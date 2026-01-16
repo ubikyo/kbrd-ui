@@ -1,15 +1,11 @@
 # kbrd-ui
 
-# Dev
-
-# Compiler
+# Build
+## Dev
 npm --prefix kbrd-ui run dev
 
-
-# Build
-
-# Compiler
+## Prod
 npm --prefix kbrd-ui run build
 
-# Tester
+## Preview
 npm --prefix kbrd-ui run preview
