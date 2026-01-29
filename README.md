@@ -2,7 +2,7 @@
 
 # Build
 ## Dev
-npm --prefix kbrd-ui run dev
+kbrd-ui/build.sh
 
 ## Prod
 npm --prefix kbrd-ui run build
