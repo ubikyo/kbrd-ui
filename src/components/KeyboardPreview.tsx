@@ -14,6 +14,7 @@ type KeyboardPreviewProps = {
 };
 
 const MM_TO_PX = 96 / 25.4;
+
 const KEY_GAP = 3;
 const KEY_HEIGHT_MM = 16;
 
@@ -40,7 +41,6 @@ export default function KeyboardPreview({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: KEY_GAP,
           width: "max-content",
         }}
       >
@@ -49,56 +49,64 @@ export default function KeyboardPreview({
             key={rowIndex}
             style={{
               display: "flex",
-              gap: KEY_GAP,
-              alignItems: "flex-start",
+              height: keyHeight,
+              flexShrink: 0,
             }}
           >
             {row.flatMap((item, itemIndex) =>
               Array.from(
                 { length: item.quantity },
                 (_, quantityIndex) => {
-                  const width = toPx(item.size, unit);
+                  /*
+                   * size représente l'espace physique occupé
+                   * par la touche dans la géométrie.
+                   */
+                  const slotWidth = toPx(item.size, unit);
 
                   /*
-                   * rowspan :
-                   * la touche se prolonge vers la rangée précédente.
+                   * Le slot conserve exactement sa largeur.
                    *
-                   * colspan :
-                   * la touche se prolonge vers la droite.
+                   * La touche dessinée est réduite de KEY_GAP
+                   * afin de créer 3px entre deux slots sans
+                   * modifier la largeur totale de la rangée.
                    */
-                  const height =
-                    item.rowspan > 1
-                      ? keyHeight * item.rowspan +
-                        KEY_GAP * (item.rowspan - 1)
-                      : keyHeight;
+                  const keyWidth = Math.max(
+                    0,
+                    slotWidth - KEY_GAP,
+                  );
 
-                  const colspanWidth =
-                    item.colspan > 1
-                      ? width * item.colspan +
-                        KEY_GAP * (item.colspan - 1)
-                      : width;
+                  const rows = Math.max(1, item.rowspan || 1);
+
+                  const keyHeightWithRowspan =
+                    keyHeight * rows - KEY_GAP;
 
                   return (
                     <Box
                       key={`${rowIndex}-${itemIndex}-${quantityIndex}`}
                       style={{
-                        width: colspanWidth,
-                        height,
+                        width: slotWidth,
+                        height: keyHeight,
                         flexShrink: 0,
-
-                        border: "1px solid white",
-                        borderRadius: 2,
-
-                        /*
-                         * rowspan se connecte vers le haut.
-                         */
-                        marginTop:
-                          item.rowspan > 1
-                            ? -(keyHeight + KEY_GAP) *
-                              (item.rowspan - 1)
-                            : 0,
+                        position: "relative",
                       }}
-                    />
+                    >
+                      <Box
+                        style={{
+                          position: "absolute",
+
+                          left: KEY_GAP / 2,
+                          top: KEY_GAP / 2,
+
+                          width: keyWidth,
+                          height: keyHeightWithRowspan,
+
+                          border: "1px solid white",
+                          borderRadius: 2,
+
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </Box>
                   );
                 },
               ),
