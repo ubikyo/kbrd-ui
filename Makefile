@@ -12,9 +12,7 @@ deploy: build
 	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : déploiement "
 	ssh $(TARGET) "mkdir -p $(REMOTE_DIR)"
 
-	rsync -av --delete \
-		--no-owner \
-		--no-group \
-		--no-perms \
+	rsync -rv --delete \
+		--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
 		dist/ \
 		$(TARGET):$(REMOTE_DIR)/

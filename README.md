@@ -5,7 +5,7 @@
 ./build.sh
 
 ## Prod
-npm --prefix kbrd-ui run build
+npm run build
 
 ## Preview
-npm --prefix kbrd-ui run preview
+npm run preview
