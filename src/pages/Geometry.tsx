@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import {
   ActionIcon,
+  Box,
   Button,
-  Drawer,
   Group,
-  Paper,
+  Modal,
+  Popover,
   Select,
   Stack,
-  Table,
   Text,
   Textarea,
   TextInput,
-  Title,
+  UnstyledButton,
 } from "@mantine/core";
 import {
-  IconDeviceFloppy,
+  IconCheck,
+  IconChevronRight,
+  IconGeometry,
   IconPencil,
   IconPlus,
   IconTrash,
@@ -54,9 +56,11 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 export default function Geometry() {
   const [items, setItems] = useState<GeometryData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<GeometryData | null>(null);
 
-  const [drawerOpened, setDrawerOpened] = useState(false);
+  const [menuOpened, setMenuOpened] = useState(false);
+  const [modalOpened, setModalOpened] = useState(false);
+
   const [editing, setEditing] = useState<GeometryData | null>(null);
 
   const [name, setName] = useState("");
@@ -66,14 +70,18 @@ export default function Geometry() {
   const [geometry, setGeometry] = useState("[]");
   const [geometryError, setGeometryError] = useState("");
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(selectId?: number) {
+    const data = await api<GeometryData[]>("/api/geometry");
 
-    try {
-      const data = await api<GeometryData[]>("/api/geometry");
-      setItems(data);
-    } finally {
-      setLoading(false);
+    setItems(data);
+
+    if (selectId !== undefined) {
+      setSelected(data.find((item) => item.id === selectId) ?? null);
+      return;
+    }
+
+    if (!selected && data.length > 0) {
+      setSelected(data[0]);
     }
   }
 
@@ -83,29 +91,30 @@ export default function Geometry() {
 
   function openAdd() {
     setEditing(null);
+
     setName("");
     setDescription("");
     setAuthor("");
     setUnit("mm");
     setGeometry("[]");
     setGeometryError("");
-    setDrawerOpened(true);
+
+    setMenuOpened(false);
+    setModalOpened(true);
   }
 
   function openEdit(item: GeometryData) {
     setEditing(item);
+
     setName(item.name);
     setDescription(item.description ?? "");
     setAuthor(item.author ?? "");
     setUnit(item.unit);
     setGeometry(JSON.stringify(item.geometry, null, 2));
     setGeometryError("");
-    setDrawerOpened(true);
-  }
 
-  function closeDrawer() {
-    setDrawerOpened(false);
-    setGeometryError("");
+    setMenuOpened(false);
+    setModalOpened(true);
   }
 
   async function save() {
@@ -118,8 +127,6 @@ export default function Geometry() {
         setGeometryError("La géométrie doit être un tableau JSON.");
         return;
       }
-
-      setGeometryError("");
     } catch {
       setGeometryError("Le JSON de la géométrie n'est pas valide.");
       return;
@@ -142,211 +149,219 @@ export default function Geometry() {
         method: "PUT",
         body: JSON.stringify(payload),
       });
+
+      setModalOpened(false);
+      await refresh(editing.id);
     } else {
-      await api<GeometryData>("/api/geometry", {
+      const created = await api<GeometryData>("/api/geometry", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-    }
 
-    closeDrawer();
-    await refresh();
+      setModalOpened(false);
+      await refresh(created.id);
+    }
   }
 
   async function remove(item: GeometryData) {
-    const ok = window.confirm(
-      `Supprimer la géométrie "${item.name}" ?`,
-    );
-
-    if (!ok) {
+    if (!window.confirm(`Supprimer "${item.name}" ?`)) {
       return;
     }
 
-    await api<{ ok: boolean }>(`/api/geometry/${item.id}`, {
+    await api(`/api/geometry/${item.id}`, {
       method: "DELETE",
     });
 
-    if (editing?.id === item.id) {
-      closeDrawer();
-    }
+    setModalOpened(false);
 
-    await refresh();
+    const data = await api<GeometryData[]>("/api/geometry");
+
+    setItems(data);
+    setSelected(data[0] ?? null);
   }
 
   return (
     <>
-      <Stack>
-        <Group justify="space-between">
-          <div>
-            <Title order={2}>Géométries</Title>
+      {/* Barre supérieure Geometry */}
+      <Box
+        pos="fixed"
+        top={0}
+        left={160}
+        style={{ zIndex: 200 }}
+      >
+        <Popover
+          opened={menuOpened}
+          onChange={setMenuOpened}
+          position="bottom-start"
+          width={300}
+          shadow="md"
+          offset={4}
+        >
+          <Popover.Target>
+            <UnstyledButton
+              h={64}
+              px="lg"
+              onClick={() => setMenuOpened((value) => !value)}
+              style={{
+                width: 230,
+                backgroundColor: "var(--mantine-color-dark-6)",
+                borderRight:
+                  "1px solid var(--mantine-color-dark-5)",
+              }}
+            >
+              <Group justify="space-between" wrap="nowrap">
+                <Group gap="sm" wrap="nowrap">
+                  <IconGeometry size={24} stroke={1.5} />
 
-            <Text size="sm" c="dimmed">
-              Gestion des géométries de clavier
-            </Text>
-          </div>
-
-          <Button
-            variant="filled"
-            leftSection={<IconPlus size={16} />}
-            onClick={openAdd}
-          >
-            Ajouter
-          </Button>
-        </Group>
-
-        <Paper withBorder>
-          <Table
-            striped
-            highlightOnHover
-            verticalSpacing="sm"
-          >
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Nom</Table.Th>
-                <Table.Th>Auteur</Table.Th>
-                <Table.Th style={{ width: 100 }}>
-                  Unité
-                </Table.Th>
-                <Table.Th style={{ width: 180 }}>
-                  Création
-                </Table.Th>
-                <Table.Th style={{ width: 100 }}>
-                  Actions
-                </Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-
-            <Table.Tbody>
-              {items.map((item) => (
-                <Table.Tr
-                  key={item.id}
-                  onClick={() => openEdit(item)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <Table.Td>
-                    <Text fw={500}>{item.name}</Text>
-
-                    {item.description && (
-                      <Text
-                        size="sm"
-                        c="dimmed"
-                        lineClamp={1}
-                      >
-                        {item.description}
-                      </Text>
-                    )}
-                  </Table.Td>
-
-                  <Table.Td>
-                    {item.author}
-                  </Table.Td>
-
-                  <Table.Td>
-                    {item.unit}
-                  </Table.Td>
-
-                  <Table.Td>
-                    {item.created_at}
-                  </Table.Td>
-
-                  <Table.Td>
-                    <Group gap="xs">
-                      <ActionIcon
-                        variant="filled"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEdit(item);
-                        }}
-                        aria-label="Modifier"
-                      >
-                        <IconPencil size={16} />
-                      </ActionIcon>
-
-                      <ActionIcon
-                        variant="filled"
-                        color="red"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          remove(item);
-                        }}
-                        aria-label="Supprimer"
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-
-              {items.length === 0 && (
-                <Table.Tr>
-                  <Table.Td colSpan={5}>
-                    <Text c="dimmed">
-                      {loading
-                        ? "Chargement..."
-                        : "Aucune géométrie"}
+                  <Box>
+                    <Text size="xs" c="dimmed">
+                      Geometry
                     </Text>
-                  </Table.Td>
-                </Table.Tr>
-              )}
-            </Table.Tbody>
-          </Table>
-        </Paper>
-      </Stack>
 
-      <Drawer
-        opened={drawerOpened}
-        onClose={closeDrawer}
-        position="right"
-        size="lg"
+                    <Text size="sm" fw={500}>
+                      {selected?.name ?? "Default"}
+                    </Text>
+                  </Box>
+                </Group>
+
+                <IconChevronRight size={16} />
+              </Group>
+            </UnstyledButton>
+          </Popover.Target>
+
+          <Popover.Dropdown p="xs">
+            <Group justify="space-between" px="xs" mb="xs">
+              <Text size="xs" c="dimmed" fw={600}>
+                GEOMETRIES
+              </Text>
+
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                onClick={openAdd}
+              >
+                <IconPlus size={16} />
+              </ActionIcon>
+            </Group>
+
+            <Stack gap={4}>
+              {items.map((item) => (
+                <UnstyledButton
+                  key={item.id}
+                  onClick={() => {
+                    setSelected(item);
+                    setMenuOpened(false);
+                  }}
+                  p="sm"
+                  style={(theme) => ({
+                    borderRadius: theme.radius.sm,
+                    backgroundColor:
+                      selected?.id === item.id
+                        ? theme.colors.violet[7]
+                        : undefined,
+                  })}
+                >
+                  <Group justify="space-between">
+                    <Group gap="sm">
+                      <IconGeometry size={18} />
+
+                      <Box>
+                        <Text size="sm" fw={500}>
+                          {item.name}
+                        </Text>
+
+                        {item.description && (
+                          <Text size="xs" c="dimmed">
+                            {item.description}
+                          </Text>
+                        )}
+                      </Box>
+                    </Group>
+
+                    {selected?.id === item.id && (
+                      <IconCheck size={16} />
+                    )}
+                  </Group>
+                </UnstyledButton>
+              ))}
+            </Stack>
+
+            <Box
+              mt="xs"
+              pt="xs"
+              style={{
+                borderTop:
+                  "1px solid var(--mantine-color-dark-4)",
+              }}
+            >
+              <UnstyledButton
+                w="100%"
+                p="sm"
+                onClick={openAdd}
+              >
+                <Group gap="sm">
+                  <IconPlus size={18} />
+                  <Text size="sm">Ajouter une géométrie</Text>
+                </Group>
+              </UnstyledButton>
+
+              {selected && (
+                <UnstyledButton
+                  w="100%"
+                  p="sm"
+                  onClick={() => openEdit(selected)}
+                >
+                  <Group gap="sm">
+                    <IconPencil size={18} />
+                    <Text size="sm">
+                      Modifier la géométrie
+                    </Text>
+                  </Group>
+                </UnstyledButton>
+              )}
+            </Box>
+          </Popover.Dropdown>
+        </Popover>
+      </Box>
+
+      {/* Modal ajout / modification */}
+      <Modal
+        opened={modalOpened}
+        onClose={() => setModalOpened(false)}
         title={
-          <Text fw={600} size="lg">
-            {editing
-              ? "Modifier la géométrie"
-              : "Nouvelle géométrie"}
-          </Text>
+          editing
+            ? "Modifier la géométrie"
+            : "Ajouter une géométrie"
         }
+        centered
+        size="lg"
         overlayProps={{
-          backgroundOpacity: 0.35,
-          blur: 6,
-        }}
-        transitionProps={{
-          transition: "slide-left",
-          duration: 250,
+          backgroundOpacity: 0.65,
+          blur: 2,
         }}
       >
-        <Stack gap="md">
-          <TextInput
-            variant="filled"
-            label="Nom"
-            placeholder="ISO"
-            value={name}
-            onChange={(e) =>
-              setName(e.currentTarget.value)
-            }
-            required
-          />
+        <Stack>
+          <Group grow>
+            <TextInput
+              variant="filled"
+              label="Nom"
+              placeholder="ISO"
+              value={name}
+              onChange={(e) =>
+                setName(e.currentTarget.value)
+              }
+              required
+            />
 
-          <Textarea
-            variant="filled"
-            label="Description"
-            value={description}
-            onChange={(e) =>
-              setDescription(e.currentTarget.value)
-            }
-            autosize
-            minRows={3}
-            maxRows={6}
-          />
-
-          <TextInput
-            variant="filled"
-            label="Auteur"
-            value={author}
-            onChange={(e) =>
-              setAuthor(e.currentTarget.value)
-            }
-          />
+            <TextInput
+              variant="filled"
+              label="Auteur"
+              value={author}
+              onChange={(e) =>
+                setAuthor(e.currentTarget.value)
+              }
+            />
+          </Group>
 
           <Select
             variant="filled"
@@ -372,6 +387,18 @@ export default function Geometry() {
 
           <Textarea
             variant="filled"
+            label="Description"
+            value={description}
+            onChange={(e) =>
+              setDescription(e.currentTarget.value)
+            }
+            autosize
+            minRows={2}
+            maxRows={4}
+          />
+
+          <Textarea
+            variant="filled"
             label="Géométrie"
             description="Définition JSON des rangées et des touches"
             value={geometry}
@@ -381,8 +408,8 @@ export default function Geometry() {
             }}
             error={geometryError}
             autosize
-            minRows={15}
-            maxRows={30}
+            minRows={10}
+            maxRows={20}
             styles={{
               input: {
                 fontFamily: "monospace",
@@ -391,42 +418,39 @@ export default function Geometry() {
           />
 
           <Group justify="space-between" mt="md">
-            {editing ? (
-              <Button
-                variant="filled"
-                color="red"
-                leftSection={<IconTrash size={16} />}
-                onClick={() => remove(editing)}
-              >
-                Supprimer
-              </Button>
-            ) : (
-              <div />
-            )}
+            <Box>
+              {editing && (
+                <Button
+                  variant="filled"
+                  color="red"
+                  leftSection={<IconTrash size={16} />}
+                  onClick={() => remove(editing)}
+                >
+                  Supprimer
+                </Button>
+              )}
+            </Box>
 
             <Group>
               <Button
                 variant="filled"
                 color="gray"
-                onClick={closeDrawer}
+                onClick={() => setModalOpened(false)}
               >
                 Annuler
               </Button>
 
               <Button
                 variant="filled"
-                leftSection={
-                  <IconDeviceFloppy size={16} />
-                }
                 onClick={save}
                 disabled={!name.trim()}
               >
-                Enregistrer
+                {editing ? "Enregistrer" : "Ajouter"}
               </Button>
             </Group>
           </Group>
         </Stack>
-      </Drawer>
+      </Modal>
     </>
   );
 }
