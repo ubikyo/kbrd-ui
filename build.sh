@@ -1,9 +1,11 @@
 #!/bin/sh
+
 set -e
 
-echo "# Bump version UI"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+cd "$SCRIPT_DIR"
 
-cd kbrd-ui
+echo "# Bump version Web"
 
 echo "# Git status"
 git status
@@ -13,7 +15,6 @@ git add .
 
 if git diff --cached --quiet; then
     echo "# Rien a committer, pas de bump"
-    cd ..
     exit 0
 fi
 
@@ -22,5 +23,3 @@ git commit -m "wip"
 
 echo "# npm version patch"
 npm version patch
-
-cd ..
