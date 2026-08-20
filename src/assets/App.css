@@ -1,0 +1,48 @@
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-dark-0);
+}
+
+.navbar {
+  background-color: var(--mantine-color-dark-7);
+  border-right: 1px solid var(--mantine-color-dark-5);
+  padding: var(--mantine-spacing-md);
+}
+
+.navbar-logo {
+  height: 60px;
+  margin-bottom: var(--mantine-spacing-md);
+  font-size: 24px;
+}
+
+.navbar-link {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--mantine-radius-md);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--mantine-color-dark-1);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.navbar-link:hover {
+  background-color: var(--mantine-color-dark-5);
+  color: var(--mantine-color-white);
+}
+
+.navbar-link[data-active] {
+  background-color: var(--mantine-color-blue-filled);
+  color: var(--mantine-color-white);
+}
