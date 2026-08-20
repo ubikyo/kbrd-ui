@@ -6,18 +6,16 @@ import {
   UnstyledButton,
   rem,
 } from "@mantine/core";
-
+import { IconGeometry } from "@tabler/icons-react";
 import {
-  IconAdjustments,
-  IconGeometry,
-  IconLayoutDashboard,
-  IconLogout,
-} from "@tabler/icons-react";
-
-import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import Geometry from "./pages/Geometry";
-
 import "./assets/App.css";
 
 interface NavbarLinkProps {
@@ -34,13 +32,20 @@ function NavbarLink({
   onClick,
 }: NavbarLinkProps) {
   return (
-    <Tooltip label={label} position="right" transitionProps={{ duration: 0 }}>
+    <Tooltip
+      label={label}
+      position="right"
+      transitionProps={{ duration: 0 }}
+    >
       <UnstyledButton
         onClick={onClick}
         className="navbar-link"
         data-active={active || undefined}
       >
-        <Icon style={{ width: rem(20), height: rem(20) }} stroke={1.5} />
+        <Icon
+          style={{ width: rem(20), height: rem(20) }}
+          stroke={1.5}
+        />
       </UnstyledButton>
     </Tooltip>
   );
@@ -49,24 +54,6 @@ function NavbarLink({
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const links = [
-    {
-      icon: IconGeometry,
-      label: "Geometry",
-      path: "/geometry",
-    },
-    {
-      icon: IconLayoutDashboard,
-      label: "Layouts",
-      path: "/layouts",
-    },
-    {
-      icon: IconAdjustments,
-      label: "Profils",
-      path: "/profiles",
-    },
-  ];
 
   return (
     <AppShell
@@ -81,23 +68,12 @@ export default function App() {
           <strong>K</strong>
         </Center>
 
-        <Stack justify="center" gap={8} style={{ flex: 1 }}>
-          {links.map((link) => (
-            <NavbarLink
-              key={link.label}
-              icon={link.icon}
-              label={link.label}
-              active={location.pathname === link.path}
-              onClick={() => navigate(link.path)}
-            />
-          ))}
-        </Stack>
-
-        <Stack justify="center" gap={8}>
+        <Stack align="center" gap="sm">
           <NavbarLink
-            icon={IconLogout}
-            label="Quitter"
-            onClick={() => {}}
+            icon={IconGeometry}
+            label="Géométries"
+            active={location.pathname === "/geometry"}
+            onClick={() => navigate("/geometry")}
           />
         </Stack>
       </AppShell.Navbar>
@@ -105,11 +81,6 @@ export default function App() {
       <AppShell.Main>
         <Routes>
           <Route path="/geometry" element={<Geometry />} />
-
-          <Route
-            path="/"
-            element={<Navigate to="/geometry" replace />}
-          />
 
           <Route
             path="*"
