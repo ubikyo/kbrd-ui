@@ -13,6 +13,12 @@ deploy: build
 	ssh $(TARGET) "mkdir -p $(REMOTE_DIR)"
 
 	rsync -rv --delete \
-		--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
 		dist/ \
 		$(TARGET):$(REMOTE_DIR)/
+
+	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : permissions "
+	ssh $(TARGET) \
+		"find $(REMOTE_DIR) -type d -exec chmod 755 {} \; && \
+		 find $(REMOTE_DIR) -type f -exec chmod 644 {} \;"
+
+	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : déploiement terminé "
