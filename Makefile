@@ -13,8 +13,8 @@ deploy: build
 	ssh $(TARGET) "mkdir -p $(REMOTE_DIR)"
 
 	rsync -av --delete \
+		--no-owner \
+		--no-group \
+		--no-perms \
 		dist/ \
 		$(TARGET):$(REMOTE_DIR)/
-
-	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : permissions "
-	ssh $(TARGET) "chown -R kbrd:kbrd $(REMOTE_DIR) && chmod -R u=rwX,go=rX $(REMOTE_DIR)"

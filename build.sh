@@ -5,7 +5,8 @@ set -e
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "# Bump version Web"
+echo "# Build Web"
+npm run build
 
 echo "# Git status"
 git status
