@@ -4,7 +4,6 @@ import {
 } from "react";
 
 import {
-  ActionIcon,
   Box,
   Button,
   Group,
@@ -91,6 +90,11 @@ export default function Geometry({
   const [modalOpened, setModalOpened] =
     useState(false);
 
+  const [
+    deleteModalOpened,
+    setDeleteModalOpened,
+  ] = useState(false);
+
   const [editing, setEditing] =
     useState<GeometryData | null>(null);
 
@@ -135,11 +139,6 @@ export default function Geometry({
       | GeometryData
       | undefined;
 
-    /*
-     * Après un ajout ou une modification,
-     * on resélectionne explicitement
-     * l'enregistrement concerné.
-     */
     if (selectId !== undefined) {
       current = data.find(
         (item) =>
@@ -147,10 +146,6 @@ export default function Geometry({
       );
     }
 
-    /*
-     * Sinon on conserve la sélection
-     * actuelle si elle existe toujours.
-     */
     if (!current && selected) {
       current = data.find(
         (item) =>
@@ -158,10 +153,6 @@ export default function Geometry({
       );
     }
 
-    /*
-     * Au premier chargement :
-     * Default en priorité.
-     */
     if (!current) {
       current =
         data.find(
@@ -233,11 +224,7 @@ export default function Geometry({
       parsedGeometry =
         JSON.parse(geometry);
 
-      if (
-        !Array.isArray(
-          parsedGeometry,
-        )
-      ) {
+      if (!Array.isArray(parsedGeometry)) {
         setGeometryError(
           "La géométrie doit être un tableau JSON.",
         );
@@ -309,25 +296,27 @@ export default function Geometry({
     }
   }
 
-  async function remove(
-    item: GeometryData,
-  ) {
-    const ok =
-      window.confirm(
-        `Supprimer "${item.name}" ?`,
-      );
+  function askDelete() {
+    if (!editing) {
+      return;
+    }
 
-    if (!ok) {
+    setDeleteModalOpened(true);
+  }
+
+  async function confirmDelete() {
+    if (!editing) {
       return;
     }
 
     await api<{ ok: boolean }>(
-      `/api/geometry/${item.id}`,
+      `/api/geometry/${editing.id}`,
       {
         method: "DELETE",
       },
     );
 
+    setDeleteModalOpened(false);
     setModalOpened(false);
 
     const data =
@@ -339,8 +328,8 @@ export default function Geometry({
 
     const next =
       data.find(
-        (geometry) =>
-          geometry.name.toLowerCase() ===
+        (item) =>
+          item.name.toLowerCase() ===
           "default",
       ) ?? data[0];
 
@@ -418,28 +407,15 @@ export default function Geometry({
         </Popover.Target>
 
         <Popover.Dropdown p="xs">
-          <Group
-            justify="space-between"
+          <Text
+            size="xs"
+            c="dimmed"
+            fw={600}
             px="xs"
             mb="xs"
           >
-            <Text
-              size="xs"
-              c="dimmed"
-              fw={600}
-            >
-              GEOMETRIES
-            </Text>
-
-            <ActionIcon
-              variant="filled"
-              size="sm"
-              onClick={openAdd}
-              aria-label="Ajouter une géométrie"
-            >
-              <IconPlus size={16} />
-            </ActionIcon>
-          </Group>
+            GEOMETRIES
+          </Text>
 
           <Stack gap={4}>
             {items.map(
@@ -456,9 +432,7 @@ export default function Geometry({
                     );
                   }}
                   p="sm"
-                  style={(
-                    theme,
-                  ) => ({
+                  style={(theme) => ({
                     borderRadius:
                       theme.radius.sm,
 
@@ -501,9 +475,7 @@ export default function Geometry({
                             c="dimmed"
                             lineClamp={1}
                           >
-                            {
-                              item.description
-                            }
+                            {item.description}
                           </Text>
                         )}
                       </Box>
@@ -570,6 +542,7 @@ export default function Geometry({
         </Popover.Dropdown>
       </Popover>
 
+      {/* Ajout / modification */}
       <Modal
         opened={modalOpened}
         onClose={() =>
@@ -592,7 +565,8 @@ export default function Geometry({
           content: {
             display: "flex",
             flexDirection: "column",
-            maxHeight: "80vh",
+            height: "85vh",
+            maxHeight: "85vh",
           },
 
           body: {
@@ -604,7 +578,6 @@ export default function Geometry({
           },
         }}
       >
-        {/* Partie scrollable */}
         <Box
           p="md"
           style={{
@@ -622,8 +595,7 @@ export default function Geometry({
                 value={name}
                 onChange={(e) =>
                   setName(
-                    e.currentTarget
-                      .value,
+                    e.currentTarget.value,
                   )
                 }
                 required
@@ -635,8 +607,7 @@ export default function Geometry({
                 value={author}
                 onChange={(e) =>
                   setAuthor(
-                    e.currentTarget
-                      .value,
+                    e.currentTarget.value,
                   )
                 }
               />
@@ -659,9 +630,7 @@ export default function Geometry({
               ]}
               value={unit}
               allowDeselect={false}
-              onChange={(
-                value,
-              ) => {
+              onChange={(value) => {
                 if (
                   value === "mm" ||
                   value === "px"
@@ -677,8 +646,7 @@ export default function Geometry({
               value={description}
               onChange={(e) =>
                 setDescription(
-                  e.currentTarget
-                    .value,
+                  e.currentTarget.value,
                 )
               }
               autosize
@@ -693,22 +661,18 @@ export default function Geometry({
               value={geometry}
               onChange={(e) => {
                 setGeometry(
-                  e.currentTarget
-                    .value,
+                  e.currentTarget.value,
                 );
-
-                setGeometryError(
-                  "",
-                );
+                setGeometryError("");
               }}
-              error={
-                geometryError
-              }
-              minRows={16}
+              error={geometryError}
+              minRows={30}
+              resize="vertical"
               styles={{
                 input: {
                   fontFamily:
                     "monospace",
+                  minHeight: 520,
                 },
               }}
             />
@@ -721,10 +685,8 @@ export default function Geometry({
           p="md"
           style={{
             flexShrink: 0,
-
             borderTop:
               "1px solid var(--mantine-color-dark-4)",
-
             backgroundColor:
               "var(--mantine-color-body)",
           }}
@@ -739,9 +701,7 @@ export default function Geometry({
                     size={16}
                   />
                 }
-                onClick={() =>
-                  remove(editing)
-                }
+                onClick={askDelete}
               >
                 Supprimer
               </Button>
@@ -753,9 +713,7 @@ export default function Geometry({
               variant="filled"
               color="gray"
               onClick={() =>
-                setModalOpened(
-                  false,
-                )
+                setModalOpened(false)
               }
             >
               Annuler
@@ -764,9 +722,7 @@ export default function Geometry({
             <Button
               variant="filled"
               onClick={save}
-              disabled={
-                !name.trim()
-              }
+              disabled={!name.trim()}
             >
               {editing
                 ? "Enregistrer"
@@ -774,6 +730,71 @@ export default function Geometry({
             </Button>
           </Group>
         </Group>
+      </Modal>
+
+      {/* Confirmation suppression */}
+      <Modal
+        opened={deleteModalOpened}
+        onClose={() =>
+          setDeleteModalOpened(false)
+        }
+        title={
+          <Text fw={700}>
+            Supprimer la géométrie
+          </Text>
+        }
+        centered
+        size="sm"
+        overlayProps={{
+          backgroundOpacity: 0.65,
+          blur: 2,
+        }}
+      >
+        <Stack>
+          <Text>
+            Supprimer la géométrie{" "}
+            <Text
+              component="span"
+              fw={600}
+            >
+              {editing?.name}
+            </Text>
+            {" "}?
+          </Text>
+
+          <Text
+            size="sm"
+            c="dimmed"
+          >
+            Cette action est irréversible.
+          </Text>
+
+          <Group
+            justify="flex-end"
+            mt="sm"
+          >
+            <Button
+              variant="filled"
+              color="gray"
+              onClick={() =>
+                setDeleteModalOpened(false)
+              }
+            >
+              Annuler
+            </Button>
+
+            <Button
+              variant="filled"
+              color="red"
+              leftSection={
+                <IconTrash size={16} />
+              }
+              onClick={confirmDelete}
+            >
+              Supprimer
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </>
   );

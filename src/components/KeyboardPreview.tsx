@@ -6,12 +6,14 @@ type KeyboardPreviewProps = {
   onSelectKey: (
     key: string | null,
   ) => void;
+  zoom: number;
 };
 
 export default function KeyboardPreview({
   svg,
   selectedKey,
   onSelectKey,
+  zoom,
 }: KeyboardPreviewProps) {
   function handleClick(
     event: React.MouseEvent<HTMLDivElement>,
@@ -47,19 +49,28 @@ export default function KeyboardPreview({
       onClick={handleClick}
       className="keyboard-preview"
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         overflow: "auto",
-        padding: 32,
       }}
     >
       <Box
-        className="keyboard-svg"
-        dangerouslySetInnerHTML={{
-          __html: svg,
+        style={{
+          width: `${zoom}%`,
+          minWidth: "100%",
+          minHeight: "100%",
+          padding: 48,
+
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
-      />
+      >
+        <Box
+          className="keyboard-svg"
+          dangerouslySetInnerHTML={{
+            __html: svg,
+          }}
+        />
+      </Box>
 
       <style>
         {`
@@ -72,7 +83,7 @@ export default function KeyboardPreview({
 
           .keyboard-svg svg {
             display: block;
-            width: min(100%, 1400px);
+            width: 100%;
             height: auto;
             overflow: visible;
           }

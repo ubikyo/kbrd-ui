@@ -6,7 +6,7 @@ import {
 } from "@mantine/core";
 import { useState } from "react";
 
-type InspectorPanelProps = {
+type PropertiesProps = {
   selectedKey: string | null;
 };
 
@@ -14,9 +14,11 @@ const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 600;
 
-export default function InspectorPanel({
+const PANEL_MARGIN = 12;
+
+export default function Properties({
   selectedKey,
-}: InspectorPanelProps) {
+}: PropertiesProps) {
   const [width, setWidth] =
     useState(DEFAULT_WIDTH);
 
@@ -25,40 +27,30 @@ export default function InspectorPanel({
   ) {
     event.preventDefault();
 
-    const startX =
-      event.clientX;
-
-    const startWidth =
-      width;
+    const startX = event.clientX;
+    const startWidth = width;
 
     function handleMouseMove(
       event: MouseEvent,
     ) {
       const delta =
-        startX -
-        event.clientX;
+        startX - event.clientX;
 
       const nextWidth =
         Math.min(
           MAX_WIDTH,
           Math.max(
             MIN_WIDTH,
-            startWidth +
-              delta,
+            startWidth + delta,
           ),
         );
 
-      setWidth(
-        nextWidth,
-      );
+      setWidth(nextWidth);
     }
 
     function handleMouseUp() {
-      document.body.style.cursor =
-        "";
-
-      document.body.style.userSelect =
-        "";
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
 
       window.removeEventListener(
         "mousemove",
@@ -91,37 +83,59 @@ export default function InspectorPanel({
   return (
     <Box
       w={width}
-      h="100%"
       style={{
         position: "relative",
         flexShrink: 0,
 
+        marginTop: PANEL_MARGIN,
+        marginBottom: PANEL_MARGIN,
+
         backgroundColor:
           "var(--mantine-color-dark-7)",
+
+        borderTop:
+          "1px solid var(--mantine-color-dark-5)",
+
+        borderBottom:
+          "1px solid var(--mantine-color-dark-5)",
 
         borderLeft:
           "1px solid var(--mantine-color-dark-5)",
       }}
     >
-      {/* Poignée */}
+      {/* Zone permettant de saisir la bordure */}
       <Box
-        onMouseDown={
-          startResize
-        }
+        onMouseDown={startResize}
         style={{
-          position:
-            "absolute",
-
+          position: "absolute",
           top: 0,
           bottom: 0,
-          left: -4,
+          left: -5,
+          width: 10,
+          cursor: "col-resize",
+          zIndex: 20,
+        }}
+      />
 
-          width: 8,
+      {/* Poignée visible */}
+      <Box
+        onMouseDown={startResize}
+        style={{
+          position: "absolute",
+          left: -3,
+          top: "50%",
+          transform: "translateY(-50%)",
 
-          cursor:
-            "col-resize",
+          width: 5,
+          height: 36,
 
-          zIndex: 10,
+          borderRadius: 3,
+
+          backgroundColor:
+            "var(--mantine-color-gray-5)",
+
+          cursor: "col-resize",
+          zIndex: 21,
         }}
       />
 
@@ -130,7 +144,7 @@ export default function InspectorPanel({
         py="sm"
       >
         <Title order={5}>
-          Touche
+          Properties
         </Title>
       </Box>
 
@@ -159,8 +173,7 @@ export default function InspectorPanel({
             size="sm"
             c="dimmed"
           >
-            Aucune touche
-            sélectionnée
+            Aucune touche sélectionnée
           </Text>
         )}
       </Box>
