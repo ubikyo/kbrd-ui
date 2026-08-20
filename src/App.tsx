@@ -1,12 +1,16 @@
 import { AppShell, Box, Group, Text } from "@mantine/core";
-import Geometry from "./pages/Geometry";
+import { useState } from "react";
+
+import Geometry, {
+  type GeometryData,
+} from "./components/Geometry";
+import KeyboardPreview from "./components/KeyboardPreview";
 
 export default function App() {
+  const [geometry, setGeometry] = useState<GeometryData | null>(null);
+
   return (
-    <AppShell
-      header={{ height: 64 }}
-      padding={0}
-    >
+    <AppShell header={{ height: 64 }} padding={0}>
       <AppShell.Header
         style={{
           backgroundColor: "var(--mantine-color-dark-7)",
@@ -28,16 +32,33 @@ export default function App() {
               KBRD
             </Text>
           </Box>
+
+          <Geometry onChange={setGeometry} />
         </Group>
       </AppShell.Header>
 
       <AppShell.Main
         style={{
-          minHeight: "100vh",
-          backgroundColor: "#151518",
+          height: "100vh",
+          backgroundColor: "#101113",
         }}
       >
-        <Geometry />
+        <Box
+          style={{
+            height: "calc(100vh - 64px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "auto",
+          }}
+        >
+          {geometry && (
+            <KeyboardPreview
+              geometry={geometry.geometry}
+              unit={geometry.unit}
+            />
+          )}
+        </Box>
       </AppShell.Main>
     </AppShell>
   );
