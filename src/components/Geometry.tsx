@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
+
 import {
   ActionIcon,
   Box,
@@ -13,6 +17,7 @@ import {
   TextInput,
   UnstyledButton,
 } from "@mantine/core";
+
 import {
   IconCheck,
   IconChevronRight,
@@ -37,79 +42,132 @@ export type GeometryData = {
   author: string;
   unit: "px" | "mm";
   geometry: GeometryItem[][];
+  svg: string;
   created_at: string;
 };
 
 type GeometryProps = {
-  onChange: (geometry: GeometryData | null) => void;
+  onChange: (
+    geometry: GeometryData | null,
+  ) => void;
 };
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
+async function api<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<T> {
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     ...init,
   });
 
   if (!res.ok) {
-    const msg = await res.text().catch(() => "");
-    throw new Error(msg || `HTTP ${res.status}`);
+    const msg = await res
+      .text()
+      .catch(() => "");
+
+    throw new Error(
+      msg || `HTTP ${res.status}`,
+    );
   }
 
   return (await res.json()) as T;
 }
 
-export default function Geometry({ onChange }: GeometryProps) {
-  const [items, setItems] = useState<GeometryData[]>([]);
-  const [selected, setSelected] = useState<GeometryData | null>(null);
+export default function Geometry({
+  onChange,
+}: GeometryProps) {
+  const [items, setItems] =
+    useState<GeometryData[]>([]);
 
-  const [menuOpened, setMenuOpened] = useState(false);
-  const [modalOpened, setModalOpened] = useState(false);
+  const [selected, setSelected] =
+    useState<GeometryData | null>(null);
 
-  const [editing, setEditing] = useState<GeometryData | null>(null);
+  const [menuOpened, setMenuOpened] =
+    useState(false);
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [author, setAuthor] = useState("");
-  const [unit, setUnit] = useState<"px" | "mm">("mm");
-  const [geometry, setGeometry] = useState("[]");
-  const [geometryError, setGeometryError] = useState("");
+  const [modalOpened, setModalOpened] =
+    useState(false);
 
-  function selectGeometry(item: GeometryData) {
+  const [editing, setEditing] =
+    useState<GeometryData | null>(null);
+
+  const [name, setName] =
+    useState("");
+
+  const [description, setDescription] =
+    useState("");
+
+  const [author, setAuthor] =
+    useState("");
+
+  const [unit, setUnit] =
+    useState<"px" | "mm">("mm");
+
+  const [geometry, setGeometry] =
+    useState("[]");
+
+  const [
+    geometryError,
+    setGeometryError,
+  ] = useState("");
+
+  function selectGeometry(
+    item: GeometryData,
+  ) {
     setSelected(item);
     onChange(item);
   }
 
-  async function refresh(selectId?: number) {
-    const data = await api<GeometryData[]>("/api/geometry");
+  async function refresh(
+    selectId?: number,
+  ) {
+    const data =
+      await api<GeometryData[]>(
+        "/api/geometry",
+      );
 
     setItems(data);
 
-    let current: GeometryData | undefined;
+    let current:
+      | GeometryData
+      | undefined;
 
     /*
-     * Après un ajout ou une modification, on resélectionne
-     * explicitement la géométrie concernée.
+     * Après un ajout ou une modification,
+     * on resélectionne explicitement
+     * l'enregistrement concerné.
      */
     if (selectId !== undefined) {
-      current = data.find((item) => item.id === selectId);
+      current = data.find(
+        (item) =>
+          item.id === selectId,
+      );
     }
 
     /*
-     * Sinon on conserve la géométrie actuellement sélectionnée.
+     * Sinon on conserve la sélection
+     * actuelle si elle existe toujours.
      */
     if (!current && selected) {
-      current = data.find((item) => item.id === selected.id);
+      current = data.find(
+        (item) =>
+          item.id === selected.id,
+      );
     }
 
     /*
      * Au premier chargement :
-     * - Default en priorité
-     * - sinon la première géométrie disponible
+     * Default en priorité.
      */
     if (!current) {
       current =
         data.find(
-          (item) => item.name.toLowerCase() === "default",
+          (item) =>
+            item.name.toLowerCase() ===
+            "default",
         ) ?? data[0];
     }
 
@@ -139,14 +197,28 @@ export default function Geometry({ onChange }: GeometryProps) {
     setModalOpened(true);
   }
 
-  function openEdit(item: GeometryData) {
+  function openEdit(
+    item: GeometryData,
+  ) {
     setEditing(item);
 
     setName(item.name);
-    setDescription(item.description ?? "");
-    setAuthor(item.author ?? "");
+    setDescription(
+      item.description ?? "",
+    );
+    setAuthor(
+      item.author ?? "",
+    );
     setUnit(item.unit);
-    setGeometry(JSON.stringify(item.geometry, null, 2));
+
+    setGeometry(
+      JSON.stringify(
+        item.geometry,
+        null,
+        2,
+      ),
+    );
+
     setGeometryError("");
 
     setMenuOpened(false);
@@ -154,12 +226,18 @@ export default function Geometry({ onChange }: GeometryProps) {
   }
 
   async function save() {
-    let parsedGeometry: GeometryItem[][];
+    let parsedGeometry:
+      GeometryItem[][];
 
     try {
-      parsedGeometry = JSON.parse(geometry);
+      parsedGeometry =
+        JSON.parse(geometry);
 
-      if (!Array.isArray(parsedGeometry)) {
+      if (
+        !Array.isArray(
+          parsedGeometry,
+        )
+      ) {
         setGeometryError(
           "La géométrie doit être un tableau JSON.",
         );
@@ -176,7 +254,8 @@ export default function Geometry({ onChange }: GeometryProps) {
 
     const payload = {
       name: name.trim(),
-      description: description.trim(),
+      description:
+        description.trim(),
       author: author.trim(),
       unit,
       geometry: parsedGeometry,
@@ -186,33 +265,59 @@ export default function Geometry({ onChange }: GeometryProps) {
       return;
     }
 
-    if (editing) {
-      await api<GeometryData>(
-        `/api/geometry/${editing.id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        },
-      );
+    try {
+      if (editing) {
+        await api<GeometryData>(
+          `/api/geometry/${editing.id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify(
+              payload,
+            ),
+          },
+        );
 
-      setModalOpened(false);
-      await refresh(editing.id);
-    } else {
-      const created = await api<GeometryData>(
-        "/api/geometry",
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
-      );
+        setModalOpened(false);
 
-      setModalOpened(false);
-      await refresh(created.id);
+        await refresh(
+          editing.id,
+        );
+      } else {
+        const created =
+          await api<GeometryData>(
+            "/api/geometry",
+            {
+              method: "POST",
+              body: JSON.stringify(
+                payload,
+              ),
+            },
+          );
+
+        setModalOpened(false);
+
+        await refresh(
+          created.id,
+        );
+      }
+    } catch (error) {
+      setGeometryError(
+        error instanceof Error
+          ? error.message
+          : "Erreur lors de l'enregistrement.",
+      );
     }
   }
 
-  async function remove(item: GeometryData) {
-    if (!window.confirm(`Supprimer "${item.name}" ?`)) {
+  async function remove(
+    item: GeometryData,
+  ) {
+    const ok =
+      window.confirm(
+        `Supprimer "${item.name}" ?`,
+      );
+
+    if (!ok) {
       return;
     }
 
@@ -225,20 +330,18 @@ export default function Geometry({ onChange }: GeometryProps) {
 
     setModalOpened(false);
 
-    const data = await api<GeometryData[]>(
-      "/api/geometry",
-    );
+    const data =
+      await api<GeometryData[]>(
+        "/api/geometry",
+      );
 
     setItems(data);
 
-    /*
-     * Après suppression :
-     * Default en priorité, sinon la première disponible.
-     */
     const next =
       data.find(
         (geometry) =>
-          geometry.name.toLowerCase() === "default",
+          geometry.name.toLowerCase() ===
+          "default",
       ) ?? data[0];
 
     if (next) {
@@ -264,7 +367,9 @@ export default function Geometry({ onChange }: GeometryProps) {
             h={64}
             px="lg"
             onClick={() =>
-              setMenuOpened((value) => !value)
+              setMenuOpened(
+                (value) => !value,
+              )
             }
             style={{
               width: 230,
@@ -278,24 +383,36 @@ export default function Geometry({ onChange }: GeometryProps) {
               justify="space-between"
               wrap="nowrap"
             >
-              <Group gap="sm" wrap="nowrap">
+              <Group
+                gap="sm"
+                wrap="nowrap"
+              >
                 <IconGeometry
                   size={24}
                   stroke={1.5}
                 />
 
                 <Box>
-                  <Text size="xs" c="dimmed">
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
                     Geometry
                   </Text>
 
-                  <Text size="sm" fw={500}>
-                    {selected?.name ?? "Aucune"}
+                  <Text
+                    size="sm"
+                    fw={500}
+                  >
+                    {selected?.name ??
+                      "Aucune"}
                   </Text>
                 </Box>
               </Group>
 
-              <IconChevronRight size={16} />
+              <IconChevronRight
+                size={16}
+              />
             </Group>
           </UnstyledButton>
         </Popover.Target>
@@ -325,49 +442,83 @@ export default function Geometry({ onChange }: GeometryProps) {
           </Group>
 
           <Stack gap={4}>
-            {items.map((item) => (
-              <UnstyledButton
-                key={item.id}
-                onClick={() => {
-                  selectGeometry(item);
-                  setMenuOpened(false);
-                }}
-                p="sm"
-                style={(theme) => ({
-                  borderRadius: theme.radius.sm,
-                  backgroundColor:
-                    selected?.id === item.id
-                      ? theme.colors.violet[7]
-                      : undefined,
-                })}
-              >
-                <Group justify="space-between">
-                  <Group gap="sm">
-                    <IconGeometry size={18} />
+            {items.map(
+              (item) => (
+                <UnstyledButton
+                  key={item.id}
+                  onClick={() => {
+                    selectGeometry(
+                      item,
+                    );
 
-                    <Box>
-                      <Text size="sm" fw={500}>
-                        {item.name}
-                      </Text>
+                    setMenuOpened(
+                      false,
+                    );
+                  }}
+                  p="sm"
+                  style={(
+                    theme,
+                  ) => ({
+                    borderRadius:
+                      theme.radius.sm,
 
-                      {item.description && (
+                    backgroundColor:
+                      selected?.id ===
+                      item.id
+                        ? theme
+                            .colors
+                            .violet[7]
+                        : undefined,
+                  })}
+                >
+                  <Group
+                    justify="space-between"
+                    wrap="nowrap"
+                  >
+                    <Group
+                      gap="sm"
+                      wrap="nowrap"
+                    >
+                      <IconGeometry
+                        size={18}
+                      />
+
+                      <Box
+                        style={{
+                          minWidth: 0,
+                        }}
+                      >
                         <Text
-                          size="xs"
-                          c="dimmed"
-                          lineClamp={1}
+                          size="sm"
+                          fw={500}
                         >
-                          {item.description}
+                          {item.name}
                         </Text>
-                      )}
-                    </Box>
-                  </Group>
 
-                  {selected?.id === item.id && (
-                    <IconCheck size={16} />
-                  )}
-                </Group>
-              </UnstyledButton>
-            ))}
+                        {item.description && (
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            lineClamp={1}
+                          >
+                            {
+                              item.description
+                            }
+                          </Text>
+                        )}
+                      </Box>
+                    </Group>
+
+                    {selected?.id ===
+                      item.id && (
+                      <IconCheck
+                        size={16}
+                      />
+                    )}
+                  </Group>
+                </UnstyledButton>
+              ),
+            )}
           </Stack>
 
           <Box
@@ -384,7 +535,10 @@ export default function Geometry({ onChange }: GeometryProps) {
               onClick={openAdd}
             >
               <Group gap="sm">
-                <IconPlus size={18} />
+                <IconPlus
+                  size={18}
+                />
+
                 <Text size="sm">
                   Ajouter une géométrie
                 </Text>
@@ -396,11 +550,15 @@ export default function Geometry({ onChange }: GeometryProps) {
                 w="100%"
                 p="sm"
                 onClick={() =>
-                  openEdit(selected)
+                  openEdit(
+                    selected,
+                  )
                 }
               >
                 <Group gap="sm">
-                  <IconPencil size={18} />
+                  <IconPencil
+                    size={18}
+                  />
 
                   <Text size="sm">
                     Modifier la géométrie
@@ -414,11 +572,15 @@ export default function Geometry({ onChange }: GeometryProps) {
 
       <Modal
         opened={modalOpened}
-        onClose={() => setModalOpened(false)}
+        onClose={() =>
+          setModalOpened(false)
+        }
         title={
-          editing
-            ? "Modifier la géométrie"
-            : "Ajouter une géométrie"
+          <Text fw={700}>
+            {editing
+              ? "Modifier la géométrie"
+              : "Ajouter une géométrie"}
+          </Text>
         }
         centered
         size="lg"
@@ -426,135 +588,192 @@ export default function Geometry({ onChange }: GeometryProps) {
           backgroundOpacity: 0.65,
           blur: 2,
         }}
+        styles={{
+          content: {
+            display: "flex",
+            flexDirection: "column",
+            maxHeight: "80vh",
+          },
+
+          body: {
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            padding: 0,
+          },
+        }}
       >
-        <Stack>
-          <Group grow>
-            <TextInput
+        {/* Partie scrollable */}
+        <Box
+          p="md"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+          }}
+        >
+          <Stack>
+            <Group grow>
+              <TextInput
+                variant="filled"
+                label="Nom"
+                placeholder="ISO"
+                value={name}
+                onChange={(e) =>
+                  setName(
+                    e.currentTarget
+                      .value,
+                  )
+                }
+                required
+              />
+
+              <TextInput
+                variant="filled"
+                label="Auteur"
+                value={author}
+                onChange={(e) =>
+                  setAuthor(
+                    e.currentTarget
+                      .value,
+                  )
+                }
+              />
+            </Group>
+
+            <Select
               variant="filled"
-              label="Nom"
-              placeholder="ISO"
-              value={name}
-              onChange={(e) =>
-                setName(e.currentTarget.value)
-              }
-              required
+              label="Unité"
+              data={[
+                {
+                  value: "mm",
+                  label:
+                    "Millimètres (mm)",
+                },
+                {
+                  value: "px",
+                  label:
+                    "Pixels (px)",
+                },
+              ]}
+              value={unit}
+              allowDeselect={false}
+              onChange={(
+                value,
+              ) => {
+                if (
+                  value === "mm" ||
+                  value === "px"
+                ) {
+                  setUnit(value);
+                }
+              }}
             />
 
-            <TextInput
+            <Textarea
               variant="filled"
-              label="Auteur"
-              value={author}
+              label="Description"
+              value={description}
               onChange={(e) =>
-                setAuthor(e.currentTarget.value)
+                setDescription(
+                  e.currentTarget
+                    .value,
+                )
               }
+              autosize
+              minRows={2}
+              maxRows={4}
             />
-          </Group>
 
-          <Select
-            variant="filled"
-            label="Unité"
-            data={[
-              {
-                value: "mm",
-                label: "Millimètres (mm)",
-              },
-              {
-                value: "px",
-                label: "Pixels (px)",
-              },
-            ]}
-            value={unit}
-            allowDeselect={false}
-            onChange={(value) => {
-              if (
-                value === "mm" ||
-                value === "px"
-              ) {
-                setUnit(value);
+            <Textarea
+              variant="filled"
+              label="Géométrie"
+              description="Définition JSON des rangées et des touches"
+              value={geometry}
+              onChange={(e) => {
+                setGeometry(
+                  e.currentTarget
+                    .value,
+                );
+
+                setGeometryError(
+                  "",
+                );
+              }}
+              error={
+                geometryError
               }
-            }}
-          />
+              minRows={16}
+              styles={{
+                input: {
+                  fontFamily:
+                    "monospace",
+                },
+              }}
+            />
+          </Stack>
+        </Box>
 
-          <Textarea
-            variant="filled"
-            label="Description"
-            value={description}
-            onChange={(e) =>
-              setDescription(
-                e.currentTarget.value,
-              )
-            }
-            autosize
-            minRows={2}
-            maxRows={4}
-          />
+        {/* Footer fixe */}
+        <Group
+          justify="space-between"
+          p="md"
+          style={{
+            flexShrink: 0,
 
-          <Textarea
-            variant="filled"
-            label="Géométrie"
-            description="Définition JSON des rangées et des touches"
-            value={geometry}
-            onChange={(e) => {
-              setGeometry(
-                e.currentTarget.value,
-              );
-              setGeometryError("");
-            }}
-            error={geometryError}
-            autosize
-            minRows={10}
-            maxRows={20}
-            styles={{
-              input: {
-                fontFamily: "monospace",
-              },
-            }}
-          />
+            borderTop:
+              "1px solid var(--mantine-color-dark-4)",
 
-          <Group
-            justify="space-between"
-            mt="md"
-          >
-            <Box>
-              {editing && (
-                <Button
-                  variant="filled"
-                  color="red"
-                  leftSection={
-                    <IconTrash size={16} />
-                  }
-                  onClick={() =>
-                    remove(editing)
-                  }
-                >
-                  Supprimer
-                </Button>
-              )}
-            </Box>
-
-            <Group>
+            backgroundColor:
+              "var(--mantine-color-body)",
+          }}
+        >
+          <Box>
+            {editing && (
               <Button
                 variant="filled"
-                color="gray"
+                color="red"
+                leftSection={
+                  <IconTrash
+                    size={16}
+                  />
+                }
                 onClick={() =>
-                  setModalOpened(false)
+                  remove(editing)
                 }
               >
-                Annuler
+                Supprimer
               </Button>
+            )}
+          </Box>
 
-              <Button
-                variant="filled"
-                onClick={save}
-                disabled={!name.trim()}
-              >
-                {editing
-                  ? "Enregistrer"
-                  : "Ajouter"}
-              </Button>
-            </Group>
+          <Group>
+            <Button
+              variant="filled"
+              color="gray"
+              onClick={() =>
+                setModalOpened(
+                  false,
+                )
+              }
+            >
+              Annuler
+            </Button>
+
+            <Button
+              variant="filled"
+              onClick={save}
+              disabled={
+                !name.trim()
+              }
+            >
+              {editing
+                ? "Enregistrer"
+                : "Ajouter"}
+            </Button>
           </Group>
-        </Stack>
+        </Group>
       </Modal>
     </>
   );
