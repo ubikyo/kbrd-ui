@@ -76,7 +76,7 @@ export default function App() {
             }}
           >
             <img
-              src="/assets/media/KBRD.svg"
+              src="./assets/media/KBRD.svg"
               alt="KBRD"
               style={{
                 width: "100px",
