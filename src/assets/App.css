@@ -6,7 +6,7 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--mantine-color-body);
+  background-color: var(--kbrd-color-body);
   color: var(--mantine-color-dark-0);
 }
 

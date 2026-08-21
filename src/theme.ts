@@ -7,7 +7,7 @@ export const theme = createTheme({});
 
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
-    "--mantine-color-body": "#000000",
+    "--kbrd-color-body": "#000000",
     "--kbrd-color-surface": "#222120",
   },
   light: {},

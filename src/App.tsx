@@ -58,7 +58,7 @@ export default function App() {
 
   return (
     <AppShell 
-      bg="var(--mantine-color-body)"
+      bg="var(--kbrd-color-body)"
       header={{ height: 64 }}
       padding={0}
     >
