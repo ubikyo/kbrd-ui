@@ -86,7 +86,7 @@ export default function App() {
       <AppShell.Main
         style={{
           height: "100vh",
-          backgroundColor: "#171514",
+          backgroundColor:"#171514",
         }}
       >
         <Box
