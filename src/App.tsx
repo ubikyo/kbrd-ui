@@ -63,7 +63,6 @@ export default function App() {
     >
       <AppShell.Header
         style={{
-          backgroundColor:"#000000",
           borderBottom: "1px solid var(--mantine-color-dark-7)",
         }}
       >
@@ -95,7 +94,6 @@ export default function App() {
       <AppShell.Main
         style={{
           height: "100vh",
-          backgroundColor:"#000000",
         }}
       >
         <Box
