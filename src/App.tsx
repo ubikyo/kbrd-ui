@@ -15,7 +15,7 @@ import { useState } from "react";
 import Geometry, {
   type GeometryData,
 } from "./components/Geometry";
-import KeyboardPreview from "./components/KeyboardPreview";
+import Preview from "./components/Preview";
 import Properties from "./components/Properties";
 
 const MIN_ZOOM = 25;
@@ -60,8 +60,6 @@ export default function App() {
         style={{
           backgroundColor:
             "var(--mantine-color-dark-7)",
-          borderBottom:
-            "1px solid var(--mantine-color-dark-6)",
         }}
       >
         <Group h="100%" gap={0}>
@@ -72,8 +70,6 @@ export default function App() {
             style={{
               display: "flex",
               alignItems: "center",
-              borderRight:
-                "1px solid var(--mantine-color-dark-6)",
             }}
           >
             <Text fw={700} size="xl">
@@ -109,7 +105,7 @@ export default function App() {
             }}
           >
             {geometry?.svg && (
-              <KeyboardPreview
+              <Preview
                 svg={geometry.svg}
                 selectedKey={selectedKey}
                 onSelectKey={setSelectedKey}

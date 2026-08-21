@@ -364,8 +364,6 @@ export default function Geometry({
               width: 230,
               backgroundColor:
                 "var(--mantine-color-dark-6)",
-              borderRight:
-                "1px solid var(--mantine-color-dark-5)",
             }}
           >
             <Group
@@ -496,10 +494,6 @@ export default function Geometry({
           <Box
             mt="xs"
             pt="xs"
-            style={{
-              borderTop:
-                "1px solid var(--mantine-color-dark-4)",
-            }}
           >
             <UnstyledButton
               w="100%"

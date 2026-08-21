@@ -1,6 +1,6 @@
 import { Box } from "@mantine/core";
 
-type KeyboardPreviewProps = {
+type PreviewProps = {
   svg: string;
   selectedKey: string | null;
   onSelectKey: (
@@ -9,30 +9,26 @@ type KeyboardPreviewProps = {
   zoom: number;
 };
 
-export default function KeyboardPreview({
+export default function Preview({
   svg,
   selectedKey,
   onSelectKey,
   zoom,
-}: KeyboardPreviewProps) {
+}: PreviewProps) {
   function handleClick(
     event: React.MouseEvent<HTMLDivElement>,
   ) {
-    const target =
-      event.target as Element;
+    const target = event.target as Element;
 
     const key =
-      target.closest<SVGPathElement>(
-        ".kbrd-key",
-      );
+      target.closest<SVGElement>(".kbrd-key");
 
     if (!key) {
       onSelectKey(null);
       return;
     }
 
-    const keyRef =
-      key.dataset.key;
+    const keyRef = key.dataset.key;
 
     if (!keyRef) {
       onSelectKey(null);
@@ -47,57 +43,65 @@ export default function KeyboardPreview({
       w="100%"
       h="100%"
       onClick={handleClick}
-      className="keyboard-preview"
       style={{
         overflow: "auto",
       }}
     >
+      {/* 60 px de marge extérieure */}
       <Box
         style={{
-          width: `${zoom}%`,
           minWidth: "100%",
           minHeight: "100%",
-          padding: 48,
+          padding: 60,
 
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+
+          boxSizing: "border-box",
         }}
       >
+        {/* Cadre de la preview */}
         <Box
-          className="keyboard-svg"
-          dangerouslySetInnerHTML={{
-            __html: svg,
+          style={{
+            border: "1px solid rgba(255, 255, 255, 1)",
+            padding: 30,
+            boxSizing: "border-box",
           }}
-        />
+        >
+          {/* Zoom */}
+          <Box
+            className="preview-svg"
+            style={{
+              width: `${zoom}%`,
+              margin: "auto",
+            }}
+            dangerouslySetInnerHTML={{
+              __html: svg,
+            }}
+          />
+        </Box>
       </Box>
 
       <style>
         {`
-          .keyboard-svg {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .keyboard-svg svg {
+          .preview-svg svg {
             display: block;
             width: 100%;
             height: auto;
             overflow: visible;
           }
 
-          .keyboard-svg .kbrd-key {
+          .preview-svg .kbrd-key {
             cursor: pointer;
             transition: stroke 100ms ease;
           }
 
-          .keyboard-svg .kbrd-key:hover {
+          .preview-svg .kbrd-key:hover {
             stroke: rgba(255, 255, 255, 0.75);
           }
 
-          .keyboard-svg .kbrd-key[data-key="${selectedKey ?? ""}"] {
+          .preview-svg .kbrd-key[data-key="${selectedKey ?? ""}"] {
             stroke: rgba(255, 255, 255, 1);
           }
         `}

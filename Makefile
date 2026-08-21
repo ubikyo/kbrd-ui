@@ -21,4 +21,4 @@ deploy: build
 		"find $(REMOTE_DIR) -type d -exec chmod 755 {} \; && \
 		 find $(REMOTE_DIR) -type f -exec chmod 644 {} \;"
 
-	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : déploiement terminé "
+	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : déploiement terminé "curl

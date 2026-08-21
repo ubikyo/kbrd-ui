@@ -1,6 +1,5 @@
 import {
   Box,
-  Divider,
   Text,
   Title,
 } from "@mantine/core";
@@ -13,8 +12,6 @@ type PropertiesProps = {
 const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 600;
-
-const PANEL_MARGIN = 12;
 
 export default function Properties({
   selectedKey,
@@ -87,23 +84,15 @@ export default function Properties({
         position: "relative",
         flexShrink: 0,
 
-        marginTop: PANEL_MARGIN,
-        marginBottom: PANEL_MARGIN,
+        marginTop: 4,
+        marginRight: 4,
+        marginBottom: 4,
 
         backgroundColor:
           "var(--mantine-color-dark-7)",
-
-        borderTop:
-          "1px solid var(--mantine-color-dark-5)",
-
-        borderBottom:
-          "1px solid var(--mantine-color-dark-5)",
-
-        borderLeft:
-          "1px solid var(--mantine-color-dark-5)",
       }}
     >
-      {/* Zone permettant de saisir la bordure */}
+      {/* Zone de redimensionnement */}
       <Box
         onMouseDown={startResize}
         style={{
@@ -117,13 +106,15 @@ export default function Properties({
         }}
       />
 
-      {/* Poignée visible */}
+      {/* Poignée */}
       <Box
         onMouseDown={startResize}
         style={{
           position: "absolute",
+
           left: -3,
           top: "50%",
+
           transform: "translateY(-50%)",
 
           width: 5,
@@ -141,14 +132,13 @@ export default function Properties({
 
       <Box
         px="md"
-        py="sm"
+        pt="md"
+        pb="sm"
       >
         <Title order={5}>
           Properties
         </Title>
       </Box>
-
-      <Divider />
 
       <Box p="md">
         {selectedKey ? (
