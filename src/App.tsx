@@ -14,6 +14,8 @@ import {
 
 import { useState } from "react";
 
+import kbrdLogo from "./assets/media/KBRD.svg";
+
 import Geometry, {
   type GeometryData,
 } from "./components/Geometry";
@@ -76,7 +78,7 @@ export default function App() {
             }}
           >
             <img
-              src="./assets/media/KBRD.svg"
+              src={kbrdLogo}
               alt="KBRD"
               style={{
                 width: "100px",
