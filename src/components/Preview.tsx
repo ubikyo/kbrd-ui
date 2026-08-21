@@ -18,18 +18,15 @@ export default function Preview({
   ) {
     const target = event.target as Element;
 
-    const key = target.closest<SVGElement>(
-      ".kbrd-key",
-    );
+    const key =
+      target.closest<SVGElement>(".kbrd-key");
 
     if (!key) {
       onSelectKey(null);
       return;
     }
 
-    const keyRef = key.dataset.key;
-
-    onSelectKey(keyRef ?? null);
+    onSelectKey(key.dataset.key ?? null);
   }
 
   return (
@@ -38,50 +35,56 @@ export default function Preview({
       h="100%"
       onClick={handleClick}
       style={{
-        padding: 60,
-        boxSizing: "border-box",
+        overflow: "auto",
       }}
     >
-      {/* Preview */}
+      {/* Zone de travail avec marge fixe de 60 px */}
       <Box
-        w="100%"
-        h="100%"
         style={{
-          position: "relative",
-
-          border:
-            "1px solid rgba(255, 255, 255, 1)",
-
-          padding: 30,
-
+          width: "100%",
+          height: "100%",
+          padding: 60,
           boxSizing: "border-box",
 
-          overflow: "auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        {/* Surface disponible pour le clavier */}
+        {/*
+         * Tout ce bloc est zoomé :
+         * - bordure
+         * - padding
+         * - SVG
+         */}
         <Box
-          w="100%"
-          h="100%"
           style={{
+            width: `${zoom}%`,
+            height: `${zoom}%`,
+
+            flexShrink: 0,
+
+            border:
+              "1px solid rgba(255, 255, 255, 1)",
+
+            padding: 30,
+
+            boxSizing: "border-box",
+
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-
-            overflow: "visible",
           }}
         >
           <Box
-            className="preview-svg"
+            className="keyboard-svg"
             style={{
-              width: `${zoom}%`,
-              height: `${zoom}%`,
+              width: "100%",
+              height: "100%",
 
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-
-              flexShrink: 0,
             }}
             dangerouslySetInnerHTML={{
               __html: svg,
@@ -92,7 +95,7 @@ export default function Preview({
 
       <style>
         {`
-          .preview-svg svg {
+          .keyboard-svg svg {
             display: block;
 
             width: 100%;
@@ -101,21 +104,19 @@ export default function Preview({
             max-width: 100%;
             max-height: 100%;
 
-            object-fit: contain;
-
             overflow: visible;
           }
 
-          .preview-svg .kbrd-key {
+          .keyboard-svg .kbrd-key {
             cursor: pointer;
             transition: stroke 100ms ease;
           }
 
-          .preview-svg .kbrd-key:hover {
+          .keyboard-svg .kbrd-key:hover {
             stroke: rgba(255, 255, 255, 0.75);
           }
 
-          .preview-svg .kbrd-key[data-key="${selectedKey ?? ""}"] {
+          .keyboard-svg .kbrd-key[data-key="${selectedKey ?? ""}"] {
             stroke: rgba(255, 255, 255, 1);
           }
         `}
