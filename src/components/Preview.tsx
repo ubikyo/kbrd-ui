@@ -3,9 +3,7 @@ import { Box } from "@mantine/core";
 type PreviewProps = {
   svg: string;
   selectedKey: string | null;
-  onSelectKey: (
-    key: string | null,
-  ) => void;
+  onSelectKey: (key: string | null) => void;
   zoom: number;
 };
 
@@ -20,8 +18,9 @@ export default function Preview({
   ) {
     const target = event.target as Element;
 
-    const key =
-      target.closest<SVGElement>(".kbrd-key");
+    const key = target.closest<SVGElement>(
+      ".kbrd-key",
+    );
 
     if (!key) {
       onSelectKey(null);
@@ -30,12 +29,7 @@ export default function Preview({
 
     const keyRef = key.dataset.key;
 
-    if (!keyRef) {
-      onSelectKey(null);
-      return;
-    }
-
-    onSelectKey(keyRef);
+    onSelectKey(keyRef ?? null);
   }
 
   return (
@@ -44,37 +38,50 @@ export default function Preview({
       h="100%"
       onClick={handleClick}
       style={{
-        overflow: "auto",
+        padding: 60,
+        boxSizing: "border-box",
       }}
     >
-      {/* 60 px de marge extérieure */}
+      {/* Preview */}
       <Box
+        w="100%"
+        h="100%"
         style={{
-          minWidth: "100%",
-          minHeight: "100%",
-          padding: 60,
+          position: "relative",
 
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          border:
+            "1px solid rgba(255, 255, 255, 1)",
+
+          padding: 30,
 
           boxSizing: "border-box",
+
+          overflow: "auto",
         }}
       >
-        {/* Cadre de la preview */}
+        {/* Surface disponible pour le clavier */}
         <Box
+          w="100%"
+          h="100%"
           style={{
-            border: "1px solid rgba(255, 255, 255, 1)",
-            padding: 30,
-            boxSizing: "border-box",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+
+            overflow: "visible",
           }}
         >
-          {/* Zoom */}
           <Box
             className="preview-svg"
             style={{
               width: `${zoom}%`,
-              margin: "auto",
+              height: `${zoom}%`,
+
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+
+              flexShrink: 0,
             }}
             dangerouslySetInnerHTML={{
               __html: svg,
@@ -87,8 +94,15 @@ export default function Preview({
         {`
           .preview-svg svg {
             display: block;
+
             width: 100%;
-            height: auto;
+            height: 100%;
+
+            max-width: 100%;
+            max-height: 100%;
+
+            object-fit: contain;
+
             overflow: visible;
           }
 
