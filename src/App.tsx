@@ -62,6 +62,7 @@ export default function App() {
       <AppShell.Header
         style={{
           backgroundColor:"#000000",
+          borderBottom: "1px solid var(--mantine-color-dark-4)",
         }}
       >
         <Group h="100%" gap={0}>
