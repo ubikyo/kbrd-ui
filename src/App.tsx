@@ -69,7 +69,7 @@ export default function App() {
       >
         <Group h="100%" gap={0}>
           <Box
-            w={160}
+            w={100}
             h="100%"
             px="lg"
             style={{
