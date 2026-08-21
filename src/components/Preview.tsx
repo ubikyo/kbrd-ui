@@ -18,8 +18,9 @@ export default function Preview({
   ) {
     const target = event.target as Element;
 
-    const key =
-      target.closest<SVGElement>(".kbrd-key");
+    const key = target.closest<SVGElement>(
+      ".kbrd-key",
+    );
 
     if (!key) {
       onSelectKey(null);
@@ -39,10 +40,12 @@ export default function Preview({
         overflow: "auto",
       }}
     >
-      {/* 
-       * 60 px minimum entre la preview
-       * et les limites du viewport
-       */}
+      {/*
+        Zone disponible pour la preview.
+
+        Les 60 px sont la marge entre le viewport
+        et le cadre de la preview.
+      */}
       <Box
         style={{
           position: "absolute",
@@ -51,34 +54,32 @@ export default function Preview({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+
+          overflow: "visible",
         }}
       >
         {/*
-         * Le zoom concerne tout :
-         * clavier + padding + bordure
-         */}
+          Ce bloc représente l'objet zoomé complet :
+          bordure + padding + clavier.
+        */}
         <Box
           style={{
-            width: "100%",
-            height: "100%",
+            display: "inline-flex",
 
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            maxWidth: "100%",
+            maxHeight: "100%",
 
             transform: `scale(${zoom / 100})`,
             transformOrigin: "center",
+
+            boxSizing: "border-box",
           }}
         >
           {/*
-           * Ce bloc prend les dimensions
-           * naturelles du clavier.
-           *
-           * La bordure se trouve toujours
-           * à 30 px du SVG.
-           */}
+            Le cadre est exactement à 30 px
+            autour du clavier.
+          */}
           <Box
-            className="preview-frame"
             style={{
               display: "inline-flex",
 
@@ -102,32 +103,31 @@ export default function Preview({
 
       <style>
         {`
-          /*
-           * Le SVG utilise au maximum le viewport
-           * disponible, en conservant son ratio.
-           */
-          .preview-frame {
-            max-width: 100%;
-            max-height: 100%;
-          }
-
           .keyboard-svg {
             display: flex;
-            align-items: center;
-            justify-content: center;
-
-            max-width: 100%;
-            max-height: 100%;
+            flex: 0 0 auto;
           }
 
           .keyboard-svg svg {
             display: block;
 
+            /*
+             * Le SVG conserve ses dimensions/ratio
+             * intrinsèques.
+             */
             width: auto;
             height: auto;
 
-            max-width: 100%;
-            max-height: 100%;
+            /*
+             * La taille maximale tient compte de :
+             *
+             * 60 px viewport gauche/droite
+             * 30 px padding gauche/droite
+             *
+             * Même principe verticalement.
+             */
+            max-width: calc(100vw - 180px);
+            max-height: calc(100vh - 244px);
 
             overflow: visible;
           }
