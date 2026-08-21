@@ -362,8 +362,6 @@ export default function Geometry({
             }
             style={{
               width: 230,
-              backgroundColor:
-                "var(--mantine-color-dark-6)",
             }}
           >
             <Group
