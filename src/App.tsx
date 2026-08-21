@@ -75,9 +75,15 @@ export default function App() {
               alignItems: "center",
             }}
           >
-            <Text fw={700} size="xl">
-              KBRD
-            </Text>
+            <img
+              src="/assets/media/KBRD.svg"
+              alt="KBRD"
+              style={{
+                width: "100px",
+                height: "auto",
+                display: "block",
+              }}
+            />
           </Box>
 
           <Geometry onChange={changeGeometry} />
