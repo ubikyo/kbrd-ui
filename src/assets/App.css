@@ -4,19 +4,6 @@ body,
   min-height: 100%;
 }
 
-[data-mantine-color-scheme="dark"] {
-  --mantine-color-body: #101010;
-}
-
-[data-mantine-color-scheme="dark"] {
-  --mantine-color-body: #101010;
-}
-
-[data-mantine-color-scheme="dark"] .mantine-AppShell-header,
-[data-mantine-color-scheme="dark"] .mantine-AppShell-main {
-  background-color: var(--mantine-color-body);
-}
-
 body {
   margin: 0;
   background-color: var(--mantine-color-body);
