@@ -89,7 +89,7 @@ export default function Properties({
         marginBottom: 4,
 
         backgroundColor:
-          "var(--mantine-color-dark-7)",
+          "var(--kbrd-color-surface)",
       }}
     >
       {/* Zone de redimensionnement */}

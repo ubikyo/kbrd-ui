@@ -18,7 +18,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <MantineProvider
       theme={theme}
       cssVariablesResolver={cssVariablesResolver}
-      defaultColorScheme="dark"
+      forceColorScheme="dark"
     >
       <Notifications position="top-right" />
       <BrowserRouter>

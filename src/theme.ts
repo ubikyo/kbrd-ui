@@ -6,11 +6,10 @@ import {
 export const theme = createTheme({});
 
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
-  variables: {},
-  light: {
+  variables: {
     "--mantine-color-body": "#000000",
+    "--kbrd-color-surface": "#222120",
   },
-  dark: {
-    "--mantine-color-body": "#000000",
-  },
+  light: {},
+  dark: {},
 });

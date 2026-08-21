@@ -404,7 +404,10 @@ export default function Geometry({
           </UnstyledButton>
         </Popover.Target>
 
-        <Popover.Dropdown p="xs">
+        <Popover.Dropdown
+          p="xs"
+          bg="var(--kbrd-color-surface)"
+        >
           <Text
             size="xs"
             c="dimmed"
@@ -561,6 +564,13 @@ export default function Geometry({
             flexDirection: "column",
             height: "85vh",
             maxHeight: "85vh",
+            backgroundColor:
+              "var(--kbrd-color-surface)",
+          },
+
+          header: {
+            backgroundColor:
+              "var(--kbrd-color-surface)",
           },
 
           body: {
@@ -682,7 +692,7 @@ export default function Geometry({
             borderTop:
               "1px solid var(--mantine-color-dark-4)",
             backgroundColor:
-              "var(--mantine-color-body)",
+              "var(--kbrd-color-surface)",
           }}
         >
           <Box>
@@ -742,6 +752,16 @@ export default function Geometry({
         overlayProps={{
           backgroundOpacity: 0.65,
           blur: 2,
+        }}
+        styles={{
+          content: {
+            backgroundColor:
+              "var(--kbrd-color-surface)",
+          },
+          header: {
+            backgroundColor:
+              "var(--kbrd-color-surface)",
+          },
         }}
       >
         <Stack>
