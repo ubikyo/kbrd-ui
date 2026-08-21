@@ -83,13 +83,8 @@ export default function Properties({
       style={{
         position: "relative",
         flexShrink: 0,
-
-        marginTop: 4,
-        marginRight: 4,
-        marginBottom: 4,
-
-        backgroundColor:
-          "var(--kbrd-color-surface)",
+        backgroundColor: "var(--kbrd-color-body)",
+        borderLeft: "1px solid var(--mantine-color-dark-7)",
       }}
     >
       {/* Zone de redimensionnement */}
@@ -112,15 +107,15 @@ export default function Properties({
         style={{
           position: "absolute",
 
-          left: -3,
+          left: -8,
           top: "50%",
 
           transform: "translateY(-50%)",
 
-          width: 5,
+          width: 3,
           height: 36,
 
-          borderRadius: 3,
+          borderRadius: 0,
 
           backgroundColor:
             "var(--mantine-color-gray-5)",
