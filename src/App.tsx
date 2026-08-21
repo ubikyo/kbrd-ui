@@ -58,11 +58,11 @@ export default function App() {
 
   return (
     <AppShell 
-      bg="var(--kbrd-color-body)"
       header={{ height: 64 }}
       padding={0}
     >
       <AppShell.Header
+        bg="var(--kbrd-color-body)"
         style={{
           borderBottom: "1px solid var(--mantine-color-dark-7)",
         }}
@@ -93,6 +93,7 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Main
+        bg="var(--kbrd-color-body)"
         style={{
           height: "100vh",
         }}
