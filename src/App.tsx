@@ -71,7 +71,7 @@ export default function App() {
           <Box
             w={100}
             h="100%"
-            px="lg"
+            px="sm"
             style={{
               display: "flex",
               alignItems: "center",
