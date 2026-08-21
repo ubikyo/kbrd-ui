@@ -8,9 +8,9 @@ import {
 } from "@mantine/core";
 
 import {
-  IconMinus,
-  IconPlus,
-} from "@tabler/icons-react";
+  MdAdd,
+  MdRemove,
+} from "react-icons/md";
 
 import { useState } from "react";
 
@@ -146,7 +146,7 @@ export default function App() {
                 disabled={zoom <= MIN_ZOOM}
                 aria-label="Dézoomer"
               >
-                <IconMinus size={15} />
+                <MdRemove size={15} />
               </ActionIcon>
 
               <UnstyledButton
@@ -170,7 +170,7 @@ export default function App() {
                 disabled={zoom >= MAX_ZOOM}
                 aria-label="Zoomer"
               >
-                <IconPlus size={15} />
+                <MdAdd size={15} />
               </ActionIcon>
             </Group>
           </Box>

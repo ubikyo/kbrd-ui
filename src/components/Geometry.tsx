@@ -18,13 +18,13 @@ import {
 } from "@mantine/core";
 
 import {
-  IconCheck,
-  IconChevronRight,
-  IconGeometry,
-  IconPencil,
-  IconPlus,
-  IconTrash,
-} from "@tabler/icons-react";
+  MdAdd,
+  MdCheck,
+  MdChevronRight,
+  MdDelete,
+  MdEdit,
+  MdKeyboardAlt,
+} from "react-icons/md";
 
 export type GeometryItem = {
   name: string;
@@ -374,9 +374,8 @@ export default function Geometry({
                 gap="sm"
                 wrap="nowrap"
               >
-                <IconGeometry
+                <MdKeyboardAlt
                   size={24}
-                  stroke={1.5}
                 />
 
                 <Box>
@@ -397,7 +396,7 @@ export default function Geometry({
                 </Box>
               </Group>
 
-              <IconChevronRight
+              <MdChevronRight
                 size={16}
               />
             </Group>
@@ -454,7 +453,7 @@ export default function Geometry({
                       gap="sm"
                       wrap="nowrap"
                     >
-                      <IconGeometry
+                      <MdKeyboardAlt
                         size={18}
                       />
 
@@ -484,7 +483,7 @@ export default function Geometry({
 
                     {selected?.id ===
                       item.id && (
-                      <IconCheck
+                      <MdCheck
                         size={16}
                       />
                     )}
@@ -504,7 +503,7 @@ export default function Geometry({
               onClick={openAdd}
             >
               <Group gap="sm">
-                <IconPlus
+                <MdAdd
                   size={18}
                 />
 
@@ -525,7 +524,7 @@ export default function Geometry({
                 }
               >
                 <Group gap="sm">
-                  <IconPencil
+                  <MdEdit
                     size={18}
                   />
 
@@ -701,7 +700,7 @@ export default function Geometry({
                 variant="filled"
                 color="red"
                 leftSection={
-                  <IconTrash
+                  <MdDelete
                     size={16}
                   />
                 }
@@ -801,7 +800,7 @@ export default function Geometry({
               variant="filled"
               color="red"
               leftSection={
-                <IconTrash size={16} />
+                <MdDelete size={16} />
               }
               onClick={confirmDelete}
             >
