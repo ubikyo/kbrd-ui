@@ -1,5 +1,5 @@
 import { Box } from "@mantine/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type PreviewProps = {
   svg: string;
@@ -15,6 +15,7 @@ type Size = {
 
 const VIEWPORT_MARGIN = 60;
 const PREVIEW_PADDING = 30;
+const BORDER_WIDTH = 1;
 
 export default function Preview({
   svg,
@@ -29,6 +30,27 @@ export default function Preview({
     height: 0,
   });
 
+  /*
+   * Récupère les dimensions natives du SVG depuis son viewBox.
+   */
+  const svgSize = useMemo(() => {
+    const match = svg.match(
+      /viewBox=["']\s*([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s*["']/i,
+    );
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      width: Number(match[3]),
+      height: Number(match[4]),
+    };
+  }, [svg]);
+
+  /*
+   * Surveillance du viewport.
+   */
   useEffect(() => {
     const element = viewportRef.current;
 
@@ -48,6 +70,65 @@ export default function Preview({
     return () => observer.disconnect();
   }, []);
 
+  /*
+   * Calcule les dimensions du clavier en respectant :
+   *
+   * viewport
+   *   60px marge
+   *   border
+   *     30px padding
+   *       clavier
+   *     30px padding
+   *   border
+   *   60px marge
+   *
+   * Le ratio du SVG est conservé.
+   */
+  const keyboardSize = useMemo(() => {
+    if (
+      !svgSize ||
+      viewport.width <= 0 ||
+      viewport.height <= 0
+    ) {
+      return null;
+    }
+
+    const availableWidth =
+      viewport.width -
+      VIEWPORT_MARGIN * 2 -
+      PREVIEW_PADDING * 2 -
+      BORDER_WIDTH * 2;
+
+    const availableHeight =
+      viewport.height -
+      VIEWPORT_MARGIN * 2 -
+      PREVIEW_PADDING * 2 -
+      BORDER_WIDTH * 2;
+
+    if (availableWidth <= 0 || availableHeight <= 0) {
+      return null;
+    }
+
+    const ratio = svgSize.width / svgSize.height;
+
+    let width = availableWidth;
+    let height = width / ratio;
+
+    /*
+     * Si on dépasse verticalement,
+     * c'est la hauteur qui devient limitante.
+     */
+    if (height > availableHeight) {
+      height = availableHeight;
+      width = height * ratio;
+    }
+
+    return {
+      width,
+      height,
+    };
+  }, [svgSize, viewport]);
+
   function handleClick(
     event: React.MouseEvent<HTMLDivElement>,
   ) {
@@ -65,30 +146,6 @@ export default function Preview({
     onSelectKey(key.dataset.key ?? null);
   }
 
-  /*
-   * Dimensions maximales du clavier à 100%.
-   *
-   * viewport
-   * - 60px × 2 de marge extérieure
-   * - 30px × 2 de padding intérieur
-   * - 2px pour la bordure
-   */
-  const keyboardMaxWidth = Math.max(
-    0,
-    viewport.width -
-      VIEWPORT_MARGIN * 2 -
-      PREVIEW_PADDING * 2 -
-      2,
-  );
-
-  const keyboardMaxHeight = Math.max(
-    0,
-    viewport.height -
-      VIEWPORT_MARGIN * 2 -
-      PREVIEW_PADDING * 2 -
-      2,
-  );
-
   return (
     <Box
       ref={viewportRef}
@@ -100,68 +157,62 @@ export default function Preview({
         overflow: "auto",
       }}
     >
-      {viewport.width > 0 &&
-        viewport.height > 0 && (
+      {keyboardSize && (
+        <Box
+          style={{
+            position: "absolute",
+
+            inset: VIEWPORT_MARGIN,
+
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {/*
+           * Tout ce bloc zoome ensemble :
+           *
+           * border
+           * padding
+           * SVG
+           */}
           <Box
             style={{
-              position: "absolute",
+              display: "inline-block",
 
-              inset: VIEWPORT_MARGIN,
+              transform: `scale(${zoom / 100})`,
+              transformOrigin: "center center",
 
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            {/*
-             * L'objet complet est zoomé :
-             *
-             * bordure
-             * + padding 30
-             * + clavier
-             */}
             <Box
               style={{
-                display: "inline-flex",
+                display: "block",
 
-                transform: `scale(${zoom / 100})`,
-                transformOrigin: "center",
+                padding: PREVIEW_PADDING,
 
-                flexShrink: 0,
+                border: `${BORDER_WIDTH}px solid rgba(255, 255, 255, 1)`,
+
+                boxSizing: "content-box",
               }}
             >
-              {/* Cadre */}
               <Box
+                className="keyboard-svg"
                 style={{
-                  display: "inline-flex",
+                  width: keyboardSize.width,
+                  height: keyboardSize.height,
 
-                  padding: PREVIEW_PADDING,
-
-                  border:
-                    "1px solid rgba(255, 255, 255, 1)",
-
-                  boxSizing: "content-box",
+                  lineHeight: 0,
                 }}
-              >
-                {/* Clavier */}
-                <Box
-                  className="keyboard-svg"
-                  style={{
-                    width: keyboardMaxWidth,
-                    height: keyboardMaxHeight,
-
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: svg,
-                  }}
-                />
-              </Box>
+                dangerouslySetInnerHTML={{
+                  __html: svg,
+                }}
+              />
             </Box>
           </Box>
-        )}
+        </Box>
+      )}
 
       <style>
         {`
@@ -171,11 +222,7 @@ export default function Preview({
             width: 100%;
             height: 100%;
 
-            /*
-             * Le viewBox du SVG conserve
-             * automatiquement le ratio du clavier.
-             */
-            object-fit: contain;
+            overflow: visible;
           }
 
           .keyboard-svg .kbrd-key {
