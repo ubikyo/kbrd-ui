@@ -35,16 +35,18 @@ export default function Preview({
       h="100%"
       onClick={handleClick}
       style={{
+        position: "relative",
         overflow: "auto",
       }}
     >
-      {/* Zone de travail avec marge fixe de 60 px */}
+      {/* 
+       * 60 px minimum entre la preview
+       * et les limites du viewport
+       */}
       <Box
         style={{
-          width: "100%",
-          height: "100%",
-          padding: 60,
-          boxSizing: "border-box",
+          position: "absolute",
+          inset: 60,
 
           display: "flex",
           alignItems: "center",
@@ -52,54 +54,77 @@ export default function Preview({
         }}
       >
         {/*
-         * Tout ce bloc est zoomé :
-         * - bordure
-         * - padding
-         * - SVG
+         * Le zoom concerne tout :
+         * clavier + padding + bordure
          */}
         <Box
           style={{
-            width: `${zoom}%`,
-            height: `${zoom}%`,
-
-            flexShrink: 0,
-
-            border:
-              "1px solid rgba(255, 255, 255, 1)",
-
-            padding: 30,
-
-            boxSizing: "border-box",
+            width: "100%",
+            height: "100%",
 
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+
+            transform: `scale(${zoom / 100})`,
+            transformOrigin: "center",
           }}
         >
+          {/*
+           * Ce bloc prend les dimensions
+           * naturelles du clavier.
+           *
+           * La bordure se trouve toujours
+           * à 30 px du SVG.
+           */}
           <Box
-            className="keyboard-svg"
+            className="preview-frame"
             style={{
-              width: "100%",
-              height: "100%",
+              display: "inline-flex",
 
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              padding: 30,
+
+              border:
+                "1px solid rgba(255, 255, 255, 1)",
+
+              boxSizing: "border-box",
             }}
-            dangerouslySetInnerHTML={{
-              __html: svg,
-            }}
-          />
+          >
+            <Box
+              className="keyboard-svg"
+              dangerouslySetInnerHTML={{
+                __html: svg,
+              }}
+            />
+          </Box>
         </Box>
       </Box>
 
       <style>
         {`
+          /*
+           * Le SVG utilise au maximum le viewport
+           * disponible, en conservant son ratio.
+           */
+          .preview-frame {
+            max-width: 100%;
+            max-height: 100%;
+          }
+
+          .keyboard-svg {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            max-width: 100%;
+            max-height: 100%;
+          }
+
           .keyboard-svg svg {
             display: block;
 
-            width: 100%;
-            height: 100%;
+            width: auto;
+            height: auto;
 
             max-width: 100%;
             max-height: 100%;
