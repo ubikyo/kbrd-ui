@@ -6,15 +6,18 @@ import {
   Text,
   UnstyledButton,
 } from "@mantine/core";
+
 import {
   IconMinus,
   IconPlus,
 } from "@tabler/icons-react";
+
 import { useState } from "react";
 
 import Geometry, {
   type GeometryData,
 } from "./components/Geometry";
+
 import Preview from "./components/Preview";
 import Properties from "./components/Properties";
 
@@ -58,8 +61,7 @@ export default function App() {
     >
       <AppShell.Header
         style={{
-          backgroundColor:
-            "var(--mantine-color-dark-7)",
+          backgroundColor:"#141211",
         }}
       >
         <Group h="100%" gap={0}>
@@ -84,7 +86,7 @@ export default function App() {
       <AppShell.Main
         style={{
           height: "100vh",
-          backgroundColor: "#241E25",
+          backgroundColor: "#171514",
         }}
       >
         <Box
