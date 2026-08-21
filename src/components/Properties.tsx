@@ -84,7 +84,7 @@ export default function Properties({
         position: "relative",
         flexShrink: 0,
         backgroundColor: "var(--kbrd-color-body)",
-        borderLeft: "1px solid var(--mantine-color-dark-7)",
+        borderLeft: "1px solid var(--kbrd-border-color)",
       }}
     >
       {/* Zone de redimensionnement */}

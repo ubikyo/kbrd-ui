@@ -362,6 +362,7 @@ export default function Geometry({
             }
             style={{
               width: 230,
+              borderLeft: "1px solid var(--kbrd-border-color)"
             }}
           >
             <Group
