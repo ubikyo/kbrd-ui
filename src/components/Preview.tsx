@@ -38,19 +38,19 @@ export default function Preview({
       style={{
         position: "relative",
         overflow: "auto",
+
+        /*
+         * Marge extérieure du viewport.
+         */
+        padding: 60,
+
+        boxSizing: "border-box",
       }}
     >
-      {/*
-        Zone disponible pour la preview.
-
-        Les 60 px sont la marge entre le viewport
-        et le cadre de la preview.
-      */}
       <Box
+        w="100%"
+        h="100%"
         style={{
-          position: "absolute",
-          inset: 60,
-
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -58,90 +58,51 @@ export default function Preview({
           overflow: "visible",
         }}
       >
-        {/*
-          Ce bloc représente l'objet zoomé complet :
-          bordure + padding + clavier.
-        */}
         <Box
+          className="keyboard-preview"
           style={{
-            display: "inline-flex",
+            width: `${zoom}%`,
+            height: `${zoom}%`,
 
-            maxWidth: "100%",
-            maxHeight: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
 
-            transform: `scale(${zoom / 100})`,
-            transformOrigin: "center",
-
-            boxSizing: "border-box",
+            flexShrink: 0,
           }}
-        >
-          {/*
-            Le cadre est exactement à 30 px
-            autour du clavier.
-          */}
-          <Box
-            style={{
-              display: "inline-flex",
-
-              padding: 30,
-
-              border:
-                "1px solid rgba(255, 255, 255, 1)",
-
-              boxSizing: "border-box",
-            }}
-          >
-            <Box
-              className="keyboard-svg"
-              dangerouslySetInnerHTML={{
-                __html: svg,
-              }}
-            />
-          </Box>
-        </Box>
+          dangerouslySetInnerHTML={{
+            __html: svg,
+          }}
+        />
       </Box>
 
       <style>
         {`
-          .keyboard-svg {
-            display: flex;
-            flex: 0 0 auto;
-          }
-
-          .keyboard-svg svg {
+          .keyboard-preview svg {
             display: block;
 
-            /*
-             * Le SVG conserve ses dimensions/ratio
-             * intrinsèques.
-             */
-            width: auto;
-            height: auto;
+            width: 100%;
+            height: 100%;
 
             /*
-             * La taille maximale tient compte de :
-             *
-             * 60 px viewport gauche/droite
-             * 30 px padding gauche/droite
-             *
-             * Même principe verticalement.
+             * Le ratio du SVG décide si c'est
+             * la largeur ou la hauteur qui limite.
              */
-            max-width: calc(100vw - 180px);
-            max-height: calc(100vh - 244px);
+            object-fit: contain;
 
             overflow: visible;
           }
 
-          .keyboard-svg .kbrd-key {
+          .keyboard-preview .kbrd-key {
             cursor: pointer;
             transition: stroke 100ms ease;
           }
 
-          .keyboard-svg .kbrd-key:hover {
+          .keyboard-preview .kbrd-key:hover {
             stroke: rgba(255, 255, 255, 0.75);
           }
 
-          .keyboard-svg .kbrd-key[data-key="${selectedKey ?? ""}"] {
+          .keyboard-preview .kbrd-key[data-key="${selectedKey ?? ""}"] {
             stroke: rgba(255, 255, 255, 1);
           }
         `}
