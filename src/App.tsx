@@ -74,9 +74,7 @@ export default function App() {
             px="sm"
             style={{
               display: "flex",
-              alignItems: "center",
-              padding: "0 10px",
-              width: "auto"
+              alignItems: "center"
             }}
           >
             <img
