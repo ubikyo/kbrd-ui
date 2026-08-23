@@ -64,7 +64,7 @@ export default function App() {
       <AppShell.Header
         bg="var(--kbrd-color-body)"
         style={{
-          borderBottom: "1px solid var(--mantine-color-dark-7)",
+          borderBottom: "1px solid var(--kbrd-border-color)",
         }}
       >
         <Group h="100%" gap={0}>
