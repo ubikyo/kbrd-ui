@@ -228,6 +228,7 @@ export default function Preview({
           .keyboard-svg .kbrd-key {
             cursor: pointer;
             transition: stroke 100ms ease;
+            fill: rgba(0, 0, 0, 0);
           }
 
           .keyboard-svg .kbrd-key:hover {

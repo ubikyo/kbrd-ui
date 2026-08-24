@@ -26,12 +26,20 @@ import {
   MdKeyboardAlt,
 } from "react-icons/md";
 
-export type GeometryItem = {
+export type GeometryElement = {
+  type: "key" | "space";
   name: string;
+  ref?: string;
   rowspan: number;
   colspan: number;
   size: number;
   quantity: number;
+};
+
+export type GeometryGroup = {
+  name: string;
+  gap: number;
+  elements: GeometryElement[];
 };
 
 export type GeometryData = {
@@ -40,7 +48,7 @@ export type GeometryData = {
   description: string;
   author: string;
   unit: "px" | "mm";
-  geometry: GeometryItem[][];
+  geometry: GeometryGroup[][];
   svg: string;
   created_at: string;
 };
@@ -218,7 +226,7 @@ export default function Geometry({
 
   async function save() {
     let parsedGeometry:
-      GeometryItem[][];
+      GeometryGroup[][];
 
     try {
       parsedGeometry =

@@ -69,19 +69,21 @@ export default function App() {
       >
         <Group h="100%" gap={0}>
           <Box
-            w={100}
+            w={86}
             h="100%"
             px="xs"
             style={{
               display: "flex",
-              alignItems: "center"
+              alignItems: "center",
+              boxSizing: "border-box",
             }}
           >
             <img
               src={kbrdLogo}
               alt="KBRD"
               style={{
-                width: "100px",
+                width: "100%",
+                maxWidth: "100%",
                 height: "auto",
                 display: "block",
               }}
