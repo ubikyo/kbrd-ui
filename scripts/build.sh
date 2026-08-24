@@ -2,8 +2,8 @@
 
 set -e
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$PROJECT_DIR"
 
 echo "# Build Web"
 npm run build
@@ -21,6 +21,3 @@ fi
 
 echo "# Git commit"
 git commit -m "wip"
-
-echo "# npm version patch"
-npm version patch

@@ -6,7 +6,7 @@
 
 # Build
 ## Dev
-./build.sh
+./scripts/build.sh
 
 ## Prod
 npm run build

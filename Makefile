@@ -6,7 +6,7 @@ REMOTE_DIR := /var/www
 
 build:
 	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : compilation "
-	./build.sh
+	./scripts/build.sh
 
 deploy: build
 	@printf "\033[47;30m %-60s \033[0m\n" " KBRD-WEB : déploiement "
