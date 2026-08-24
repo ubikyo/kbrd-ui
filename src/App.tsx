@@ -12,13 +12,12 @@ import {
   MdRemove,
 } from "react-icons/md";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import kbrdLogo from "./assets/media/KBRD.svg";
 
-import Geometry, {
-  type GeometryData,
-} from "./components/Geometry";
+import Geometry from "./components/Geometry";
+import type { GeometryData } from "./types/geometry";
 
 import Preview from "./components/Preview";
 import Properties from "./components/Properties";
@@ -36,13 +35,13 @@ export default function App() {
 
   const [zoom, setZoom] = useState(100);
 
-  function changeGeometry(
+  const changeGeometry = useCallback((
     value: GeometryData | null,
-  ) {
+  ) => {
     setGeometry(value);
     setSelectedKey(null);
     setZoom(100);
-  }
+  }, []);
 
   function zoomOut() {
     setZoom((value) =>

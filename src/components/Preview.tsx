@@ -24,6 +24,7 @@ export default function Preview({
   zoom,
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const selectedKeySelector = CSS.escape(selectedKey ?? "");
 
   const [viewport, setViewport] = useState<Size>({
     width: 0,
@@ -235,7 +236,7 @@ export default function Preview({
             stroke: rgba(255, 255, 255, 0.75);
           }
 
-          .keyboard-svg .kbrd-key[data-key="${selectedKey ?? ""}"] {
+          .keyboard-svg .kbrd-key[data-key="${selectedKeySelector}"] {
             stroke: rgba(255, 255, 255, 1);
           }
         `}
