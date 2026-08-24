@@ -34,14 +34,14 @@ export type GeometryElement = {
   colspan: number;
   size: number;
   quantity: number;
+  gap?: number;
   parts?: GeometryPart[];
 };
 
 export type GeometryPart = {
-  row: number;
-  column: number;
-  rowspan: number;
-  colspan: number;
+  width?: number;
+  height?: number;
+  position?: "top" | "bottom-right";
 };
 
 export type GeometryGroup = {
