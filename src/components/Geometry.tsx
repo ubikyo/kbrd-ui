@@ -34,6 +34,14 @@ export type GeometryElement = {
   colspan: number;
   size: number;
   quantity: number;
+  parts?: GeometryPart[];
+};
+
+export type GeometryPart = {
+  row: number;
+  column: number;
+  rowspan: number;
+  colspan: number;
 };
 
 export type GeometryGroup = {
@@ -48,7 +56,7 @@ export type GeometryData = {
   description: string;
   author: string;
   unit: "px" | "mm";
-  geometry: GeometryGroup[][];
+  geometry: GeometryGroup[];
   svg: string;
   created_at: string;
 };
