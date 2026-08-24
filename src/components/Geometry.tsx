@@ -41,7 +41,7 @@ export type GeometryElement = {
 export type GeometryPart = {
   width?: number;
   height?: number;
-  position?: "top" | "bottom-right";
+  align?: "left" | "center" | "right";
 };
 
 export type GeometryGroup = {
