@@ -11,11 +11,11 @@ export type KeyPlugin = {
 
 export type KeyPropertyConfig = {
   borderEnabled: boolean;
-  borderWidth: number;
+  downEnabled: boolean;
   upBorderColor: string;
   downBorderColor: string;
-  upBackgroundColor: string;
-  downBackgroundColor: string;
+  upBorderWidth: number;
+  downBorderWidth: number;
 };
 
 export type KeyProperty = {

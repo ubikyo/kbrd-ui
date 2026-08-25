@@ -15,6 +15,7 @@ type PreviewProps = {
   workspace: WorkspaceData | null;
   onDropPlugin: (key: string, pluginId: string) => void;
   previewDownPluginId: number | null;
+  previewDownTarget: string | null;
 };
 
 type Size = {
@@ -69,6 +70,7 @@ export default function Preview({
   workspace,
   onDropPlugin,
   previewDownPluginId,
+  previewDownTarget,
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const keyboardRef = useRef<HTMLDivElement>(null);
@@ -133,31 +135,33 @@ export default function Preview({
     );
     root.querySelectorAll<SVGGraphicsElement>(".kbrd-key").forEach((element) => {
       const ref = element.dataset.key ?? "";
-      const type = element.dataset.type ?? "key";
-      if (type !== "key") {
-        element.setAttribute("fill", "#00000000");
-        element.setAttribute("stroke", "none");
-        return;
-      }
       const config = properties.get(ref);
-      const down = pressedKey === ref;
+      const down =
+        Boolean(config?.downEnabled) &&
+        (pressedKey === ref || previewDownTarget === ref);
       const borderEnabled = config?.borderEnabled ?? true;
-      const borderWidth = Math.max(1, config?.borderWidth ?? 1);
-      element.setAttribute(
-        "fill",
-        down
-          ? (config?.downBackgroundColor ?? "#00000000")
-          : (config?.upBackgroundColor ?? "#00000000"),
+      const legacyWidth = (config as { borderWidth?: number } | undefined)
+        ?.borderWidth;
+      const borderWidth = Math.max(
+        1,
+        Math.min(
+          4,
+          down
+            ? (config?.downBorderWidth ?? legacyWidth ?? 1)
+            : (config?.upBorderWidth ?? legacyWidth ?? 1),
+        ),
       );
+      const displayWidth = borderEnabled ? borderWidth : 1;
+      element.setAttribute("fill", "#00000000");
       element.setAttribute(
         "stroke",
         borderEnabled
           ? down
-            ? (config?.downBorderColor ?? "#ffffffff")
-            : (config?.upBorderColor ?? "#ffffff80")
+            ? (config?.downBorderColor ?? "#ffffff")
+            : (config?.upBorderColor ?? "#ffffff")
           : "none",
       );
-      element.setAttribute("stroke-width", String(borderWidth));
+      element.setAttribute("stroke-width", String(displayWidth));
       element.setAttribute("vector-effect", "non-scaling-stroke");
 
       if (element instanceof SVGRectElement) {
@@ -165,12 +169,12 @@ export default function Preview({
         const bounds = svg?.getBoundingClientRect();
         const viewBox = svg?.viewBox.baseVal;
         const insetX =
-          borderEnabled && bounds?.width && viewBox
-            ? (borderWidth / 2) * (viewBox.width / bounds.width)
+          bounds?.width && viewBox
+            ? (displayWidth / 2) * (viewBox.width / bounds.width)
             : 0;
         const insetY =
-          borderEnabled && bounds?.height && viewBox
-            ? (borderWidth / 2) * (viewBox.height / bounds.height)
+          bounds?.height && viewBox
+            ? (displayWidth / 2) * (viewBox.height / bounds.height)
             : 0;
         const x = Number(element.dataset.x ?? element.getAttribute("x") ?? 0);
         const y = Number(element.dataset.y ?? element.getAttribute("y") ?? 0);
@@ -189,7 +193,7 @@ export default function Preview({
         );
       }
     });
-  }, [pressedKey, svg, workspace?.key_properties]);
+  }, [pressedKey, previewDownTarget, svg, workspace?.key_properties]);
 
   useEffect(() => {
     const release = () => setPressedKey(null);

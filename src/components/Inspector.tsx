@@ -8,7 +8,6 @@ import {
   Modal,
   NumberInput,
   Stack,
-  Slider,
   Switch,
   Tabs,
   Text,
@@ -34,11 +33,11 @@ import type {
 const BACKGROUND_REF = "__background__";
 const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
   borderEnabled: true,
-  borderWidth: 1,
-  upBorderColor: "#ffffff80",
-  downBorderColor: "#ffffffff",
-  upBackgroundColor: "#00000000",
-  downBackgroundColor: "#00000000",
+  downEnabled: false,
+  upBorderColor: "#ffffff",
+  downBorderColor: "#ffffff",
+  upBorderWidth: 1,
+  downBorderWidth: 1,
 };
 
 type Props = {
@@ -50,6 +49,7 @@ type Props = {
   layout: GeometryLayout | null;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
+  onPreviewDownTargetChange: (keyRef: string | null) => void;
 };
 
 function pluginSummary(item: KeyPlugin) {
@@ -101,11 +101,15 @@ export default function Inspector({
   layout,
   onKeyPropertiesChange,
   onPreviewDownPluginChange,
+  onPreviewDownTargetChange,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
     Record<number, "main" | "up" | "down">
   >({});
   const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
+  const [targetStates, setTargetStates] = useState<
+    Record<string, "option" | "up" | "down">
+  >({});
   const [dropIndicator, setDropIndicator] = useState<{
     id: number;
     edge: "before" | "after";
@@ -127,14 +131,31 @@ export default function Inspector({
   const selectedProperty = keyProperties.find(
     (property) => property.key_ref === selectedKey,
   );
+  const legacyBorderWidth = (
+    selectedProperty?.config as (KeyPropertyConfig & { borderWidth?: number })
+      | undefined
+  )?.borderWidth;
   const propertyConfig: KeyPropertyConfig = {
     ...DEFAULT_KEY_PROPERTIES,
     ...selectedProperty?.config,
+    upBorderWidth:
+      selectedProperty?.config.upBorderWidth ?? legacyBorderWidth ?? 1,
+    downBorderWidth:
+      selectedProperty?.config.downBorderWidth ?? legacyBorderWidth ?? 1,
   };
   const targetType =
     selectedKey === BACKGROUND_REF
       ? "background"
       : (layout?.keys.find((key) => key.ref === selectedKey)?.type ?? "key");
+  const targetState = selectedKey
+    ? (targetStates[selectedKey] ?? "option")
+    : "option";
+  const systemPluginName =
+    targetType === "background"
+      ? "Workspace"
+      : targetType === "space"
+        ? "Space"
+        : "Key";
 
   function patchKeyProperty(data: Partial<KeyPropertyConfig>) {
     if (!workspace || !selectedKey) return;
@@ -297,104 +318,155 @@ export default function Inspector({
           {!selectedKey ? (
             <Text c="dimmed">No key selected</Text>
           ) : (
-            <Stack gap="xl">
-              <Stack gap="xs">
-                <Group justify="space-between" wrap="nowrap">
-                  <Text size="sm">Type</Text>
-                  <Text size="sm" tt="capitalize" c="dimmed">
-                    {targetType}
-                  </Text>
-                </Group>
-                {targetType === "key" && (
-                  <>
-                    <Group justify="space-between" wrap="nowrap">
-                      <Text size="sm">Border</Text>
-                      <Switch
-                        size="sm"
-                        checked={propertyConfig.borderEnabled}
-                        onChange={(event) =>
-                          patchKeyProperty({
-                            borderEnabled: event.currentTarget.checked,
-                          })
-                        }
-                      />
-                    </Group>
-                    {propertyConfig.borderEnabled && (
-                      <>
-                        <Group justify="space-between" wrap="nowrap">
-                          <Text size="sm">Border Up</Text>
-                          <ColorInput
-                            w={160}
-                            size="xs"
-                            format="hexa"
-                            value={propertyConfig.upBorderColor}
-                            onChange={(value) =>
-                              patchKeyProperty({ upBorderColor: value })
-                            }
-                          />
-                        </Group>
-                        <Group justify="space-between" wrap="nowrap">
-                          <Text size="sm">Border Down</Text>
-                          <ColorInput
-                            w={160}
-                            size="xs"
-                            format="hexa"
-                            value={propertyConfig.downBorderColor}
-                            onChange={(value) =>
-                              patchKeyProperty({ downBorderColor: value })
-                            }
-                          />
-                        </Group>
-                        <Group justify="space-between" wrap="nowrap">
-                          <Text size="sm">Border width</Text>
-                          <Box w={160} px="xs">
-                            <Slider
-                              min={1}
-                              max={8}
-                              step={1}
-                              value={propertyConfig.borderWidth}
-                              onChange={(value) =>
-                                patchKeyProperty({ borderWidth: value })
-                              }
-                            />
-                          </Box>
-                        </Group>
-                      </>
-                    )}
-                    <Group justify="space-between" wrap="nowrap">
-                      <Text size="sm">Background Up</Text>
-                      <ColorInput
-                        w={160}
-                        size="xs"
-                        format="hexa"
-                        value={propertyConfig.upBackgroundColor}
-                        onChange={(value) =>
-                          patchKeyProperty({ upBackgroundColor: value })
-                        }
-                      />
-                    </Group>
-                    <Group justify="space-between" wrap="nowrap">
-                      <Text size="sm">Background Down</Text>
-                      <ColorInput
-                        w={160}
-                        size="xs"
-                        format="hexa"
-                        value={propertyConfig.downBackgroundColor}
-                        onChange={(value) =>
-                          patchKeyProperty({ downBackgroundColor: value })
-                        }
-                      />
-                    </Group>
-                  </>
-                )}
-              </Stack>
-
-              <Text
-                pb="xs"
-                style={{ borderBottom: "2px solid white" }}
+            <Stack gap={0}>
+              <Accordion
+                multiple
+                defaultValue={["system"]}
+                className="property-accordion"
               >
-                Plugin properties
-              </Text>
+                <Accordion.Item value="system">
+                  <Box className="inspector-accordion-heading">
+                    <Accordion.Control>{systemPluginName}</Accordion.Control>
+                  </Box>
+                  {targetType !== "background" && (
+                    <Accordion.Panel className="property-editor-panel">
+                      <Tabs
+                        className="state-tabs"
+                        value={targetState}
+                        onChange={(value) => {
+                          const state = (value ?? "option") as
+                            | "option"
+                            | "up"
+                            | "down";
+                          setTargetStates((states) => ({
+                            ...states,
+                            [selectedKey]: state,
+                          }));
+                          onPreviewDownTargetChange(
+                            state === "down" ? selectedKey : null,
+                          );
+                        }}
+                      >
+                        <Tabs.List grow>
+                          <Tabs.Tab value="option">Option</Tabs.Tab>
+                          <Tabs.Tab value="up">Up</Tabs.Tab>
+                          {propertyConfig.downEnabled && (
+                            <Tabs.Tab value="down">Down</Tabs.Tab>
+                          )}
+                        </Tabs.List>
+                        <Tabs.Panel value="option" pt="xl">
+                          <Stack gap="md">
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Border</Text>
+                              <Switch
+                                size="sm"
+                                checked={propertyConfig.borderEnabled}
+                                onChange={(event) =>
+                                  patchKeyProperty({
+                                    borderEnabled: event.currentTarget.checked,
+                                  })
+                                }
+                              />
+                            </Group>
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Down state</Text>
+                              <Switch
+                                size="sm"
+                                checked={propertyConfig.downEnabled}
+                                onChange={(event) => {
+                                  const enabled = event.currentTarget.checked;
+                                  patchKeyProperty({ downEnabled: enabled });
+                                  if (!enabled) {
+                                    setTargetStates((states) => ({
+                                      ...states,
+                                      [selectedKey]: "option",
+                                    }));
+                                    onPreviewDownTargetChange(null);
+                                  }
+                                }}
+                              />
+                            </Group>
+                          </Stack>
+                        </Tabs.Panel>
+                        <Tabs.Panel value="up" pt="xl">
+                          <Stack gap="sm">
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Border color</Text>
+                              <ColorInput
+                                w={160}
+                                size="xs"
+                                format="hex"
+                                value={propertyConfig.upBorderColor}
+                                disabled={!propertyConfig.borderEnabled}
+                                onChange={(value) =>
+                                  patchKeyProperty({ upBorderColor: value })
+                                }
+                              />
+                            </Group>
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Border size</Text>
+                              <NumberInput
+                                w={160}
+                                size="xs"
+                                min={1}
+                                max={4}
+                                allowDecimal={false}
+                                clampBehavior="strict"
+                                value={propertyConfig.upBorderWidth}
+                                disabled={!propertyConfig.borderEnabled}
+                                onChange={(value) =>
+                                  patchKeyProperty({
+                                    upBorderWidth:
+                                      typeof value === "number" ? value : 1,
+                                  })
+                                }
+                              />
+                            </Group>
+                          </Stack>
+                        </Tabs.Panel>
+                        {propertyConfig.downEnabled && (
+                          <Tabs.Panel value="down" pt="xl">
+                            <Stack gap="sm">
+                              <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Border color</Text>
+                                <ColorInput
+                                  w={160}
+                                  size="xs"
+                                  format="hex"
+                                  value={propertyConfig.downBorderColor}
+                                  disabled={!propertyConfig.borderEnabled}
+                                  onChange={(value) =>
+                                    patchKeyProperty({ downBorderColor: value })
+                                  }
+                                />
+                              </Group>
+                              <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Border size</Text>
+                                <NumberInput
+                                  w={160}
+                                  size="xs"
+                                  min={1}
+                                  max={4}
+                                  allowDecimal={false}
+                                  clampBehavior="strict"
+                                  value={propertyConfig.downBorderWidth}
+                                  disabled={!propertyConfig.borderEnabled}
+                                  onChange={(value) =>
+                                    patchKeyProperty({
+                                      downBorderWidth:
+                                        typeof value === "number" ? value : 1,
+                                    })
+                                  }
+                                />
+                              </Group>
+                            </Stack>
+                          </Tabs.Panel>
+                        )}
+                      </Tabs>
+                    </Accordion.Panel>
+                  )}
+                </Accordion.Item>
+              </Accordion>
 
               {instances.length === 0 ? (
                 <Text c="dimmed">No plugin on this target</Text>

@@ -45,12 +45,16 @@ export default function App() {
   const [previewDownPluginId, setPreviewDownPluginId] = useState<number | null>(
     null,
   );
+  const [previewDownTarget, setPreviewDownTarget] = useState<string | null>(
+    null,
+  );
 
   const changeGeometry = useCallback((value: GeometryData | null) => {
     setGeometry(value);
     setWorkspace(null);
     setSelectedKey(null);
     setPreviewDownPluginId(null);
+    setPreviewDownTarget(null);
     setZoom(100);
   }, []);
 
@@ -58,6 +62,7 @@ export default function App() {
     setWorkspace(value);
     setSelectedKey(null);
     setPreviewDownPluginId(null);
+    setPreviewDownTarget(null);
   }, []);
 
   function changePlugins(plugins: KeyPlugin[]) {
@@ -98,7 +103,10 @@ export default function App() {
   }
 
   function selectKey(key: string | null) {
-    if (key !== selectedKey) setPreviewDownPluginId(null);
+    if (key !== selectedKey) {
+      setPreviewDownPluginId(null);
+      setPreviewDownTarget(null);
+    }
     setSelectedKey(key);
     if (key) setInspectorTab("properties");
   }
@@ -171,6 +179,7 @@ export default function App() {
                   selectedKey={selectedKey}
                   onSelectKey={selectKey}
                   previewDownPluginId={previewDownPluginId}
+                  previewDownTarget={previewDownTarget}
                   onDropPlugin={(key, pluginId) =>
                     void dropPlugin(key, pluginId)
                   }
@@ -236,6 +245,7 @@ export default function App() {
               onChange={changePlugins}
               onKeyPropertiesChange={changeKeyProperties}
               onPreviewDownPluginChange={setPreviewDownPluginId}
+              onPreviewDownTargetChange={setPreviewDownTarget}
             />
           </Splitter.Pane>
         </Splitter>
