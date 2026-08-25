@@ -20,7 +20,7 @@ export const theme = createTheme({
     Splitter: Splitter.extend({
       styles: {
         handle: {
-          color: "#FFFFFF",
+          backgroundColor: "#FFFFFF",
         },
       },
     }),
