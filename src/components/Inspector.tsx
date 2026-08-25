@@ -7,7 +7,7 @@ import {
   Tabs,
   Text,
 } from "@mantine/core";
-import { MdDelete, MdDragIndicator, MdLabel, MdMoreVert } from "react-icons/md";
+import { MdDelete, MdDragIndicator, MdMoreVert } from "react-icons/md";
 import { useRef } from "react";
 
 import { deleteKeyPlugin, updateKeyPlugin } from "../api/workspaces";
@@ -170,7 +170,6 @@ export default function Inspector({
                                   aria-label="Déplacer le plugin"
                                   style={{ cursor: "grab", flexShrink: 0 }}
                                 />
-                                <MdLabel />
                                 <Text>{plugin.name}</Text>
                               </Group>
                               <Text size="xs" c="dimmed">

@@ -98,8 +98,8 @@ export default function Geometry({ onChange }: Props) {
           </UnstyledButton>
         </Menu.Target>
 
-        <Menu.Dropdown p="xs" bg="var(--kbrd-color-surface)">
-          <Menu.Label>GEOMETRIES</Menu.Label>
+        <Menu.Dropdown>
+          <Menu.Label>Geometries</Menu.Label>
           {items.map((item) => (
             <Menu.Item
               key={item.id}
