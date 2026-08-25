@@ -69,14 +69,6 @@ export default function Geometry({ onChange }: Props) {
         width={300}
         shadow="md"
         offset={0}
-        styles={{
-          dropdown: {
-            borderRadius: "0 0 8px 8px",
-            border: "1px solid var(--kbrd-border-color)",
-            backgroundColor: "var(--kbrd-color-body)",
-            borderTop: "none",
-          },
-        }}
       >
         <Menu.Target>
           <UnstyledButton
