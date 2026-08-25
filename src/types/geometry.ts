@@ -30,6 +30,23 @@ export type GeometryData = {
   geometry: GeometryGroup[];
   svg: string;
   created_at: string;
+  layout: GeometryLayout;
+};
+
+export type KeyLayout = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  ref: string;
+  name: string;
+  parts: unknown[];
+};
+
+export type GeometryLayout = {
+  width: number;
+  height: number;
+  keys: KeyLayout[];
 };
 
 export type GeometryPayload = Pick<

@@ -1,11 +1,18 @@
 import { Box } from "@mantine/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { pluginById } from "../plugins/registry";
+import type { GeometryLayout } from "../types/geometry";
+import type { WorkspaceData } from "../types/workspace";
+
 type PreviewProps = {
   svg: string;
   selectedKey: string | null;
   onSelectKey: (key: string | null) => void;
   zoom: number;
+  layout: GeometryLayout;
+  workspace: WorkspaceData | null;
+  onDropPlugin: (key: string, pluginId: string) => void;
 };
 
 type Size = {
@@ -22,6 +29,9 @@ export default function Preview({
   selectedKey,
   onSelectKey,
   zoom,
+  layout,
+  workspace,
+  onDropPlugin,
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectedKeySelector = CSS.escape(selectedKey ?? "");
@@ -86,11 +96,7 @@ export default function Preview({
    * Le ratio du SVG est conservé.
    */
   const keyboardSize = useMemo(() => {
-    if (
-      !svgSize ||
-      viewport.width <= 0 ||
-      viewport.height <= 0
-    ) {
+    if (!svgSize || viewport.width <= 0 || viewport.height <= 0) {
       return null;
     }
 
@@ -130,14 +136,10 @@ export default function Preview({
     };
   }, [svgSize, viewport]);
 
-  function handleClick(
-    event: React.MouseEvent<HTMLDivElement>,
-  ) {
+  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target as Element;
 
-    const key = target.closest<SVGElement>(
-      ".kbrd-key",
-    );
+    const key = target.closest<SVGElement>(".kbrd-key");
 
     if (!key) {
       onSelectKey(null);
@@ -147,12 +149,35 @@ export default function Preview({
     onSelectKey(key.dataset.key ?? null);
   }
 
+  function keyFromEvent(target: EventTarget | null) {
+    return (target as Element | null)?.closest<SVGElement>(".kbrd-key")?.dataset
+      .key;
+  }
+
+  function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
+    if (!workspace || !keyFromEvent(event.target)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    if (!workspace) return;
+    const key = keyFromEvent(event.target);
+    const pluginId = event.dataTransfer.getData("application/kbrd-plugin");
+    if (!key || !pluginId) return;
+    event.preventDefault();
+    onSelectKey(key);
+    onDropPlugin(key, pluginId);
+  }
+
   return (
     <Box
       ref={viewportRef}
       w="100%"
       h="100%"
       onClick={handleClick}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       style={{
         position: "relative",
         overflow: "auto",
@@ -203,13 +228,43 @@ export default function Preview({
                 style={{
                   width: keyboardSize.width,
                   height: keyboardSize.height,
-
+                  position: "relative",
                   lineHeight: 0,
                 }}
-                dangerouslySetInnerHTML={{
-                  __html: svg,
-                }}
-              />
+              >
+                <Box dangerouslySetInnerHTML={{ __html: svg }} />
+                <svg
+                  viewBox={`0 0 ${layout.width} ${layout.height}`}
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {(workspace?.plugins ?? [])
+                    .filter((instance) => instance.enabled)
+                    .sort((left, right) => left.position - right.position)
+                    .map((instance) => {
+                      const key = layout.keys.find(
+                        (item) => item.ref === instance.key_ref,
+                      );
+                      const plugin = pluginById(instance.plugin_id);
+                      if (!key || !plugin) return null;
+                      const Renderer = plugin.Renderer;
+                      return (
+                        <Renderer
+                          key={instance.id}
+                          config={instance.config}
+                          {...key}
+                        />
+                      );
+                    })}
+                </svg>
+              </Box>
             </Box>
           </Box>
         </Box>
