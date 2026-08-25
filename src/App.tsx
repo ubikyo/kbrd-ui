@@ -22,7 +22,11 @@ import Inspector from "./components/Inspector";
 import Workspace from "./components/Workspace";
 import { addKeyPlugin } from "./api/workspaces";
 import { pluginById } from "./plugins/registry";
-import type { KeyPlugin, WorkspaceData } from "./types/workspace";
+import type {
+  KeyPlugin,
+  KeyProperty,
+  WorkspaceData,
+} from "./types/workspace";
 
 const MIN_ZOOM = 25;
 const MAX_ZOOM = 200;
@@ -58,6 +62,12 @@ export default function App() {
 
   function changePlugins(plugins: KeyPlugin[]) {
     setWorkspace((value) => (value ? { ...value, plugins } : null));
+  }
+
+  function changeKeyProperties(keyProperties: KeyProperty[]) {
+    setWorkspace((value) =>
+      value ? { ...value, key_properties: keyProperties } : null,
+    );
   }
 
   async function dropPlugin(key: string, pluginId: string) {
@@ -220,9 +230,11 @@ export default function App() {
             <Inspector
               workspace={workspace}
               selectedKey={selectedKey}
+              layout={geometry?.layout ?? null}
               tab={inspectorTab}
               onTabChange={setInspectorTab}
               onChange={changePlugins}
+              onKeyPropertiesChange={changeKeyProperties}
               onPreviewDownPluginChange={setPreviewDownPluginId}
             />
           </Splitter.Pane>

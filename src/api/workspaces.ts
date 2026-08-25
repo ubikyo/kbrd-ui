@@ -1,5 +1,10 @@
 import { api } from "./client";
-import type { KeyPlugin, WorkspaceData } from "../types/workspace";
+import type {
+  KeyPlugin,
+  KeyProperty,
+  KeyPropertyConfig,
+  WorkspaceData,
+} from "../types/workspace";
 
 export const listWorkspaces = (geometryId: number) =>
   api<WorkspaceData[]>(`/api/geometry/${geometryId}/workspace`);
@@ -60,3 +65,13 @@ export const updateKeyPlugin = (id: number, data: Partial<KeyPlugin>) =>
 
 export const deleteKeyPlugin = (id: number) =>
   api<{ ok: boolean }>(`/api/key-plugin/${id}`, { method: "DELETE" });
+
+export const updateKeyProperties = (
+  workspaceId: number,
+  key: string,
+  config: KeyPropertyConfig,
+) =>
+  api<KeyProperty>(
+    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}/properties`,
+    { method: "PUT", body: JSON.stringify({ config }) },
+  );

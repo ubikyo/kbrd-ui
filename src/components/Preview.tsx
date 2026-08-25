@@ -71,6 +71,7 @@ export default function Preview({
   previewDownPluginId,
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const keyboardRef = useRef<HTMLDivElement>(null);
   const selectedKeySelector = CSS.escape(selectedKey ?? "");
 
   const [viewport, setViewport] = useState<Size>({
@@ -120,6 +121,75 @@ export default function Preview({
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const root = keyboardRef.current;
+    if (!root) return;
+    const properties = new Map(
+      (workspace?.key_properties ?? []).map((item) => [
+        item.key_ref,
+        item.config,
+      ]),
+    );
+    root.querySelectorAll<SVGGraphicsElement>(".kbrd-key").forEach((element) => {
+      const ref = element.dataset.key ?? "";
+      const type = element.dataset.type ?? "key";
+      if (type !== "key") {
+        element.setAttribute("fill", "#00000000");
+        element.setAttribute("stroke", "none");
+        return;
+      }
+      const config = properties.get(ref);
+      const down = pressedKey === ref;
+      const borderEnabled = config?.borderEnabled ?? true;
+      const borderWidth = Math.max(1, config?.borderWidth ?? 1);
+      element.setAttribute(
+        "fill",
+        down
+          ? (config?.downBackgroundColor ?? "#00000000")
+          : (config?.upBackgroundColor ?? "#00000000"),
+      );
+      element.setAttribute(
+        "stroke",
+        borderEnabled
+          ? down
+            ? (config?.downBorderColor ?? "#ffffffff")
+            : (config?.upBorderColor ?? "#ffffff80")
+          : "none",
+      );
+      element.setAttribute("stroke-width", String(borderWidth));
+      element.setAttribute("vector-effect", "non-scaling-stroke");
+
+      if (element instanceof SVGRectElement) {
+        const svg = element.ownerSVGElement;
+        const bounds = svg?.getBoundingClientRect();
+        const viewBox = svg?.viewBox.baseVal;
+        const insetX =
+          borderEnabled && bounds?.width && viewBox
+            ? (borderWidth / 2) * (viewBox.width / bounds.width)
+            : 0;
+        const insetY =
+          borderEnabled && bounds?.height && viewBox
+            ? (borderWidth / 2) * (viewBox.height / bounds.height)
+            : 0;
+        const x = Number(element.dataset.x ?? element.getAttribute("x") ?? 0);
+        const y = Number(element.dataset.y ?? element.getAttribute("y") ?? 0);
+        const width = Number(
+          element.dataset.width ?? element.getAttribute("width") ?? 0,
+        );
+        const height = Number(
+          element.dataset.height ?? element.getAttribute("height") ?? 0,
+        );
+        element.setAttribute("x", String(x + insetX));
+        element.setAttribute("y", String(y + insetY));
+        element.setAttribute("width", String(Math.max(0, width - insetX * 2)));
+        element.setAttribute(
+          "height",
+          String(Math.max(0, height - insetY * 2)),
+        );
+      }
+    });
+  }, [pressedKey, svg, workspace?.key_properties]);
 
   useEffect(() => {
     const release = () => setPressedKey(null);
@@ -301,6 +371,7 @@ export default function Preview({
               ref: BACKGROUND_REF,
               name: "Background",
               parts: [],
+              type: "space" as const,
             }
           : layout.keys.find((item) => item.ref === instance.key_ref);
         const plugin = pluginById(instance.plugin_id);
@@ -419,6 +490,7 @@ export default function Preview({
                 {renderPlugins(true)}
               </svg>
               <Box
+                ref={keyboardRef}
                 className="keyboard-svg"
                 style={{
                   width: keyboardSize.width,
@@ -468,7 +540,6 @@ export default function Preview({
           .keyboard-svg .kbrd-key {
             cursor: pointer;
             transition: stroke 100ms ease;
-            fill: rgba(0, 0, 0, 0);
           }
 
           .keyboard-svg .keyboard-plugin-layer,

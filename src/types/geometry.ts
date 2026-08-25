@@ -41,6 +41,7 @@ export type KeyLayout = {
   ref: string;
   name: string;
   parts: unknown[];
+  type: "key" | "space";
 };
 
 export type GeometryLayout = {

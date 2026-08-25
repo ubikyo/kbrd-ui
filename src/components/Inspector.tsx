@@ -3,10 +3,12 @@ import {
   ActionIcon,
   Box,
   Button,
+  ColorInput,
   Group,
   Modal,
   NumberInput,
   Stack,
+  Slider,
   Switch,
   Tabs,
   Text,
@@ -14,12 +16,30 @@ import {
 import { MdDelete, MdDragIndicator } from "react-icons/md";
 import { useRef, useState } from "react";
 
-import { deleteKeyPlugin, updateKeyPlugin } from "../api/workspaces";
+import {
+  deleteKeyPlugin,
+  updateKeyPlugin,
+  updateKeyProperties,
+} from "../api/workspaces";
 import { pluginById, plugins } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
-import type { KeyPlugin, WorkspaceData } from "../types/workspace";
+import type { GeometryLayout } from "../types/geometry";
+import type {
+  KeyPlugin,
+  KeyProperty,
+  KeyPropertyConfig,
+  WorkspaceData,
+} from "../types/workspace";
 
 const BACKGROUND_REF = "__background__";
+const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
+  borderEnabled: true,
+  borderWidth: 1,
+  upBorderColor: "#ffffff80",
+  downBorderColor: "#ffffffff",
+  upBackgroundColor: "#00000000",
+  downBackgroundColor: "#00000000",
+};
 
 type Props = {
   workspace: WorkspaceData | null;
@@ -27,19 +47,29 @@ type Props = {
   tab: string | null;
   onTabChange: (tab: string | null) => void;
   onChange: (plugins: KeyPlugin[]) => void;
+  layout: GeometryLayout | null;
+  onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
 };
 
 function pluginSummary(item: KeyPlugin) {
   if (item.plugin_id === "kbrd.label") {
     const text = item.config.text;
-    return typeof text === "string" && text.trim() ? text.trim() : null;
+    return typeof text === "string" && text.trim()
+      ? truncate(text.trim())
+      : null;
   }
   if (item.plugin_id === "kbrd.image") {
     const name = item.config.name ?? item.config.media;
-    return typeof name === "string" && name.trim() ? name.trim() : null;
+    return typeof name === "string" && name.trim()
+      ? truncate(name.trim())
+      : null;
   }
   return null;
+}
+
+function truncate(value: string) {
+  return value.length > 15 ? `${value.slice(0, 15)}…` : value;
 }
 
 function setDragSymbol(event: React.DragEvent, symbol = "⠿") {
@@ -68,6 +98,8 @@ export default function Inspector({
   tab,
   onTabChange,
   onChange,
+  layout,
+  onKeyPropertiesChange,
   onPreviewDownPluginChange,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
@@ -84,10 +116,44 @@ export default function Inspector({
       { data: Partial<KeyPlugin>; timer: ReturnType<typeof setTimeout> }
     >(),
   );
+  const pendingPropertySaves = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
   const allInstances = workspace?.plugins ?? [];
   const instances = allInstances
     .filter((plugin) => plugin.key_ref === selectedKey)
     .sort((left, right) => left.position - right.position);
+  const keyProperties = workspace?.key_properties ?? [];
+  const selectedProperty = keyProperties.find(
+    (property) => property.key_ref === selectedKey,
+  );
+  const propertyConfig: KeyPropertyConfig = {
+    ...DEFAULT_KEY_PROPERTIES,
+    ...selectedProperty?.config,
+  };
+  const targetType =
+    selectedKey === BACKGROUND_REF
+      ? "background"
+      : (layout?.keys.find((key) => key.ref === selectedKey)?.type ?? "key");
+
+  function patchKeyProperty(data: Partial<KeyPropertyConfig>) {
+    if (!workspace || !selectedKey) return;
+    const config = { ...propertyConfig, ...data };
+    const property = { key_ref: selectedKey, config };
+    onKeyPropertiesChange([
+      ...keyProperties.filter((item) => item.key_ref !== selectedKey),
+      property,
+    ]);
+    const pending = pendingPropertySaves.current.get(selectedKey);
+    if (pending) clearTimeout(pending);
+    pendingPropertySaves.current.set(
+      selectedKey,
+      setTimeout(() => {
+        pendingPropertySaves.current.delete(selectedKey);
+        void updateKeyProperties(workspace.id, selectedKey, config);
+      }, 200),
+    );
+  }
 
   function patch(item: KeyPlugin, data: Partial<KeyPlugin>) {
     const value = { ...item, ...data };
@@ -230,10 +296,110 @@ export default function Inspector({
         <Tabs.Panel value="properties" p="md">
           {!selectedKey ? (
             <Text c="dimmed">No key selected</Text>
-          ) : instances.length === 0 ? (
-            <Text c="dimmed">No plugin on this key</Text>
           ) : (
-            <Accordion multiple className="property-accordion">
+            <Stack gap="xl">
+              <Stack gap="xs">
+                <Group justify="space-between" wrap="nowrap">
+                  <Text size="sm">Type</Text>
+                  <Text size="sm" tt="capitalize" c="dimmed">
+                    {targetType}
+                  </Text>
+                </Group>
+                {targetType === "key" && (
+                  <>
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text size="sm">Border</Text>
+                      <Switch
+                        size="sm"
+                        checked={propertyConfig.borderEnabled}
+                        onChange={(event) =>
+                          patchKeyProperty({
+                            borderEnabled: event.currentTarget.checked,
+                          })
+                        }
+                      />
+                    </Group>
+                    {propertyConfig.borderEnabled && (
+                      <>
+                        <Group justify="space-between" wrap="nowrap">
+                          <Text size="sm">Border Up</Text>
+                          <ColorInput
+                            w={160}
+                            size="xs"
+                            format="hexa"
+                            value={propertyConfig.upBorderColor}
+                            onChange={(value) =>
+                              patchKeyProperty({ upBorderColor: value })
+                            }
+                          />
+                        </Group>
+                        <Group justify="space-between" wrap="nowrap">
+                          <Text size="sm">Border Down</Text>
+                          <ColorInput
+                            w={160}
+                            size="xs"
+                            format="hexa"
+                            value={propertyConfig.downBorderColor}
+                            onChange={(value) =>
+                              patchKeyProperty({ downBorderColor: value })
+                            }
+                          />
+                        </Group>
+                        <Group justify="space-between" wrap="nowrap">
+                          <Text size="sm">Border width</Text>
+                          <Box w={160} px="xs">
+                            <Slider
+                              min={1}
+                              max={8}
+                              step={1}
+                              value={propertyConfig.borderWidth}
+                              onChange={(value) =>
+                                patchKeyProperty({ borderWidth: value })
+                              }
+                            />
+                          </Box>
+                        </Group>
+                      </>
+                    )}
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text size="sm">Background Up</Text>
+                      <ColorInput
+                        w={160}
+                        size="xs"
+                        format="hexa"
+                        value={propertyConfig.upBackgroundColor}
+                        onChange={(value) =>
+                          patchKeyProperty({ upBackgroundColor: value })
+                        }
+                      />
+                    </Group>
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text size="sm">Background Down</Text>
+                      <ColorInput
+                        w={160}
+                        size="xs"
+                        format="hexa"
+                        value={propertyConfig.downBackgroundColor}
+                        onChange={(value) =>
+                          patchKeyProperty({ downBackgroundColor: value })
+                        }
+                      />
+                    </Group>
+                  </>
+                )}
+              </Stack>
+
+              <Text
+                pb="xs"
+                style={{ borderBottom: "2px solid white" }}
+              >
+                Plugin properties
+              </Text>
+
+              {instances.length === 0 ? (
+                <Text c="dimmed">No plugin on this target</Text>
+              ) : (
+                <Accordion multiple className="property-accordion">
               {instances.map((item) => {
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
@@ -477,7 +643,9 @@ export default function Inspector({
                   </Accordion.Item>
                 );
               })}
-            </Accordion>
+                </Accordion>
+              )}
+            </Stack>
           )}
         </Tabs.Panel>
       </Tabs>
