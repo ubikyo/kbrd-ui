@@ -121,7 +121,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             px="lg"
             onClick={() => setMenuOpened((value) => !value)}
             style={{
-              width: 230,
+              width: 300,
               borderRight: "1px solid var(--kbrd-border-color)",
             }}
           >
@@ -142,7 +142,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
           </UnstyledButton>
         </Menu.Target>
         <Menu.Dropdown p="xs" bg="var(--kbrd-color-surface)">
-          <Menu.Label>WORKSPACES</Menu.Label>
+          <Menu.Label>Workspaces</Menu.Label>
           {items.map((item) => (
             <Menu.Item
               key={item.id}
