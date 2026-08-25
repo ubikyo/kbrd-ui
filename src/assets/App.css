@@ -63,6 +63,12 @@ body {
 
 .mantine-Input-input {
   background-color: var(--kbrd-color-body) !important;
+  border: 1px solid var(--kbrd-border-color) !important;
+}
+
+.mantine-InputWrapper-label,
+.mantine-Switch-label {
+  font-weight: 400 !important;
 }
 
 .property-editor-panel .mantine-Accordion-content {

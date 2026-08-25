@@ -87,7 +87,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
         opened={menuOpened}
         onChange={setMenuOpened}
         position="bottom-start"
-        width={300}
+        width={250}
         shadow="md"
         offset={0}
       >
@@ -97,7 +97,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             px="lg"
             onClick={() => setMenuOpened((value) => !value)}
             style={{
-              width: 300,
+              width: 250,
               boxSizing: "border-box",
               borderRight: "1px solid var(--kbrd-border-color)",
             }}
@@ -118,7 +118,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             </Group>
           </UnstyledButton>
         </Menu.Target>
-        <Menu.Dropdown ml={-1} w={301}>
+        <Menu.Dropdown ml={-1} w={251}>
           <Menu.Label>Workspaces</Menu.Label>
           {items.map((item) => (
             <Menu.Item

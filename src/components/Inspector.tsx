@@ -443,7 +443,7 @@ export default function Inspector({
                                 onChange={(config) => patchDown({ config })}
                               />
                               <Box
-                                pt={4}
+                                pt="xs"
                                 style={{ borderTop: "2px solid white" }}
                               >
                                 <NumberInput

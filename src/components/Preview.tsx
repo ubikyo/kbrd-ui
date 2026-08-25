@@ -22,6 +22,8 @@ type Size = {
   height: number;
 };
 
+const BACKGROUND_REF = "__background__";
+
 function StatefulPluginRenderer({
   Renderer,
   config,
@@ -194,26 +196,52 @@ export default function Preview({
     };
   }, [svgSize, viewport]);
 
-  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
-    const target = event.target as Element;
+  function keyFromEvent(
+    target: EventTarget | null,
+    clientX: number,
+    clientY: number,
+  ) {
+    const direct = (target as Element | null)?.closest<SVGElement>(
+      ".kbrd-key",
+    )?.dataset.key;
+    if (direct) return direct;
 
-    const key = target.closest<SVGElement>(".kbrd-key");
-
-    if (!key) {
-      onSelectKey(null);
-      return;
+    const keyboard = viewportRef.current?.querySelector<HTMLElement>(
+      ".keyboard-svg",
+    );
+    if (!keyboard) return undefined;
+    const bounds = keyboard.getBoundingClientRect();
+    if (
+      clientX < bounds.left ||
+      clientX > bounds.right ||
+      clientY < bounds.top ||
+      clientY > bounds.bottom
+    ) {
+      return undefined;
     }
 
-    onSelectKey(key.dataset.key ?? null);
+    const x = ((clientX - bounds.left) / bounds.width) * layout.width;
+    const y = ((clientY - bounds.top) / bounds.height) * layout.height;
+    const key = [...layout.keys]
+      .reverse()
+      .find(
+        (item) =>
+          x >= item.x &&
+          x <= item.x + item.width &&
+          y >= item.y &&
+          y <= item.y + item.height,
+      );
+    return key?.ref ?? BACKGROUND_REF;
   }
 
-  function keyFromEvent(target: EventTarget | null) {
-    return (target as Element | null)?.closest<SVGElement>(".kbrd-key")?.dataset
-      .key;
+  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+    onSelectKey(
+      keyFromEvent(event.target, event.clientX, event.clientY) ?? null,
+    );
   }
 
   function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
-    const key = keyFromEvent(event.target);
+    const key = keyFromEvent(event.target, event.clientX, event.clientY);
     if (!workspace || !key) {
       setDropTargetKey(null);
       return;
@@ -231,13 +259,50 @@ export default function Preview({
 
   function handleDrop(event: React.DragEvent<HTMLDivElement>) {
     if (!workspace) return;
-    const key = keyFromEvent(event.target);
+    const key = keyFromEvent(event.target, event.clientX, event.clientY);
     const pluginId = event.dataTransfer.getData("application/kbrd-plugin");
     if (!key || !pluginId) return;
     event.preventDefault();
     setDropTargetKey(null);
     onSelectKey(key);
     onDropPlugin(key, pluginId);
+  }
+
+  function renderPlugins(onBackground: boolean) {
+    return (workspace?.plugins ?? [])
+      .filter(
+        (instance) =>
+          instance.enabled &&
+          (instance.key_ref === BACKGROUND_REF) === onBackground,
+      )
+      .sort((left, right) => left.position - right.position)
+      .map((instance) => {
+        const geometry = onBackground
+          ? {
+              x: 0,
+              y: 0,
+              width: layout.width,
+              height: layout.height,
+              ref: BACKGROUND_REF,
+              name: "Background",
+              parts: [],
+            }
+          : layout.keys.find((item) => item.ref === instance.key_ref);
+        const plugin = pluginById(instance.plugin_id);
+        if (!geometry || !plugin) return null;
+        const Renderer = plugin.Renderer;
+        return (
+          <StatefulPluginRenderer
+            key={instance.id}
+            Renderer={Renderer}
+            config={instance.config}
+            geometry={geometry}
+            pressed={pressedKey === instance.key_ref}
+            pressToken={pressToken}
+            forceDown={previewDownPluginId === instance.id}
+          />
+        );
+      });
   }
 
   return (
@@ -247,7 +312,10 @@ export default function Preview({
       h="100%"
       onClick={handleClick}
       onPointerDown={(event) => {
-        setPressedKey(keyFromEvent(event.target) ?? null);
+        const key =
+          keyFromEvent(event.target, event.clientX, event.clientY) ?? null;
+        setPressedKey(key);
+        onSelectKey(key);
         setPressToken((value) => value + 1);
       }}
       onDragOver={handleDragOver}
@@ -307,7 +375,40 @@ export default function Preview({
                   lineHeight: 0,
                 }}
               >
-                <Box dangerouslySetInnerHTML={{ __html: svg }} />
+                <svg
+                  viewBox={`0 0 ${layout.width} ${layout.height}`}
+                  aria-hidden="true"
+                  className="keyboard-plugin-layer"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    pointerEvents: "none",
+                    zIndex: 0,
+                  }}
+                >
+                  {renderPlugins(true)}
+                  <rect
+                    x={0}
+                    y={0}
+                    width={layout.width}
+                    height={layout.height}
+                    fill="none"
+                    stroke={
+                      selectedKey === BACKGROUND_REF ||
+                      dropTargetKey === BACKGROUND_REF
+                        ? "white"
+                        : "none"
+                    }
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+                <Box
+                  style={{ position: "relative", zIndex: 1 }}
+                  dangerouslySetInnerHTML={{ __html: svg }}
+                />
                 <svg
                   className="keyboard-plugin-layer"
                   viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -319,30 +420,10 @@ export default function Preview({
                     height: "100%",
                     overflow: "visible",
                     pointerEvents: "none",
+                    zIndex: 2,
                   }}
                 >
-                  {(workspace?.plugins ?? [])
-                    .filter((instance) => instance.enabled)
-                    .sort((left, right) => left.position - right.position)
-                    .map((instance) => {
-                      const key = layout.keys.find(
-                        (item) => item.ref === instance.key_ref,
-                      );
-                      const plugin = pluginById(instance.plugin_id);
-                      if (!key || !plugin) return null;
-                      const Renderer = plugin.Renderer;
-                      return (
-                        <StatefulPluginRenderer
-                          key={instance.id}
-                          Renderer={Renderer}
-                          config={instance.config}
-                          geometry={key}
-                          pressed={pressedKey === instance.key_ref}
-                          pressToken={pressToken}
-                          forceDown={previewDownPluginId === instance.id}
-                        />
-                      );
-                    })}
+                  {renderPlugins(false)}
                 </svg>
               </Box>
             </Box>

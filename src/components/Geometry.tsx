@@ -66,7 +66,7 @@ export default function Geometry({ onChange }: Props) {
         opened={menuOpened}
         onChange={setMenuOpened}
         position="bottom-start"
-        width={300}
+        width={250}
         shadow="md"
         offset={0}
       >
@@ -76,7 +76,7 @@ export default function Geometry({ onChange }: Props) {
             px="lg"
             onClick={() => setMenuOpened((opened) => !opened)}
             style={{
-              width: 300,
+              width: 250,
               boxSizing: "border-box",
               borderLeft: "1px solid var(--kbrd-border-color)",
               borderRight: "1px solid var(--kbrd-border-color)",
