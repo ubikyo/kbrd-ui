@@ -234,6 +234,8 @@ export default function Preview({
     pressedKey,
     previewDownTarget,
     svg,
+    viewport.height,
+    viewport.width,
     workspace?.key_properties,
   ]);
 
@@ -537,6 +539,7 @@ export default function Preview({
                 overflow: "hidden",
               }}
             >
+              {/* Ordre des calques : fond, contenu, bordures, sélection. */}
               <svg
                 viewBox={`${
                   -(PREVIEW_PADDING / keyboardSize.width) * layout.width
@@ -573,10 +576,6 @@ export default function Preview({
                   zIndex: 1,
                 }}
               >
-                <Box
-                  style={{ position: "relative", zIndex: 1 }}
-                  dangerouslySetInnerHTML={{ __html: svg }}
-                />
                 <svg
                   className="keyboard-plugin-layer"
                   viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -588,18 +587,41 @@ export default function Preview({
                     height: "100%",
                     overflow: "visible",
                     pointerEvents: "none",
-                    zIndex: 2,
+                    zIndex: 1,
                   }}
                 >
                   {renderPlugins(false)}
+                </svg>
+                <Box
+                  className="keyboard-border-layer"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 2,
+                  }}
+                  dangerouslySetInnerHTML={{ __html: svg }}
+                />
+                <svg
+                  className="keyboard-selection-layer"
+                  viewBox={`0 0 ${layout.width} ${layout.height}`}
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    pointerEvents: "none",
+                    zIndex: 3,
+                  }}
+                >
                   {selectedKey && selectedKey !== BACKGROUND_REF && (() => {
                     const selectedGeometry = layout.keys.find(
                       (item) => item.ref === selectedKey,
                     );
                     if (!selectedGeometry) return null;
 
-                    // Le contour de sélection est rendu après les plugins : une
-                    // image couvrant toute la touche ne peut donc plus le masquer.
+                    // Le contour de sélection reste au-dessus des bordures.
                     const insetX = keyboardSize
                       ? layout.width / keyboardSize.width
                       : 0;
