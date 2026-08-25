@@ -99,7 +99,7 @@ export default function Inspector({
           <Tabs.Tab value="plugins">Plugins</Tabs.Tab>
           <Tabs.Tab value="properties">Properties</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="plugins" p="md">
+        <Tabs.Panel value="plugins">
           {!workspace ? (
             <Text c="dimmed">Créez un workspace pour ajouter des plugins.</Text>
           ) : (
