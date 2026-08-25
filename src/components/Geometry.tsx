@@ -77,6 +77,7 @@ export default function Geometry({ onChange }: Props) {
             onClick={() => setMenuOpened((opened) => !opened)}
             style={{
               width: 300,
+              boxSizing: "border-box",
               borderLeft: "1px solid var(--kbrd-border-color)",
               borderRight: "1px solid var(--kbrd-border-color)",
             }}
@@ -111,14 +112,21 @@ export default function Geometry({ onChange }: Props) {
               rightSection={selected?.id === item.id && <MdCheck size={16} />}
               style={(theme) => ({
                 backgroundColor:
-                  selected?.id === item.id ? theme.colors.violet[7] : undefined,
+                  selected?.id === item.id ? theme.white : undefined,
+                color: selected?.id === item.id ? theme.black : undefined,
+                borderRadius:
+                  selected?.id === item.id ? theme.radius.xs : undefined,
               })}
             >
               <Text size="sm" fw={500}>
                 {item.name}
               </Text>
               {item.description && (
-                <Text size="xs" c="dimmed" lineClamp={1}>
+                <Text
+                  size="xs"
+                  c={selected?.id === item.id ? "black" : "dimmed"}
+                  lineClamp={1}
+                >
                   {item.description}
                 </Text>
               )}

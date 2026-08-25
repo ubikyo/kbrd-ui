@@ -10,8 +10,22 @@ body {
   color: var(--mantine-color-dark-0);
 }
 
-.inspector-tabs .mantine-Tabs-list::before {
-  display: none;
+.inspector-accordion-heading {
+  border-bottom: 2px solid var(--kbrd-border-alt);
+  background: var(--kbrd-color-body);
+  transition: background-color 120ms ease;
+}
+
+.inspector-accordion-heading:hover {
+  background: #171717;
+}
+
+.inspector-accordion-heading .mantine-Accordion-control:hover {
+  background: transparent;
+}
+
+.plugin-category-panel .mantine-Accordion-content {
+  padding-inline: var(--mantine-spacing-xs);
 }
 
 .navbar {

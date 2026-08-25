@@ -2,7 +2,7 @@ import {
   createTheme,
   type CSSVariablesResolver,
   Menu,
-  Splitter
+  Splitter,
 } from "@mantine/core";
 
 export const theme = createTheme({
@@ -14,6 +14,7 @@ export const theme = createTheme({
           border: "1px solid var(--kbrd-border-color)",
           backgroundColor: "var(--kbrd-color-body)",
           borderTop: "none",
+          boxSizing: "border-box",
         },
       },
     }),

@@ -8,7 +8,7 @@ import {
   Text,
 } from "@mantine/core";
 import { MdDelete, MdDragIndicator, MdMoreVert } from "react-icons/md";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { deleteKeyPlugin, updateKeyPlugin } from "../api/workspaces";
 import { pluginById, plugins } from "../plugins/registry";
@@ -49,6 +49,10 @@ export default function Inspector({
   onTabChange,
   onChange,
 }: Props) {
+  const [dropIndicator, setDropIndicator] = useState<{
+    id: number;
+    edge: "before" | "after";
+  } | null>(null);
   const pendingSaves = useRef(
     new Map<
       number,
@@ -76,15 +80,21 @@ export default function Inspector({
     pendingSaves.current.set(item.id, { data: merged, timer });
   }
 
-  async function reorder(draggedId: number, targetId: number) {
+  async function reorder(
+    draggedId: number,
+    targetId: number,
+    edge: "before" | "after",
+  ) {
     const from = instances.findIndex((item) => item.id === draggedId);
-    const to = instances.findIndex((item) => item.id === targetId);
-    if (from === -1 || to === -1 || from === to) return;
+    if (from === -1 || draggedId === targetId) return;
 
     const positions = instances.map((item) => item.position);
     const reordered = [...instances];
     const [dragged] = reordered.splice(from, 1);
-    reordered.splice(to, 0, dragged);
+    const targetIndex = reordered.findIndex((item) => item.id === targetId);
+    if (targetIndex === -1) return;
+    reordered.splice(targetIndex + (edge === "after" ? 1 : 0), 0, dragged);
+    if (reordered.every((item, index) => item.id === instances[index].id)) return;
     const positioned = reordered.map((item, index) => ({
       ...item,
       position: positions[index],
@@ -108,6 +118,7 @@ export default function Inspector({
     if (pending) clearTimeout(pending.timer);
     pendingSaves.current.delete(item.id);
     onChange(allInstances.filter((plugin) => plugin.id !== item.id));
+    if (pending) await updateKeyPlugin(item.id, pending.data);
     await deleteKeyPlugin(item.id);
   }
 
@@ -141,8 +152,10 @@ export default function Inspector({
                   );
                   return (
                     <Accordion.Item key={category} value={category}>
-                      <Accordion.Control>{category}</Accordion.Control>
-                      <Accordion.Panel>
+                      <Box className="inspector-accordion-heading">
+                        <Accordion.Control>{category}</Accordion.Control>
+                      </Box>
+                      <Accordion.Panel className="plugin-category-panel">
                         {categoryPlugins.map((plugin, index) => (
                           <Box
                             key={plugin.id}
@@ -202,6 +215,14 @@ export default function Inspector({
                   <Accordion.Item
                     key={item.id}
                     value={String(item.id)}
+                    style={{
+                      boxShadow:
+                        dropIndicator?.id === item.id
+                          ? dropIndicator.edge === "before"
+                            ? "inset 0 2px var(--kbrd-border-color)"
+                            : "inset 0 -2px var(--kbrd-border-color)"
+                          : undefined,
+                    }}
                     onDragOver={(event) => {
                       if (
                         event.dataTransfer.types.includes(
@@ -210,6 +231,25 @@ export default function Inspector({
                       ) {
                         event.preventDefault();
                         event.dataTransfer.dropEffect = "move";
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setDropIndicator({
+                          id: item.id,
+                          edge:
+                            event.clientY < bounds.top + bounds.height / 2
+                              ? "before"
+                              : "after",
+                        });
+                      }
+                    }}
+                    onDragLeave={(event) => {
+                      if (
+                        !event.currentTarget.contains(
+                          event.relatedTarget as Node | null,
+                        )
+                      ) {
+                        setDropIndicator((value) =>
+                          value?.id === item.id ? null : value,
+                        );
                       }
                     }}
                     onDrop={(event) => {
@@ -218,11 +258,20 @@ export default function Inspector({
                       );
                       if (!Number.isNaN(draggedId)) {
                         event.preventDefault();
-                        void reorder(draggedId, item.id);
+                        const edge =
+                          dropIndicator?.id === item.id
+                            ? dropIndicator.edge
+                            : "before";
+                        setDropIndicator(null);
+                        void reorder(draggedId, item.id, edge);
                       }
                     }}
                   >
-                    <Group gap={0} wrap="nowrap">
+                    <Group
+                      className="inspector-accordion-heading"
+                      gap={0}
+                      wrap="nowrap"
+                    >
                       <Box
                         draggable
                         px="xs"
@@ -236,6 +285,7 @@ export default function Inspector({
                           );
                           setDragSymbol(event);
                         }}
+                        onDragEnd={() => setDropIndicator(null)}
                       >
                         <MdDragIndicator
                           aria-label={`Déplacer ${plugin.name}`}
@@ -255,9 +305,18 @@ export default function Inspector({
                             <MdMoreVert />
                           </ActionIcon>
                         </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Label>Actions</Menu.Label>
+                        <Menu.Dropdown
+                          bg="white"
+                          c="black"
+                          styles={{
+                            dropdown: {
+                              borderTop:
+                                "1px solid var(--kbrd-border-color)",
+                            },
+                          }}
+                        >
                           <Menu.Item
+                            style={{ color: "black" }}
                             onClick={() =>
                               void patch(item, { enabled: !item.enabled })
                             }
@@ -265,7 +324,7 @@ export default function Inspector({
                             {item.enabled ? "Désactiver" : "Activer"}
                           </Menu.Item>
                           <Menu.Item
-                            color="red"
+                            style={{ color: "black" }}
                             leftSection={<MdDelete />}
                             onClick={() => void remove(item)}
                           >

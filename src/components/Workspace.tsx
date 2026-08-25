@@ -1,13 +1,8 @@
 import {
   Box,
-  Button,
   Group,
   Menu,
-  Modal,
-  Stack,
   Text,
-  Textarea,
-  TextInput,
   UnstyledButton,
 } from "@mantine/core";
 import {
@@ -21,13 +16,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   activateWorkspace,
-  createWorkspace,
   deactivateWorkspace,
-  deleteWorkspace,
   listWorkspaces,
-  updateWorkspace,
 } from "../api/workspaces";
 import type { WorkspaceData } from "../types/workspace";
+import WorkspaceEditorModal from "./WorkspaceEditorModal";
 
 type Props = {
   geometryId: number;
@@ -38,9 +31,8 @@ export default function Workspace({ geometryId, onChange }: Props) {
   const [items, setItems] = useState<WorkspaceData[]>([]);
   const [selected, setSelected] = useState<WorkspaceData | null>(null);
   const [menuOpened, setMenuOpened] = useState(false);
-  const [editing, setEditing] = useState<WorkspaceData | null | undefined>();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [editorOpened, setEditorOpened] = useState(false);
+  const [editing, setEditing] = useState<WorkspaceData | null>(null);
 
   const select = useCallback(
     async (item: WorkspaceData) => {
@@ -73,9 +65,8 @@ export default function Workspace({ geometryId, onChange }: Props) {
 
   function openEditor(item: WorkspaceData | null) {
     setEditing(item);
-    setName(item?.name ?? "");
-    setDescription(item?.description ?? "");
     setMenuOpened(false);
+    setEditorOpened(true);
   }
 
   async function refresh(preferredId?: number) {
@@ -88,21 +79,6 @@ export default function Workspace({ geometryId, onChange }: Props) {
       setSelected(null);
       onChange(null);
     }
-  }
-
-  async function save() {
-    const item = editing
-      ? await updateWorkspace(editing.id, name, description)
-      : await createWorkspace(geometryId, name, description);
-    setEditing(undefined);
-    await refresh(item.id);
-  }
-
-  async function remove() {
-    if (!editing) return;
-    await deleteWorkspace(editing.id);
-    setEditing(undefined);
-    await refresh();
   }
 
   return (
@@ -122,6 +98,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             onClick={() => setMenuOpened((value) => !value)}
             style={{
               width: 300,
+              boxSizing: "border-box",
               borderRight: "1px solid var(--kbrd-border-color)",
             }}
           >
@@ -141,7 +118,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             </Group>
           </UnstyledButton>
         </Menu.Target>
-        <Menu.Dropdown p="xs" bg="var(--kbrd-color-surface)">
+        <Menu.Dropdown>
           <Menu.Label>Workspaces</Menu.Label>
           {items.map((item) => (
             <Menu.Item
@@ -151,14 +128,21 @@ export default function Workspace({ geometryId, onChange }: Props) {
               rightSection={selected?.id === item.id && <MdCheck size={16} />}
               style={(theme) => ({
                 backgroundColor:
-                  selected?.id === item.id ? theme.colors.violet[7] : undefined,
+                  selected?.id === item.id ? theme.white : undefined,
+                color: selected?.id === item.id ? theme.black : undefined,
+                borderRadius:
+                  selected?.id === item.id ? theme.radius.xs : undefined,
               })}
             >
               <Text size="sm" fw={500}>
                 {item.name}
               </Text>
               {item.description && (
-                <Text size="xs" c="dimmed" lineClamp={1}>
+                <Text
+                  size="xs"
+                  c={selected?.id === item.id ? "black" : "dimmed"}
+                  lineClamp={1}
+                >
                   {item.description}
                 </Text>
               )}
@@ -182,37 +166,21 @@ export default function Workspace({ geometryId, onChange }: Props) {
           )}
         </Menu.Dropdown>
       </Menu>
-      <Modal
-        opened={editing !== undefined}
-        onClose={() => setEditing(undefined)}
-        title={editing ? "Modifier le workspace" : "Ajouter un workspace"}
-        overlayProps={{ backgroundOpacity: 0.65, blur: 2 }}
-      >
-        <Stack>
-          <TextInput
-            label="Nom"
-            value={name}
-            onChange={(event) => setName(event.currentTarget.value)}
-          />
-          <Textarea
-            label="Description"
-            value={description}
-            onChange={(event) => setDescription(event.currentTarget.value)}
-          />
-          <Group justify="space-between">
-            {editing ? (
-              <Button color="red" onClick={() => void remove()}>
-                Supprimer
-              </Button>
-            ) : (
-              <span />
-            )}
-            <Button disabled={!name.trim()} onClick={() => void save()}>
-              Enregistrer
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      {editorOpened && (
+        <WorkspaceEditorModal
+          geometryId={geometryId}
+          editing={editing}
+          onClose={() => setEditorOpened(false)}
+          onSaved={(id) => {
+            setEditorOpened(false);
+            void refresh(id);
+          }}
+          onDeleted={() => {
+            setEditorOpened(false);
+            void refresh();
+          }}
+        />
+      )}
     </>
   );
 }
