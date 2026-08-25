@@ -3,6 +3,7 @@ import {
   AppShell,
   Box,
   Group,
+  Splitter,
   Text,
   UnstyledButton,
 } from "@mantine/core";
@@ -10,7 +11,6 @@ import {
 import { MdAdd, MdRemove } from "react-icons/md";
 
 import { useCallback, useState } from "react";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 import kbrdLogo from "./assets/media/KBRD.svg";
 
@@ -125,15 +125,18 @@ export default function App() {
           height: "100vh",
         }}
       >
-        <PanelGroup
-          direction="horizontal"
+        <Splitter
+          orientation="horizontal"
+          withHandle={false}
+          lineSize={5}
+          handleColor="var(--kbrd-border-color)"
           style={{
             position: "relative",
             height: "calc(100vh - 64px)",
             overflow: "hidden",
           }}
         >
-          <Panel minSize={40}>
+          <Splitter.Pane defaultSize={75} min={40}>
             <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
               {geometry?.svg && (
                 <Preview
@@ -196,15 +199,8 @@ export default function App() {
                 </ActionIcon>
               </Group>
             </Box>
-          </Panel>
-          <PanelResizeHandle
-            style={{
-              width: 5,
-              background: "var(--kbrd-border-color)",
-              cursor: "col-resize",
-            }}
-          />
-          <Panel defaultSize={25} minSize={20} maxSize={50}>
+          </Splitter.Pane>
+          <Splitter.Pane defaultSize={25} min={20} max={50}>
             <Inspector
               workspace={workspace}
               selectedKey={selectedKey}
@@ -212,8 +208,8 @@ export default function App() {
               onTabChange={setInspectorTab}
               onChange={changePlugins}
             />
-          </Panel>
-        </PanelGroup>
+          </Splitter.Pane>
+        </Splitter>
       </AppShell.Main>
     </AppShell>
   );

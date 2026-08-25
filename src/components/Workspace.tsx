@@ -2,8 +2,8 @@ import {
   Box,
   Button,
   Group,
+  Menu,
   Modal,
-  Popover,
   Stack,
   Text,
   Textarea,
@@ -107,7 +107,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
 
   return (
     <>
-      <Popover
+      <Menu
         opened={menuOpened}
         onChange={setMenuOpened}
         position="bottom-start"
@@ -115,7 +115,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
         shadow="md"
         offset={4}
       >
-        <Popover.Target>
+        <Menu.Target>
           <UnstyledButton
             h={64}
             px="lg"
@@ -140,66 +140,48 @@ export default function Workspace({ geometryId, onChange }: Props) {
               <MdChevronRight size={16} />
             </Group>
           </UnstyledButton>
-        </Popover.Target>
-        <Popover.Dropdown p="xs" bg="var(--kbrd-color-surface)">
-          <Text size="xs" c="dimmed" fw={600} px="xs" mb="xs">
-            WORKSPACES
-          </Text>
-          <Stack gap={4}>
-            {items.map((item) => (
-              <UnstyledButton
-                key={item.id}
-                p="sm"
-                onClick={() => void select(item)}
-                style={(theme) => ({
-                  borderRadius: theme.radius.sm,
-                  backgroundColor:
-                    selected?.id === item.id
-                      ? theme.colors.violet[7]
-                      : undefined,
-                })}
-              >
-                <Group justify="space-between" wrap="nowrap">
-                  <Group gap="sm" wrap="nowrap">
-                    <MdDashboard size={18} />
-                    <Box style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={500}>
-                        {item.name}
-                      </Text>
-                      {item.description && (
-                        <Text size="xs" c="dimmed" lineClamp={1}>
-                          {item.description}
-                        </Text>
-                      )}
-                    </Box>
-                  </Group>
-                  {selected?.id === item.id && <MdCheck size={16} />}
-                </Group>
-              </UnstyledButton>
-            ))}
-          </Stack>
-          <Box mt="xs" pt="xs">
-            <UnstyledButton w="100%" p="sm" onClick={() => openEditor(null)}>
-              <Group gap="sm">
-                <MdAdd size={18} />
-                <Text size="sm">Ajouter un workspace</Text>
-              </Group>
-            </UnstyledButton>
-            {selected && (
-              <UnstyledButton
-                w="100%"
-                p="sm"
-                onClick={() => openEditor(selected)}
-              >
-                <Group gap="sm">
-                  <MdEdit size={18} />
-                  <Text size="sm">Modifier le workspace</Text>
-                </Group>
-              </UnstyledButton>
-            )}
-          </Box>
-        </Popover.Dropdown>
-      </Popover>
+        </Menu.Target>
+        <Menu.Dropdown p="xs" bg="var(--kbrd-color-surface)">
+          <Menu.Label>WORKSPACES</Menu.Label>
+          {items.map((item) => (
+            <Menu.Item
+              key={item.id}
+              onClick={() => void select(item)}
+              leftSection={<MdDashboard size={18} />}
+              rightSection={selected?.id === item.id && <MdCheck size={16} />}
+              style={(theme) => ({
+                backgroundColor:
+                  selected?.id === item.id ? theme.colors.violet[7] : undefined,
+              })}
+            >
+              <Text size="sm" fw={500}>
+                {item.name}
+              </Text>
+              {item.description && (
+                <Text size="xs" c="dimmed" lineClamp={1}>
+                  {item.description}
+                </Text>
+              )}
+            </Menu.Item>
+          ))}
+          <Menu.Divider />
+          <Menu.Label>Actions</Menu.Label>
+          <Menu.Item
+            leftSection={<MdAdd size={18} />}
+            onClick={() => openEditor(null)}
+          >
+            Ajouter un workspace
+          </Menu.Item>
+          {selected && (
+            <Menu.Item
+              leftSection={<MdEdit size={18} />}
+              onClick={() => openEditor(selected)}
+            >
+              Modifier le workspace
+            </Menu.Item>
+          )}
+        </Menu.Dropdown>
+      </Menu>
       <Modal
         opened={editing !== undefined}
         onClose={() => setEditing(undefined)}

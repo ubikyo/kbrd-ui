@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Box,
-  Group,
-  Popover,
-  Stack,
-  Text,
-  UnstyledButton,
-} from "@mantine/core";
+import { Box, Group, Menu, Text, UnstyledButton } from "@mantine/core";
 import {
   MdAdd,
   MdCheck,
@@ -40,10 +33,10 @@ export default function Geometry({ onChange }: Props) {
     const data = await listGeometries();
     setItems(data);
     select(
-      data.find((item) => item.id === preferredId)
-      ?? data.find((item) => item.id === selected?.id)
-      ?? defaultGeometry(data)
-      ?? null,
+      data.find((item) => item.id === preferredId) ??
+        data.find((item) => item.id === selected?.id) ??
+        defaultGeometry(data) ??
+        null,
     );
   }
 
@@ -69,7 +62,7 @@ export default function Geometry({ onChange }: Props) {
 
   return (
     <>
-      <Popover
+      <Menu
         opened={menuOpened}
         onChange={setMenuOpened}
         position="bottom-start"
@@ -77,7 +70,7 @@ export default function Geometry({ onChange }: Props) {
         shadow="md"
         offset={4}
       >
-        <Popover.Target>
+        <Menu.Target>
           <UnstyledButton
             h={64}
             px="lg"
@@ -92,70 +85,64 @@ export default function Geometry({ onChange }: Props) {
               <Group gap="sm" wrap="nowrap">
                 <MdKeyboardAlt size={24} />
                 <Box>
-                  <Text size="xs" c="dimmed">Geometry</Text>
-                  <Text size="sm" fw={500}>{selected?.name ?? "Aucune"}</Text>
+                  <Text size="xs" c="dimmed">
+                    Geometry
+                  </Text>
+                  <Text size="sm" fw={500}>
+                    {selected?.name ?? "Aucune"}
+                  </Text>
                 </Box>
               </Group>
               <MdChevronRight size={16} />
             </Group>
           </UnstyledButton>
-        </Popover.Target>
+        </Menu.Target>
 
-        <Popover.Dropdown p="xs" bg="var(--kbrd-color-surface)">
-          <Text size="xs" c="dimmed" fw={600} px="xs" mb="xs">
-            GEOMETRIES
-          </Text>
-          <Stack gap={4}>
-            {items.map((item) => (
-              <UnstyledButton
-                key={item.id}
-                onClick={() => {
-                  select(item);
-                  setMenuOpened(false);
-                }}
-                p="sm"
-                style={(theme) => ({
-                  borderRadius: theme.radius.sm,
-                  backgroundColor:
-                    selected?.id === item.id ? theme.colors.violet[7] : undefined,
-                })}
-              >
-                <Group justify="space-between" wrap="nowrap">
-                  <Group gap="sm" wrap="nowrap">
-                    <MdKeyboardAlt size={18} />
-                    <Box style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={500}>{item.name}</Text>
-                      {item.description && (
-                        <Text size="xs" c="dimmed" lineClamp={1}>
-                          {item.description}
-                        </Text>
-                      )}
-                    </Box>
-                  </Group>
-                  {selected?.id === item.id && <MdCheck size={16} />}
-                </Group>
-              </UnstyledButton>
-            ))}
-          </Stack>
+        <Menu.Dropdown p="xs" bg="var(--kbrd-color-surface)">
+          <Menu.Label>GEOMETRIES</Menu.Label>
+          {items.map((item) => (
+            <Menu.Item
+              key={item.id}
+              onClick={() => {
+                select(item);
+                setMenuOpened(false);
+              }}
+              leftSection={<MdKeyboardAlt size={18} />}
+              rightSection={selected?.id === item.id && <MdCheck size={16} />}
+              style={(theme) => ({
+                backgroundColor:
+                  selected?.id === item.id ? theme.colors.violet[7] : undefined,
+              })}
+            >
+              <Text size="sm" fw={500}>
+                {item.name}
+              </Text>
+              {item.description && (
+                <Text size="xs" c="dimmed" lineClamp={1}>
+                  {item.description}
+                </Text>
+              )}
+            </Menu.Item>
+          ))}
 
-          <Box mt="xs" pt="xs">
-            <UnstyledButton w="100%" p="sm" onClick={() => openEditor(null)}>
-              <Group gap="sm">
-                <MdAdd size={18} />
-                <Text size="sm">Ajouter une géométrie</Text>
-              </Group>
-            </UnstyledButton>
-            {selected && (
-              <UnstyledButton w="100%" p="sm" onClick={() => openEditor(selected)}>
-                <Group gap="sm">
-                  <MdEdit size={18} />
-                  <Text size="sm">Modifier la géométrie</Text>
-                </Group>
-              </UnstyledButton>
-            )}
-          </Box>
-        </Popover.Dropdown>
-      </Popover>
+          <Menu.Divider />
+          <Menu.Label>Actions</Menu.Label>
+          <Menu.Item
+            leftSection={<MdAdd size={18} />}
+            onClick={() => openEditor(null)}
+          >
+            Ajouter une géométrie
+          </Menu.Item>
+          {selected && (
+            <Menu.Item
+              leftSection={<MdEdit size={18} />}
+              onClick={() => openEditor(selected)}
+            >
+              Modifier la géométrie
+            </Menu.Item>
+          )}
+        </Menu.Dropdown>
+      </Menu>
 
       {editorOpened && (
         <GeometryEditorModal

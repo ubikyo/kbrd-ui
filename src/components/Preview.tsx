@@ -40,6 +40,7 @@ export default function Preview({
     width: 0,
     height: 0,
   });
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 
   /*
    * Récupère les dimensions natives du SVG depuis son viewBox.
@@ -79,6 +80,16 @@ export default function Preview({
     observer.observe(element);
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const clearDropTarget = () => setDropTargetKey(null);
+    window.addEventListener("dragend", clearDropTarget);
+    window.addEventListener("drop", clearDropTarget);
+    return () => {
+      window.removeEventListener("dragend", clearDropTarget);
+      window.removeEventListener("drop", clearDropTarget);
+    };
   }, []);
 
   /*
@@ -155,9 +166,20 @@ export default function Preview({
   }
 
   function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
-    if (!workspace || !keyFromEvent(event.target)) return;
+    const key = keyFromEvent(event.target);
+    if (!workspace || !key) {
+      setDropTargetKey(null);
+      return;
+    }
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+    setDropTargetKey(key);
+  }
+
+  function handleDragLeave(event: React.DragEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDropTargetKey(null);
+    }
   }
 
   function handleDrop(event: React.DragEvent<HTMLDivElement>) {
@@ -166,6 +188,7 @@ export default function Preview({
     const pluginId = event.dataTransfer.getData("application/kbrd-plugin");
     if (!key || !pluginId) return;
     event.preventDefault();
+    setDropTargetKey(null);
     onSelectKey(key);
     onDropPlugin(key, pluginId);
   }
@@ -177,6 +200,7 @@ export default function Preview({
       h="100%"
       onClick={handleClick}
       onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       style={{
         position: "relative",
@@ -292,6 +316,10 @@ export default function Preview({
           }
 
           .keyboard-svg .kbrd-key[data-key="${selectedKeySelector}"] {
+            stroke: rgba(255, 255, 255, 1);
+          }
+
+          .keyboard-svg .kbrd-key[data-key="${CSS.escape(dropTargetKey ?? "")}"] {
             stroke: rgba(255, 255, 255, 1);
           }
         `}

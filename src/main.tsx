@@ -3,12 +3,10 @@ import ReactDOM from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
 
 import App from "./App";
-import {
-  cssVariablesResolver,
-  theme,
-} from "./theme";
+import { cssVariablesResolver, theme } from "./theme";
 
 import "@mantine/core/styles.css";
+import "./assets/App.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -19,5 +17,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     >
       <App />
     </MantineProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
