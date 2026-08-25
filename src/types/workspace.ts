@@ -9,7 +9,10 @@ export type KeyPlugin = {
   config: Record<string, unknown>;
 };
 
+export type KeyMode = "momentary" | "toggle";
+
 export type KeyPropertyConfig = {
+  keyMode: KeyMode;
   borderEnabled: boolean;
   downEnabled: boolean;
   upBorderColor: string;

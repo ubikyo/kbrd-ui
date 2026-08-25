@@ -173,6 +173,7 @@ export default function App() {
             <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
               {geometry?.svg && (
                 <Preview
+                  key={`${geometry.id}-${workspace?.id ?? "none"}`}
                   svg={geometry.svg}
                   layout={geometry.layout}
                   workspace={workspace}

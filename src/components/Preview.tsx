@@ -1,10 +1,21 @@
 import { Box } from "@mantine/core";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { pluginById, type PluginDefinition } from "../plugins/registry";
 import { downState, effectiveConfig, upConfig } from "../plugins/state";
 import type { GeometryLayout } from "../types/geometry";
-import type { WorkspaceData } from "../types/workspace";
+import type {
+  KeyMode,
+  KeyPropertyConfig,
+  WorkspaceData,
+} from "../types/workspace";
 
 type PreviewProps = {
   svg: string;
@@ -62,6 +73,10 @@ const PREVIEW_PADDING = 30;
 const BORDER_WIDTH = 1;
 const DEFAULT_UP_BORDER_COLOR = "rgba(255, 255, 255, 0.5)";
 
+function keyMode(config: KeyPropertyConfig | undefined): KeyMode {
+  return config?.keyMode === "toggle" ? "toggle" : "momentary";
+}
+
 function geometryPath(geometry: GeometryLayout["keys"][number]) {
   if (!geometry.parts.length) return null;
 
@@ -117,7 +132,26 @@ export default function Preview({
   });
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
-  const [pressToken, setPressToken] = useState(0);
+  const [toggledKeys, setToggledKeys] = useState<Set<string>>(() => new Set());
+  const [pressTokens, setPressTokens] = useState<Record<string, number>>({});
+
+  const keyProperties = useMemo(
+    () =>
+      new Map(
+        (workspace?.key_properties ?? []).map((item) => [
+          item.key_ref,
+          item.config,
+        ]),
+      ),
+    [workspace?.key_properties],
+  );
+
+  const isKeyDown = useCallback(
+    (ref: string) =>
+      pressedKey === ref ||
+      (keyMode(keyProperties.get(ref)) === "toggle" && toggledKeys.has(ref)),
+    [keyProperties, pressedKey, toggledKeys],
+  );
 
   /*
    * Récupère les dimensions natives du SVG depuis son viewBox.
@@ -162,20 +196,14 @@ export default function Preview({
   useLayoutEffect(() => {
     const root = keyboardRef.current;
     if (!root) return;
-    const properties = new Map(
-      (workspace?.key_properties ?? []).map((item) => [
-        item.key_ref,
-        item.config,
-      ]),
-    );
     root.querySelectorAll<SVGGraphicsElement>(".kbrd-key").forEach((element) => {
       const ref = element.dataset.key ?? "";
       const type = element.dataset.type ?? "key";
-      const config = properties.get(ref);
+      const config = keyProperties.get(ref);
       const down =
         type === "key" &&
         Boolean(config?.downEnabled) &&
-        (pressedKey === ref || previewDownTarget === ref);
+        (isKeyDown(ref) || previewDownTarget === ref);
       const borderEnabled = config?.borderEnabled ?? true;
       const legacyWidth = (config as { borderWidth?: number } | undefined)
         ?.borderWidth;
@@ -234,9 +262,11 @@ export default function Preview({
     pressedKey,
     previewDownTarget,
     svg,
+    toggledKeys,
     viewport.height,
     viewport.width,
-    workspace?.key_properties,
+    keyProperties,
+    isKeyDown,
   ]);
 
   useEffect(() => {
@@ -458,9 +488,9 @@ export default function Preview({
                 config={instance.config}
                 geometry={geometry}
                 pressed={
-                  geometry.type === "key" && pressedKey === instance.key_ref
+                  geometry.type === "key" && isKeyDown(instance.key_ref)
                 }
-                pressToken={pressToken}
+                pressToken={pressTokens[instance.key_ref] ?? 0}
                 forceDown={previewDownPluginId === instance.id}
               />
             </g>
@@ -478,9 +508,29 @@ export default function Preview({
       onPointerDown={(event) => {
         const key =
           keyFromEvent(event.target, event.clientX, event.clientY) ?? null;
-        setPressedKey(key);
+        const geometry = layout.keys.find((item) => item.ref === key);
+        if (
+          key &&
+          geometry?.type === "key" &&
+          keyMode(keyProperties.get(key)) === "toggle"
+        ) {
+          setPressedKey(null);
+          setToggledKeys((current) => {
+            const next = new Set(current);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          });
+        } else {
+          setPressedKey(geometry?.type === "key" ? key : null);
+        }
         onSelectKey(key);
-        setPressToken((value) => value + 1);
+        if (key) {
+          setPressTokens((tokens) => ({
+            ...tokens,
+            [key]: (tokens[key] ?? 0) + 1,
+          }));
+        }
       }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

@@ -7,6 +7,7 @@ import {
   Group,
   Modal,
   NumberInput,
+  Select,
   Stack,
   Switch,
   Tabs,
@@ -32,6 +33,7 @@ import type {
 
 const BACKGROUND_REF = "__background__";
 const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
+  keyMode: "momentary",
   borderEnabled: true,
   downEnabled: false,
   upBorderColor: "#808080",
@@ -378,6 +380,29 @@ export default function Inspector({
                         </Tabs.List>
                         <Tabs.Panel value="option" pt="xl">
                           <Stack gap="md">
+                            {targetType === "key" && (
+                              <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Type</Text>
+                                <Select
+                                  w={160}
+                                  size="xs"
+                                  allowDeselect={false}
+                                  data={[
+                                    { value: "momentary", label: "Momentary" },
+                                    { value: "toggle", label: "Toggle" },
+                                  ]}
+                                  value={propertyConfig.keyMode}
+                                  onChange={(value) =>
+                                    patchKeyProperty({
+                                      keyMode:
+                                        value === "toggle"
+                                          ? "toggle"
+                                          : "momentary",
+                                    })
+                                  }
+                                />
+                              </Group>
+                            )}
                             <Group justify="space-between" wrap="nowrap">
                               <Text size="sm">Border</Text>
                               <Switch
