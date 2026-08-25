@@ -3,7 +3,6 @@ import {
   ActionIcon,
   Box,
   Button,
-  Divider,
   Group,
   Modal,
   NumberInput,
@@ -26,6 +25,7 @@ type Props = {
   tab: string | null;
   onTabChange: (tab: string | null) => void;
   onChange: (plugins: KeyPlugin[]) => void;
+  onPreviewDownPluginChange: (pluginId: number | null) => void;
 };
 
 function pluginSummary(item: KeyPlugin) {
@@ -66,6 +66,7 @@ export default function Inspector({
   tab,
   onTabChange,
   onChange,
+  onPreviewDownPluginChange,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
     Record<number, "main" | "up" | "down">
@@ -142,6 +143,7 @@ export default function Inspector({
     onChange(allInstances.filter((plugin) => plugin.id !== item.id));
     if (pending) await updateKeyPlugin(item.id, pending.data);
     await deleteKeyPlugin(item.id);
+    onPreviewDownPluginChange(null);
     setDeleting(null);
   }
 
@@ -165,7 +167,7 @@ export default function Inspector({
 
         <Tabs.Panel value="plugins" pt="lg" pb="lg">
           {!workspace ? (
-            <Text c="dimmed">Créez un workspace pour ajouter des plugins.</Text>
+            <Text c="dimmed">Create a workspace to add plugins.</Text>
           ) : (
             <Accordion multiple defaultValue={["Display"]}>
               {[...new Set(plugins.map((plugin) => plugin.category))].map(
@@ -203,7 +205,7 @@ export default function Inspector({
                             <Group justify="space-between" wrap="nowrap">
                               <Group gap="xs" wrap="nowrap">
                                 <MdDragIndicator
-                                  aria-label="Déplacer le plugin"
+                                  aria-label="Move plugin"
                                   style={{ cursor: "grab", flexShrink: 0 }}
                                 />
                                 <Text>{plugin.name}</Text>
@@ -225,11 +227,11 @@ export default function Inspector({
 
         <Tabs.Panel value="properties" p="md">
           {!selectedKey ? (
-            <Text c="dimmed">Aucune touche sélectionnée</Text>
+            <Text c="dimmed">No key selected</Text>
           ) : instances.length === 0 ? (
-            <Text c="dimmed">Aucun plugin sur cette touche</Text>
+            <Text c="dimmed">No plugin on this key</Text>
           ) : (
-            <Accordion multiple>
+            <Accordion multiple className="property-accordion">
               {instances.map((item) => {
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
@@ -334,7 +336,7 @@ export default function Inspector({
                         onDragEnd={() => setDropIndicator(null)}
                       >
                         <MdDragIndicator
-                          aria-label={`Déplacer ${plugin.name}`}
+                          aria-label={`Move ${plugin.name}`}
                           style={{ cursor: "grab", display: "block" }}
                         />
                       </Box>
@@ -346,8 +348,8 @@ export default function Inspector({
                       </Accordion.Control>
                       <ActionIcon
                         color="red"
-                        variant="outline"
-                        aria-label={`Supprimer ${plugin.name}`}
+                        variant="subtle"
+                        aria-label={`Delete ${plugin.name}`}
                         mr="xs"
                         onClick={() => setDeleting(item)}
                       >
@@ -356,16 +358,20 @@ export default function Inspector({
                     </Group>
                     <Accordion.Panel className="property-editor-panel">
                       <Tabs
+                        className="state-tabs"
                         value={propertyState}
-                        onChange={(value) =>
+                        onChange={(value) => {
                           setPropertyStates((states) => ({
                             ...states,
                             [item.id]: (value ?? "main") as
                               | "main"
                               | "up"
                               | "down",
-                          }))
-                        }
+                          }));
+                          onPreviewDownPluginChange(
+                            value === "down" ? item.id : null,
+                          );
+                        }}
                       >
                         <Tabs.List grow>
                           <Tabs.Tab value="main">Main</Tabs.Tab>
@@ -391,6 +397,7 @@ export default function Inspector({
                                     ...states,
                                     [item.id]: "main",
                                   }));
+                                  onPreviewDownPluginChange(null);
                                 }
                                 void patch(item, { enabled: !disabled });
                               }}
@@ -405,6 +412,7 @@ export default function Inspector({
                                     ...states,
                                     [item.id]: "main",
                                   }));
+                                  onPreviewDownPluginChange(null);
                                 }
                                 patchDown({
                                   enabled,
@@ -434,24 +442,24 @@ export default function Inspector({
                                 config={down.config ?? up}
                                 onChange={(config) => patchDown({ config })}
                               />
-                              <Divider
-                                color="white"
-                                size={2}
-                                aria-label="Options de l'état Down"
-                              />
-                              <NumberInput
-                                label="Delay"
-                                suffix=" ms"
-                                min={0}
-                                allowNegative={false}
-                                value={down.delay}
-                                onChange={(value) =>
-                                  patchDown({
-                                    delay:
-                                      typeof value === "number" ? value : 0,
-                                  })
-                                }
-                              />
+                              <Box
+                                pt={4}
+                                style={{ borderTop: "2px solid white" }}
+                              >
+                                <NumberInput
+                                  label="Delay"
+                                  suffix=" ms"
+                                  min={0}
+                                  allowNegative={false}
+                                  value={down.delay}
+                                  onChange={(value) =>
+                                    patchDown({
+                                      delay:
+                                        typeof value === "number" ? value : 0,
+                                    })
+                                  }
+                                />
+                              </Box>
                             </Stack>
                           </Tabs.Panel>
                         )}
@@ -468,28 +476,28 @@ export default function Inspector({
       <Modal
         opened={deleting !== null}
         onClose={() => setDeleting(null)}
-        title={<Text fw={700}>Supprimer le plugin</Text>}
+        title={<Text fw={700}>Delete plugin</Text>}
         centered
         size="sm"
       >
         <Stack>
           <Text>
-            Supprimer définitivement{" "}
+            Permanently delete{" "}
             <Text component="span" fw={600}>
-              {deleting ? pluginById(deleting.plugin_id)?.name : "ce plugin"}
-            </Text>{" "}
-            de cette touche ?
+              {deleting ? pluginById(deleting.plugin_id)?.name : "this plugin"}
+            </Text>
+            ?
           </Text>
           <Group justify="flex-end">
             <Button color="gray" onClick={() => setDeleting(null)}>
-              Annuler
+              Cancel
             </Button>
             <Button
               color="red"
               leftSection={<MdDelete size={16} />}
               onClick={() => deleting && void remove(deleting)}
             >
-              Supprimer
+              Delete
             </Button>
           </Group>
         </Stack>

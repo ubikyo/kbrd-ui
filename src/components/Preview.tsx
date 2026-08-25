@@ -14,6 +14,7 @@ type PreviewProps = {
   layout: GeometryLayout;
   workspace: WorkspaceData | null;
   onDropPlugin: (key: string, pluginId: string) => void;
+  previewDownPluginId: number | null;
 };
 
 type Size = {
@@ -26,12 +27,14 @@ function StatefulPluginRenderer({
   config,
   pressed,
   pressToken,
+  forceDown,
   geometry,
 }: {
   Renderer: PluginDefinition["Renderer"];
   config: Record<string, unknown>;
   pressed: boolean;
   pressToken: number;
+  forceDown: boolean;
   geometry: GeometryLayout["keys"][number];
 }) {
   const [readyToken, setReadyToken] = useState<number | null>(null);
@@ -44,9 +47,9 @@ function StatefulPluginRenderer({
   }, [pressed, pressToken, down.enabled, down.delay]);
 
   const downVisible =
-    pressed &&
     down.enabled &&
-    (down.delay <= 0 || readyToken === pressToken);
+    (forceDown ||
+      (pressed && (down.delay <= 0 || readyToken === pressToken)));
 
   return <Renderer config={effectiveConfig(config, downVisible)} {...geometry} />;
 }
@@ -63,6 +66,7 @@ export default function Preview({
   layout,
   workspace,
   onDropPlugin,
+  previewDownPluginId,
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectedKeySelector = CSS.escape(selectedKey ?? "");
@@ -305,6 +309,7 @@ export default function Preview({
               >
                 <Box dangerouslySetInnerHTML={{ __html: svg }} />
                 <svg
+                  className="keyboard-plugin-layer"
                   viewBox={`0 0 ${layout.width} ${layout.height}`}
                   aria-hidden="true"
                   style={{
@@ -334,6 +339,7 @@ export default function Preview({
                           geometry={key}
                           pressed={pressedKey === instance.key_ref}
                           pressToken={pressToken}
+                          forceDown={previewDownPluginId === instance.id}
                         />
                       );
                     })}
@@ -359,6 +365,11 @@ export default function Preview({
             cursor: pointer;
             transition: stroke 100ms ease;
             fill: rgba(0, 0, 0, 0);
+          }
+
+          .keyboard-svg .keyboard-plugin-layer,
+          .keyboard-svg .keyboard-plugin-layer * {
+            pointer-events: none !important;
           }
 
           .keyboard-svg .kbrd-key:hover {

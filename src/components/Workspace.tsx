@@ -110,7 +110,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
                     Workspace
                   </Text>
                   <Text size="sm" fw={500}>
-                    {selected?.name ?? "Aucun"}
+                    {selected?.name ?? "None"}
                   </Text>
                 </Box>
               </Group>
@@ -149,19 +149,18 @@ export default function Workspace({ geometryId, onChange }: Props) {
             </Menu.Item>
           ))}
           <Menu.Divider />
-          <Menu.Label>Actions</Menu.Label>
           <Menu.Item
             leftSection={<MdAdd size={18} />}
             onClick={() => openEditor(null)}
           >
-            Ajouter un workspace
+            Add workspace
           </Menu.Item>
           {selected && (
             <Menu.Item
               leftSection={<MdEdit size={18} />}
               onClick={() => openEditor(selected)}
             >
-              Modifier le workspace
+              Edit workspace
             </Menu.Item>
           )}
         </Menu.Dropdown>

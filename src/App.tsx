@@ -37,17 +37,22 @@ export default function App() {
 
   const [zoom, setZoom] = useState(100);
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
+  const [previewDownPluginId, setPreviewDownPluginId] = useState<number | null>(
+    null,
+  );
 
   const changeGeometry = useCallback((value: GeometryData | null) => {
     setGeometry(value);
     setWorkspace(null);
     setSelectedKey(null);
+    setPreviewDownPluginId(null);
     setZoom(100);
   }, []);
 
   const changeWorkspace = useCallback((value: WorkspaceData | null) => {
     setWorkspace(value);
     setSelectedKey(null);
+    setPreviewDownPluginId(null);
   }, []);
 
   function changePlugins(plugins: KeyPlugin[]) {
@@ -75,6 +80,12 @@ export default function App() {
 
   function zoomIn() {
     setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP));
+  }
+
+  function selectKey(key: string | null) {
+    if (key !== selectedKey) setPreviewDownPluginId(null);
+    setSelectedKey(key);
+    if (key) setInspectorTab("properties");
   }
 
   return (
@@ -143,7 +154,8 @@ export default function App() {
                   layout={geometry.layout}
                   workspace={workspace}
                   selectedKey={selectedKey}
-                  onSelectKey={setSelectedKey}
+                  onSelectKey={selectKey}
+                  previewDownPluginId={previewDownPluginId}
                   onDropPlugin={(key, pluginId) =>
                     void dropPlugin(key, pluginId)
                   }
@@ -170,7 +182,7 @@ export default function App() {
                   size="sm"
                   onClick={zoomOut}
                   disabled={zoom <= MIN_ZOOM}
-                  aria-label="Dézoomer"
+                  aria-label="Zoom out"
                 >
                   <MdRemove size={15} />
                 </ActionIcon>
@@ -181,7 +193,7 @@ export default function App() {
                     minWidth: 44,
                     textAlign: "center",
                   }}
-                  title="Revenir à 100 %"
+                  title="Reset to 100%"
                 >
                   <Text size="xs">{zoom}%</Text>
                 </UnstyledButton>
@@ -192,7 +204,7 @@ export default function App() {
                   size="sm"
                   onClick={zoomIn}
                   disabled={zoom >= MAX_ZOOM}
-                  aria-label="Zoomer"
+                  aria-label="Zoom in"
                 >
                   <MdAdd size={15} />
                 </ActionIcon>
@@ -206,6 +218,7 @@ export default function App() {
               tab={inspectorTab}
               onTabChange={setInspectorTab}
               onChange={changePlugins}
+              onPreviewDownPluginChange={setPreviewDownPluginId}
             />
           </Splitter.Pane>
         </Splitter>

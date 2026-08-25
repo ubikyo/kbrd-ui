@@ -45,7 +45,7 @@ export default function WorkspaceEditorModal({
       onSaved(item.id);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Erreur lors de l'enregistrement.",
+        cause instanceof Error ? cause.message : "Unable to save workspace.",
       );
     }
   }
@@ -57,7 +57,7 @@ export default function WorkspaceEditorModal({
       onDeleted();
     } catch (cause) {
       setConfirmDelete(false);
-      setError(cause instanceof Error ? cause.message : "Erreur de suppression.");
+      setError(cause instanceof Error ? cause.message : "Unable to delete workspace.");
     }
   }
 
@@ -68,7 +68,7 @@ export default function WorkspaceEditorModal({
         onClose={onClose}
         title={
           <Text fw={700}>
-            {editing ? "Modifier" : "Ajouter"} un workspace
+            {editing ? "Edit" : "Add"} workspace
           </Text>
         }
         centered
@@ -77,7 +77,7 @@ export default function WorkspaceEditorModal({
         <Stack>
           <TextInput
             variant="filled"
-            label="Nom"
+            label="Name"
             value={name}
             error={error || undefined}
             onChange={(event) => {
@@ -98,17 +98,17 @@ export default function WorkspaceEditorModal({
                 leftSection={<MdDelete size={16} />}
                 onClick={() => setConfirmDelete(true)}
               >
-                Supprimer
+                Delete
               </Button>
             ) : (
               <span />
             )}
             <Group>
               <Button color="gray" onClick={onClose}>
-                Annuler
+                Cancel
               </Button>
               <Button disabled={!name.trim()} onClick={() => void save()}>
-                {editing ? "Enregistrer" : "Ajouter"}
+                {editing ? "Save" : "Add"}
               </Button>
             </Group>
           </Group>
@@ -118,31 +118,31 @@ export default function WorkspaceEditorModal({
       <Modal
         opened={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        title={<Text fw={700}>Supprimer le workspace</Text>}
+        title={<Text fw={700}>Delete workspace</Text>}
         centered
         size="sm"
       >
         <Stack>
           <Text>
-            Supprimer le workspace{" "}
+            Delete workspace{" "}
             <Text component="span" fw={600}>
               {editing?.name}
             </Text>{" "}
             ?
           </Text>
           <Text size="sm" c="dimmed">
-            Cette action est irréversible.
+            This action cannot be undone.
           </Text>
           <Group justify="flex-end">
             <Button color="gray" onClick={() => setConfirmDelete(false)}>
-              Annuler
+              Cancel
             </Button>
             <Button
               color="red"
               leftSection={<MdDelete size={16} />}
               onClick={() => void remove()}
             >
-              Supprimer
+              Delete
             </Button>
           </Group>
         </Stack>

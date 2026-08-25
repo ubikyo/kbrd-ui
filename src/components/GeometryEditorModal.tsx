@@ -51,13 +51,13 @@ export default function GeometryEditorModal({
     try {
       parsedGeometry = JSON.parse(geometry) as GeometryGroup[];
       if (!Array.isArray(parsedGeometry)) {
-        throw new Error("La géométrie doit être un tableau JSON.");
+        throw new Error("Geometry must be a JSON array.");
       }
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
-          : "Le JSON de la géométrie n'est pas valide.",
+          : "The geometry JSON is invalid.",
       );
       return;
     }
@@ -78,7 +78,7 @@ export default function GeometryEditorModal({
       onSaved(saved.id);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Erreur lors de l'enregistrement.",
+        cause instanceof Error ? cause.message : "Unable to save geometry.",
       );
     }
   }
@@ -90,7 +90,7 @@ export default function GeometryEditorModal({
       onDeleted();
     } catch (cause) {
       setConfirmDelete(false);
-      setError(cause instanceof Error ? cause.message : "Erreur de suppression.");
+      setError(cause instanceof Error ? cause.message : "Unable to delete geometry.");
     }
   }
 
@@ -99,7 +99,7 @@ export default function GeometryEditorModal({
       <Modal
         opened
         onClose={onClose}
-        title={<Text fw={700}>{editing ? "Modifier" : "Ajouter"} une géométrie</Text>}
+        title={<Text fw={700}>{editing ? "Edit" : "Add"} geometry</Text>}
         centered
         size="lg"
         overlayProps={{ backgroundOpacity: 0.65, blur: 2 }}
@@ -108,9 +108,9 @@ export default function GeometryEditorModal({
             display: "flex",
             flexDirection: "column",
             height: "85vh",
-            backgroundColor: "var(--kbrd-color-surface)",
+            backgroundColor: "var(--kbrd-color-body)",
           },
-          header: { backgroundColor: "var(--kbrd-color-surface)" },
+          header: { backgroundColor: "var(--kbrd-color-body)" },
           body: { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 },
         }}
       >
@@ -119,7 +119,7 @@ export default function GeometryEditorModal({
             <Group grow>
               <TextInput
                 variant="filled"
-                label="Nom"
+                label="Name"
                 placeholder="ISO"
                 value={name}
                 onChange={(event) => setName(event.currentTarget.value)}
@@ -127,16 +127,16 @@ export default function GeometryEditorModal({
               />
               <TextInput
                 variant="filled"
-                label="Auteur"
+                label="Author"
                 value={author}
                 onChange={(event) => setAuthor(event.currentTarget.value)}
               />
             </Group>
             <Select
               variant="filled"
-              label="Unité"
+              label="Unit"
               data={[
-                { value: "mm", label: "Millimètres (mm)" },
+                { value: "mm", label: "Millimetres (mm)" },
                 { value: "px", label: "Pixels (px)" },
               ]}
               value={unit}
@@ -156,8 +156,8 @@ export default function GeometryEditorModal({
             />
             <Textarea
               variant="filled"
-              label="Géométrie"
-              description="Définition JSON des groupes, rangées et touches"
+              label="Geometry"
+              description="JSON definition of groups, rows and keys"
               value={geometry}
               onChange={(event) => {
                 setGeometry(event.currentTarget.value);
@@ -185,14 +185,14 @@ export default function GeometryEditorModal({
                 leftSection={<MdDelete size={16} />}
                 onClick={() => setConfirmDelete(true)}
               >
-                Supprimer
+                Delete
               </Button>
             )}
           </Box>
           <Group>
-            <Button color="gray" onClick={onClose}>Annuler</Button>
+            <Button color="gray" onClick={onClose}>Cancel</Button>
             <Button onClick={save} disabled={!name.trim()}>
-              {editing ? "Enregistrer" : "Ajouter"}
+              {editing ? "Save" : "Add"}
             </Button>
           </Group>
         </Group>
@@ -201,17 +201,17 @@ export default function GeometryEditorModal({
       <Modal
         opened={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        title={<Text fw={700}>Supprimer la géométrie</Text>}
+        title={<Text fw={700}>Delete geometry</Text>}
         centered
         size="sm"
       >
         <Stack>
-          <Text>Supprimer la géométrie <Text component="span" fw={600}>{editing?.name}</Text> ?</Text>
-          <Text size="sm" c="dimmed">Cette action est irréversible.</Text>
+          <Text>Delete geometry <Text component="span" fw={600}>{editing?.name}</Text>?</Text>
+          <Text size="sm" c="dimmed">This action cannot be undone.</Text>
           <Group justify="flex-end">
-            <Button color="gray" onClick={() => setConfirmDelete(false)}>Annuler</Button>
+            <Button color="gray" onClick={() => setConfirmDelete(false)}>Cancel</Button>
             <Button color="red" leftSection={<MdDelete size={16} />} onClick={remove}>
-              Supprimer
+              Delete
             </Button>
           </Group>
         </Stack>

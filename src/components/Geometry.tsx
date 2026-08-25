@@ -90,7 +90,7 @@ export default function Geometry({ onChange }: Props) {
                     Geometry
                   </Text>
                   <Text size="sm" fw={500}>
-                    {selected?.name ?? "Aucune"}
+                    {selected?.name ?? "None"}
                   </Text>
                 </Box>
               </Group>
@@ -134,19 +134,18 @@ export default function Geometry({ onChange }: Props) {
           ))}
 
           <Menu.Divider />
-          <Menu.Label>Actions</Menu.Label>
           <Menu.Item
             leftSection={<MdAdd size={18} />}
             onClick={() => openEditor(null)}
           >
-            Ajouter une géométrie
+            Add geometry
           </Menu.Item>
           {selected && (
             <Menu.Item
               leftSection={<MdEdit size={18} />}
               onClick={() => openEditor(selected)}
             >
-              Modifier la géométrie
+              Edit geometry
             </Menu.Item>
           )}
         </Menu.Dropdown>

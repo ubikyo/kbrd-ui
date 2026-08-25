@@ -28,6 +28,10 @@ body {
   border-bottom: 2px solid var(--kbrd-border-alt);
 }
 
+.property-accordion > .mantine-Accordion-item[data-active] {
+  border-bottom-color: transparent;
+}
+
 .inspector-accordion-heading:hover {
   background: #171717;
 }
@@ -41,11 +45,24 @@ body {
   padding-bottom: 0;
 }
 
-.inspector-tabs .mantine-Tabs-tab[data-active] {
+.inspector-tabs > .mantine-Tabs-list > .mantine-Tabs-tab[data-active] {
   position: relative;
   z-index: 1;
   border-bottom-color: var(--kbrd-color-body);
   color: white;
+}
+
+.state-tabs > .mantine-Tabs-list {
+  border-bottom-color: var(--kbrd-border-color);
+}
+
+.state-tabs > .mantine-Tabs-list > .mantine-Tabs-tab[data-active] {
+  color: white;
+  border-bottom-color: white;
+}
+
+.mantine-Input-input {
+  background-color: var(--kbrd-color-body) !important;
 }
 
 .property-editor-panel .mantine-Accordion-content {

@@ -2,11 +2,22 @@ import {
   createTheme,
   type CSSVariablesResolver,
   Menu,
+  Modal,
   Splitter,
 } from "@mantine/core";
 
 export const theme = createTheme({
   components: {
+    Modal: Modal.extend({
+      styles: {
+        content: {
+          backgroundColor: "var(--kbrd-color-body)",
+          border: "1px solid var(--kbrd-border-color)",
+        },
+        header: { backgroundColor: "var(--kbrd-color-body)" },
+        body: { backgroundColor: "var(--kbrd-color-body)" },
+      },
+    }),
     Menu: Menu.extend({
       styles: {
         dropdown: {
