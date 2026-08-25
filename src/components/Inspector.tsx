@@ -114,9 +114,7 @@ export default function Inspector({
                         .map((plugin) => (
                           <Paper
                             key={plugin.id}
-                            p="sm"
                             mb="xs"
-                            withBorder
                             draggable
                             style={{ cursor: "grab" }}
                             onDragStart={(event) => {
