@@ -686,41 +686,47 @@ export default function Inspector({
 
                         <Tabs.Panel value="main" pt="xl">
                           <Stack gap="lg">
-                            <Switch
-                              label="Disabled"
-                              checked={!item.enabled}
-                              onChange={(event) => {
-                                const disabled = event.currentTarget.checked;
-                                if (disabled) {
-                                  setPropertyStates((states) => ({
-                                    ...states,
-                                    [item.id]: "main",
-                                  }));
-                                  onPreviewDownPluginChange(null);
-                                }
-                                void patch(item, { enabled: !disabled });
-                              }}
-                            />
-                            {supportsDown && (
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Disabled</Text>
                               <Switch
-                                label="Down state"
-                                checked={down.enabled}
+                                size="sm"
+                                checked={!item.enabled}
                                 onChange={(event) => {
-                                  const enabled = event.currentTarget.checked;
-                                  if (!enabled) {
+                                  const disabled = event.currentTarget.checked;
+                                  if (disabled) {
                                     setPropertyStates((states) => ({
                                       ...states,
                                       [item.id]: "main",
                                     }));
                                     onPreviewDownPluginChange(null);
                                   }
-                                  patchDown({
-                                    enabled,
-                                    config:
-                                      down.config ?? structuredClone(up),
-                                  });
+                                  void patch(item, { enabled: !disabled });
                                 }}
                               />
+                            </Group>
+                            {supportsDown && (
+                              <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Down state</Text>
+                                <Switch
+                                  size="sm"
+                                  checked={down.enabled}
+                                  onChange={(event) => {
+                                    const enabled = event.currentTarget.checked;
+                                    if (!enabled) {
+                                      setPropertyStates((states) => ({
+                                        ...states,
+                                        [item.id]: "main",
+                                      }));
+                                      onPreviewDownPluginChange(null);
+                                    }
+                                    patchDown({
+                                      enabled,
+                                      config:
+                                        down.config ?? structuredClone(up),
+                                    });
+                                  }}
+                                />
+                              </Group>
                             )}
                           </Stack>
                         </Tabs.Panel>
