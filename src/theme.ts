@@ -1,7 +1,8 @@
 import {
   createTheme,
   type CSSVariablesResolver,
-  Menu
+  Menu,
+  Splitter
 } from "@mantine/core";
 
 export const theme = createTheme({
@@ -16,6 +17,13 @@ export const theme = createTheme({
         },
       },
     }),
+    Splitter: Splitter.extend({
+      styles: {
+        handle: {
+          color: "var(--kbrd-border-alt)",
+        },
+      },
+    }),
   },
 });
 
@@ -24,6 +32,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     "--kbrd-color-body": "#000000",
     "--kbrd-color-surface": "#222120",
     "--kbrd-border-color": "#333333",
+    "--kbrd-border-alt": "#FFFFFF",
   },
   light: {},
   dark: {},
