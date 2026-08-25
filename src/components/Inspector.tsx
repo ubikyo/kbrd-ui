@@ -272,7 +272,7 @@ export default function Inspector({
           {!workspace ? (
             <Text c="dimmed">Create a workspace to add plugins.</Text>
           ) : (
-            <Accordion multiple defaultValue={["Display"]}>
+            <Accordion multiple>
               {[...new Set(plugins.map((plugin) => plugin.category))].map(
                 (category) => {
                   const categoryPlugins = plugins.filter(
