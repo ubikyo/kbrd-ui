@@ -114,6 +114,7 @@ export default function Inspector({
                         .map((plugin) => (
                           <Paper
                             key={plugin.id}
+                            p="sm"
                             mb="xs"
                             draggable
                             style={{ cursor: "grab" }}
