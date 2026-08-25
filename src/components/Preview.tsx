@@ -1,5 +1,5 @@
 import { Box } from "@mantine/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { pluginById, type PluginDefinition } from "../plugins/registry";
 import { downState, effectiveConfig, upConfig } from "../plugins/state";
@@ -159,7 +159,7 @@ export default function Preview({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = keyboardRef.current;
     if (!root) return;
     const properties = new Map(
