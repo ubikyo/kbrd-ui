@@ -34,7 +34,7 @@ const BACKGROUND_REF = "__background__";
 const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
   borderEnabled: true,
   downEnabled: false,
-  upBorderColor: "#ffffff",
+  upBorderColor: "#808080",
   downBorderColor: "#ffffff",
   upBorderWidth: 1,
   downBorderWidth: 1,

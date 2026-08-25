@@ -60,6 +60,7 @@ function StatefulPluginRenderer({
 const VIEWPORT_MARGIN = 60;
 const PREVIEW_PADDING = 30;
 const BORDER_WIDTH = 1;
+const DEFAULT_UP_BORDER_COLOR = "rgba(255, 255, 255, 0.5)";
 
 function geometryPath(geometry: GeometryLayout["keys"][number]) {
   if (!geometry.parts.length) return null;
@@ -194,7 +195,7 @@ export default function Preview({
         borderEnabled
           ? down
             ? (config?.downBorderColor ?? "#ffffff")
-            : (config?.upBorderColor ?? "#ffffff")
+            : (config?.upBorderColor ?? DEFAULT_UP_BORDER_COLOR)
           : "none",
       );
       element.setAttribute("stroke-width", String(displayWidth));
