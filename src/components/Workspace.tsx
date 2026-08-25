@@ -113,7 +113,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
         position="bottom-start"
         width={300}
         shadow="md"
-        offset={4}
+        offset={0}
       >
         <Menu.Target>
           <UnstyledButton
