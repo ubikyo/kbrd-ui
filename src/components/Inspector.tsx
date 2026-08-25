@@ -360,10 +360,14 @@ export default function Inspector({
             <Text c="dimmed">No key selected</Text>
           ) : (
             <Stack gap={0}>
-              <Box key={`${selectedKey}-system`} style={{ order: 1 }}>
-                <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                  Display
-                </Text>
+              <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
+                {!propertyGroups.some(
+                  (group) => group.category === "Display",
+                ) && (
+                  <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
+                    Display
+                  </Text>
+                )}
                 <Accordion multiple className="property-accordion">
                 <Accordion.Item value="system">
                   <Group
@@ -371,7 +375,20 @@ export default function Inspector({
                     gap={0}
                     wrap="nowrap"
                   >
-                    <Box w={24} style={{ flexShrink: 0 }} />
+                    <Box
+                      px={4}
+                      py="sm"
+                      aria-label={`Move ${systemPluginName} disabled`}
+                      aria-disabled="true"
+                    >
+                      <MdDragIndicator
+                        style={{
+                          cursor: "not-allowed",
+                          display: "block",
+                          opacity: 0.35,
+                        }}
+                      />
+                    </Box>
                     <Accordion.Control style={{ flex: 1, paddingLeft: 0 }}>
                       {systemPluginName}
                     </Accordion.Control>
@@ -379,9 +396,8 @@ export default function Inspector({
                       color="red"
                       variant="subtle"
                       mr="xs"
-                      aria-hidden
-                      tabIndex={-1}
-                      style={{ visibility: "hidden" }}
+                      aria-label={`Delete ${systemPluginName} disabled`}
+                      disabled
                     >
                       <MdDelete />
                     </ActionIcon>
@@ -591,18 +607,17 @@ export default function Inspector({
                 <Stack
                   key={`${selectedKey}-plugins`}
                   gap={0}
-                  style={{ order: 1 }}
+                  style={{ display: "contents" }}
                 >
               {propertyGroups.map((group) => (
                 <Box
                   key={group.category}
                   mt={group.category === "Display" ? 0 : 48}
+                  style={{ order: group.category === "Display" ? 1 : 3 }}
                 >
-                  {group.category !== "Display" && (
-                    <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                      {group.category}
-                    </Text>
-                  )}
+                  <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
+                    {group.category}
+                  </Text>
                   <Accordion multiple className="property-accordion">
               {group.items.map((item) => {
                 const plugin = pluginById(item.plugin_id);
