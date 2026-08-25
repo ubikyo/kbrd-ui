@@ -13,12 +13,16 @@ export type KeyMode = "momentary" | "toggle";
 
 export type KeyPropertyConfig = {
   keyMode: KeyMode;
-  borderEnabled: boolean;
+  borderEnabled?: boolean;
   downEnabled: boolean;
+  upBorderEnabled: boolean;
+  downBorderEnabled: boolean;
   upBorderColor: string;
   downBorderColor: string;
   upBorderWidth: number;
   downBorderWidth: number;
+  upBackgroundColor: string;
+  downBackgroundColor: string;
 };
 
 export type KeyProperty = {

@@ -34,12 +34,15 @@ import type {
 const BACKGROUND_REF = "__background__";
 const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
   keyMode: "momentary",
-  borderEnabled: true,
   downEnabled: false,
+  upBorderEnabled: true,
+  downBorderEnabled: true,
   upBorderColor: "#808080",
   downBorderColor: "#ffffff",
   upBorderWidth: 1,
   downBorderWidth: 1,
+  upBackgroundColor: "#00000000",
+  downBackgroundColor: "#00000000",
 };
 
 type Props = {
@@ -137,6 +140,7 @@ export default function Inspector({
     selectedProperty?.config as (KeyPropertyConfig & { borderWidth?: number })
       | undefined
   )?.borderWidth;
+  const legacyBorderEnabled = selectedProperty?.config.borderEnabled ?? true;
   const propertyConfig: KeyPropertyConfig = {
     ...DEFAULT_KEY_PROPERTIES,
     ...selectedProperty?.config,
@@ -144,6 +148,10 @@ export default function Inspector({
       selectedProperty?.config.upBorderWidth ?? legacyBorderWidth ?? 1,
     downBorderWidth:
       selectedProperty?.config.downBorderWidth ?? legacyBorderWidth ?? 1,
+    upBorderEnabled:
+      selectedProperty?.config.upBorderEnabled ?? legacyBorderEnabled,
+    downBorderEnabled:
+      selectedProperty?.config.downBorderEnabled ?? legacyBorderEnabled,
   };
   const targetType =
     selectedKey === BACKGROUND_REF
@@ -352,7 +360,7 @@ export default function Inspector({
                       <MdDelete />
                     </ActionIcon>
                   </Group>
-                  {targetType !== "background" && (
+                  {targetType === "key" && (
                     <Accordion.Panel className="property-editor-panel">
                       <Tabs
                         className="state-tabs"
@@ -380,65 +388,73 @@ export default function Inspector({
                         </Tabs.List>
                         <Tabs.Panel value="option" pt="xl">
                           <Stack gap="md">
-                            {targetType === "key" && (
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Type</Text>
-                                <Select
-                                  w={160}
-                                  size="xs"
-                                  allowDeselect={false}
-                                  data={[
-                                    { value: "momentary", label: "Momentary" },
-                                    { value: "toggle", label: "Toggle" },
-                                  ]}
-                                  value={propertyConfig.keyMode}
-                                  onChange={(value) =>
-                                    patchKeyProperty({
-                                      keyMode:
-                                        value === "toggle"
-                                          ? "toggle"
-                                          : "momentary",
-                                    })
-                                  }
-                                />
-                              </Group>
-                            )}
                             <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Border</Text>
-                              <Switch
-                                size="sm"
-                                checked={propertyConfig.borderEnabled}
-                                onChange={(event) =>
+                              <Text size="sm">Type</Text>
+                              <Select
+                                w={160}
+                                size="xs"
+                                allowDeselect={false}
+                                data={[
+                                  { value: "momentary", label: "Momentary" },
+                                  { value: "toggle", label: "Toggle" },
+                                ]}
+                                value={propertyConfig.keyMode}
+                                onChange={(value) =>
                                   patchKeyProperty({
-                                    borderEnabled: event.currentTarget.checked,
+                                    keyMode:
+                                      value === "toggle"
+                                        ? "toggle"
+                                        : "momentary",
                                   })
                                 }
                               />
                             </Group>
-                            {targetType === "key" && (
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Down state</Text>
-                                <Switch
-                                  size="sm"
-                                  checked={propertyConfig.downEnabled}
-                                  onChange={(event) => {
-                                    const enabled = event.currentTarget.checked;
-                                    patchKeyProperty({ downEnabled: enabled });
-                                    if (!enabled) {
-                                      setTargetStates((states) => ({
-                                        ...states,
-                                        [selectedKey]: "option",
-                                      }));
-                                      onPreviewDownTargetChange(null);
-                                    }
-                                  }}
-                                />
-                              </Group>
-                            )}
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Down state</Text>
+                              <Switch
+                                size="sm"
+                                checked={propertyConfig.downEnabled}
+                                onChange={(event) => {
+                                  const enabled = event.currentTarget.checked;
+                                  patchKeyProperty({ downEnabled: enabled });
+                                  if (!enabled) {
+                                    setTargetStates((states) => ({
+                                      ...states,
+                                      [selectedKey]: "option",
+                                    }));
+                                    onPreviewDownTargetChange(null);
+                                  }
+                                }}
+                              />
+                            </Group>
                           </Stack>
                         </Tabs.Panel>
                         <Tabs.Panel value="up" pt="xl">
                           <Stack gap="sm">
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Background color</Text>
+                              <ColorInput
+                                w={160}
+                                size="xs"
+                                format="hexa"
+                                value={propertyConfig.upBackgroundColor}
+                                onChange={(value) =>
+                                  patchKeyProperty({ upBackgroundColor: value })
+                                }
+                              />
+                            </Group>
+                            <Group justify="space-between" wrap="nowrap">
+                              <Text size="sm">Border</Text>
+                              <Switch
+                                size="sm"
+                                checked={propertyConfig.upBorderEnabled}
+                                onChange={(event) =>
+                                  patchKeyProperty({
+                                    upBorderEnabled: event.currentTarget.checked,
+                                  })
+                                }
+                              />
+                            </Group>
                             <Group justify="space-between" wrap="nowrap">
                               <Text size="sm">Border color</Text>
                               <ColorInput
@@ -446,7 +462,7 @@ export default function Inspector({
                                 size="xs"
                                 format="hex"
                                 value={propertyConfig.upBorderColor}
-                                disabled={!propertyConfig.borderEnabled}
+                                disabled={!propertyConfig.upBorderEnabled}
                                 onChange={(value) =>
                                   patchKeyProperty({ upBorderColor: value })
                                 }
@@ -462,7 +478,7 @@ export default function Inspector({
                                 allowDecimal={false}
                                 clampBehavior="strict"
                                 value={propertyConfig.upBorderWidth}
-                                disabled={!propertyConfig.borderEnabled}
+                                disabled={!propertyConfig.upBorderEnabled}
                                 onChange={(value) =>
                                   patchKeyProperty({
                                     upBorderWidth:
@@ -477,13 +493,40 @@ export default function Inspector({
                           <Tabs.Panel value="down" pt="xl">
                             <Stack gap="sm">
                               <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Background color</Text>
+                                <ColorInput
+                                  w={160}
+                                  size="xs"
+                                  format="hexa"
+                                  value={propertyConfig.downBackgroundColor}
+                                  onChange={(value) =>
+                                    patchKeyProperty({
+                                      downBackgroundColor: value,
+                                    })
+                                  }
+                                />
+                              </Group>
+                              <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Border</Text>
+                                <Switch
+                                  size="sm"
+                                  checked={propertyConfig.downBorderEnabled}
+                                  onChange={(event) =>
+                                    patchKeyProperty({
+                                      downBorderEnabled:
+                                        event.currentTarget.checked,
+                                    })
+                                  }
+                                />
+                              </Group>
+                              <Group justify="space-between" wrap="nowrap">
                                 <Text size="sm">Border color</Text>
                                 <ColorInput
                                   w={160}
                                   size="xs"
                                   format="hex"
                                   value={propertyConfig.downBorderColor}
-                                  disabled={!propertyConfig.borderEnabled}
+                                  disabled={!propertyConfig.downBorderEnabled}
                                   onChange={(value) =>
                                     patchKeyProperty({ downBorderColor: value })
                                   }
@@ -499,7 +542,7 @@ export default function Inspector({
                                   allowDecimal={false}
                                   clampBehavior="strict"
                                   value={propertyConfig.downBorderWidth}
-                                  disabled={!propertyConfig.borderEnabled}
+                                  disabled={!propertyConfig.downBorderEnabled}
                                   onChange={(value) =>
                                     patchKeyProperty({
                                       downBorderWidth:

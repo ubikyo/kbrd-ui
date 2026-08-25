@@ -49,19 +49,32 @@ function StatefulPluginRenderer({
   forceDown: boolean;
   geometry: GeometryLayout["keys"][number];
 }) {
-  const [readyToken, setReadyToken] = useState<number | null>(null);
+  const [releasedToken, setReleasedToken] = useState(pressToken);
   const down = downState(config);
 
   useEffect(() => {
-    if (!pressed || !down.enabled || down.delay <= 0) return;
-    const timer = window.setTimeout(() => setReadyToken(pressToken), down.delay);
+    if (pressed) return;
+    if (
+      !down.enabled ||
+      down.delay <= 0 ||
+      releasedToken === pressToken
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setReleasedToken(pressToken),
+      down.delay,
+    );
     return () => window.clearTimeout(timer);
-  }, [pressed, pressToken, down.enabled, down.delay]);
+  }, [pressed, pressToken, releasedToken, down.enabled, down.delay]);
+
+  const releasePending =
+    !pressed &&
+    down.delay > 0 &&
+    releasedToken !== pressToken;
 
   const downVisible =
-    down.enabled &&
-    (forceDown ||
-      (pressed && (down.delay <= 0 || readyToken === pressToken)));
+    down.enabled && (forceDown || pressed || releasePending);
 
   return <Renderer config={effectiveConfig(config, downVisible)} {...geometry} />;
 }
@@ -246,16 +259,59 @@ export default function Preview({
     };
   }, [layout.height, layout.width, viewport]);
 
+  function keyIsDown(
+    geometry: GeometryLayout["keys"][number],
+    config: KeyPropertyConfig | undefined,
+  ) {
+    return (
+      geometry.type === "key" &&
+      Boolean(config?.downEnabled) &&
+      (isKeyDown(geometry.ref) || previewDownTarget === geometry.ref)
+    );
+  }
+
+  function renderKeyBackgrounds() {
+    if (!keyboardSize) return null;
+
+    return layout.keys.map((geometry) => {
+      if (geometry.type === "space") return null;
+      const config = keyProperties.get(geometry.ref);
+      const down = keyIsDown(geometry, config);
+      const fill = down
+        ? (config?.downBackgroundColor ?? "#00000000")
+        : (config?.upBackgroundColor ?? "#00000000");
+      const path = geometryPath(geometry);
+      if (path) {
+        return <path key={geometry.ref} d={path} fill={fill} />;
+      }
+      return (
+        <rect
+          key={geometry.ref}
+          x={geometry.x}
+          y={geometry.y}
+          width={geometry.width}
+          height={geometry.height}
+          rx={(2 * layout.width) / keyboardSize.width}
+          ry={(2 * layout.height) / keyboardSize.height}
+          fill={fill}
+        />
+      );
+    });
+  }
+
   function renderKeyBorders() {
     if (!keyboardSize) return null;
 
     return layout.keys.map((geometry) => {
       const config = keyProperties.get(geometry.ref);
-      const down =
-        geometry.type === "key" &&
-        Boolean(config?.downEnabled) &&
-        (isKeyDown(geometry.ref) || previewDownTarget === geometry.ref);
-      const borderEnabled = config?.borderEnabled ?? true;
+      const down = keyIsDown(geometry, config);
+      const legacyBorderEnabled = config?.borderEnabled ?? true;
+      const borderEnabled =
+        geometry.type === "space"
+          ? true
+          : down
+            ? (config?.downBorderEnabled ?? legacyBorderEnabled)
+            : (config?.upBorderEnabled ?? legacyBorderEnabled);
       const legacyWidth = (config as { borderWidth?: number } | undefined)
         ?.borderWidth;
       const borderWidth = Math.max(
@@ -268,9 +324,11 @@ export default function Preview({
         ),
       );
       const stroke = borderEnabled
-        ? down
-          ? (config?.downBorderColor ?? "#ffffff")
-          : (config?.upBorderColor ?? DEFAULT_UP_BORDER_COLOR)
+        ? geometry.type === "space"
+          ? DEFAULT_UP_BORDER_COLOR
+          : down
+            ? (config?.downBorderColor ?? "#ffffff")
+            : (config?.upBorderColor ?? DEFAULT_UP_BORDER_COLOR)
         : "none";
       const path = geometryPath(geometry);
 
@@ -285,6 +343,7 @@ export default function Preview({
             fill="#00000000"
             stroke={stroke}
             strokeWidth={borderWidth}
+            strokeDasharray={geometry.type === "space" ? "4 3" : undefined}
             vectorEffect="non-scaling-stroke"
           />
         );
@@ -307,6 +366,7 @@ export default function Preview({
           fill="#00000000"
           stroke={stroke}
           strokeWidth={borderWidth}
+          strokeDasharray={geometry.type === "space" ? "4 3" : undefined}
           vectorEffect="non-scaling-stroke"
         />
       );
@@ -424,6 +484,7 @@ export default function Preview({
         const plugin = pluginById(instance.plugin_id);
         if (!geometry || !plugin) return null;
         const Renderer = plugin.Renderer;
+        const pluginDown = downState(instance.config);
         if (onBackground) {
           return (
             <Renderer
@@ -453,6 +514,7 @@ export default function Preview({
             </defs>
             <g clipPath={`url(#${clipId})`}>
               <StatefulPluginRenderer
+                key={`${instance.id}-${pluginDown.enabled}-${pluginDown.delay}`}
                 Renderer={Renderer}
                 config={instance.config}
                 geometry={geometry}
@@ -478,23 +540,26 @@ export default function Preview({
         const key =
           keyFromEvent(event.target, event.clientX, event.clientY) ?? null;
         const geometry = layout.keys.find((item) => item.ref === key);
+        let activatesDown = false;
         if (
           key &&
           geometry?.type === "key" &&
           keyMode(keyProperties.get(key)) === "toggle"
         ) {
+          activatesDown = !toggledKeys.has(key);
           setPressedKey(null);
           setToggledKeys((current) => {
             const next = new Set(current);
-            if (next.has(key)) next.delete(key);
-            else next.add(key);
+            if (activatesDown) next.add(key);
+            else next.delete(key);
             return next;
           });
         } else {
+          activatesDown = geometry?.type === "key";
           setPressedKey(geometry?.type === "key" ? key : null);
         }
         onSelectKey(key);
-        if (key) {
+        if (key && activatesDown) {
           setPressTokens((tokens) => ({
             ...tokens,
             [key]: (tokens[key] ?? 0) + 1,
@@ -595,6 +660,22 @@ export default function Preview({
                 }}
               >
                 <svg
+                  className="keyboard-background-layer"
+                  viewBox={`0 0 ${layout.width} ${layout.height}`}
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    pointerEvents: "none",
+                    zIndex: 0,
+                  }}
+                >
+                  {renderKeyBackgrounds()}
+                </svg>
+                <svg
                   className="keyboard-plugin-layer"
                   viewBox={`0 0 ${layout.width} ${layout.height}`}
                   aria-hidden="true"
@@ -660,6 +741,11 @@ export default function Preview({
                           fill="none"
                           stroke="#00ff00"
                           strokeWidth={2}
+                          strokeDasharray={
+                            selectedGeometry.type === "space"
+                              ? "4 3"
+                              : undefined
+                          }
                           vectorEffect="non-scaling-stroke"
                           pointerEvents="none"
                         />
@@ -680,6 +766,9 @@ export default function Preview({
                         fill="none"
                         stroke="#00ff00"
                         strokeWidth={2}
+                        strokeDasharray={
+                          selectedGeometry.type === "space" ? "4 3" : undefined
+                        }
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="none"
                       />
