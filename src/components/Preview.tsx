@@ -2,7 +2,7 @@ import { Box } from "@mantine/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { pluginById, type PluginDefinition } from "../plugins/registry";
-import { downState, effectiveConfig } from "../plugins/state";
+import { downState, effectiveConfig, upConfig } from "../plugins/state";
 import type { GeometryLayout } from "../types/geometry";
 import type { WorkspaceData } from "../types/workspace";
 
@@ -209,29 +209,38 @@ export default function Preview({
     const keyboard = viewportRef.current?.querySelector<HTMLElement>(
       ".keyboard-svg",
     );
-    if (!keyboard) return undefined;
+    const frame = viewportRef.current?.querySelector<HTMLElement>(
+      ".keyboard-frame",
+    );
+    if (!keyboard || !frame) return undefined;
     const bounds = keyboard.getBoundingClientRect();
     if (
-      clientX < bounds.left ||
-      clientX > bounds.right ||
-      clientY < bounds.top ||
-      clientY > bounds.bottom
+      clientX >= bounds.left &&
+      clientX <= bounds.right &&
+      clientY >= bounds.top &&
+      clientY <= bounds.bottom
     ) {
-      return undefined;
+      const x = ((clientX - bounds.left) / bounds.width) * layout.width;
+      const y = ((clientY - bounds.top) / bounds.height) * layout.height;
+      const key = [...layout.keys]
+        .reverse()
+        .find(
+          (item) =>
+            x >= item.x &&
+            x <= item.x + item.width &&
+            y >= item.y &&
+            y <= item.y + item.height,
+        );
+      if (key) return key.ref;
     }
 
-    const x = ((clientX - bounds.left) / bounds.width) * layout.width;
-    const y = ((clientY - bounds.top) / bounds.height) * layout.height;
-    const key = [...layout.keys]
-      .reverse()
-      .find(
-        (item) =>
-          x >= item.x &&
-          x <= item.x + item.width &&
-          y >= item.y &&
-          y <= item.y + item.height,
-      );
-    return key?.ref ?? BACKGROUND_REF;
+    const frameBounds = frame.getBoundingClientRect();
+    return clientX >= frameBounds.left &&
+      clientX <= frameBounds.right &&
+      clientY >= frameBounds.top &&
+      clientY <= frameBounds.bottom
+      ? BACKGROUND_REF
+      : undefined;
   }
 
   function handleClick(event: React.MouseEvent<HTMLDivElement>) {
@@ -277,12 +286,18 @@ export default function Preview({
       )
       .sort((left, right) => left.position - right.position)
       .map((instance) => {
+        const horizontalPadding = keyboardSize
+          ? (PREVIEW_PADDING / keyboardSize.width) * layout.width
+          : 0;
+        const verticalPadding = keyboardSize
+          ? (PREVIEW_PADDING / keyboardSize.height) * layout.height
+          : 0;
         const geometry = onBackground
           ? {
-              x: 0,
-              y: 0,
-              width: layout.width,
-              height: layout.height,
+              x: -horizontalPadding,
+              y: -verticalPadding,
+              width: layout.width + horizontalPadding * 2,
+              height: layout.height + verticalPadding * 2,
               ref: BACKGROUND_REF,
               name: "Background",
               parts: [],
@@ -291,6 +306,15 @@ export default function Preview({
         const plugin = pluginById(instance.plugin_id);
         if (!geometry || !plugin) return null;
         const Renderer = plugin.Renderer;
+        if (onBackground) {
+          return (
+            <Renderer
+              key={instance.id}
+              config={upConfig(instance.config)}
+              {...geometry}
+            />
+          );
+        }
         return (
           <StatefulPluginRenderer
             key={instance.id}
@@ -356,16 +380,44 @@ export default function Preview({
             }}
           >
             <Box
+              className="keyboard-frame"
               style={{
                 display: "block",
+                position: "relative",
 
                 padding: PREVIEW_PADDING,
 
                 border: `${BORDER_WIDTH}px solid rgba(255, 255, 255, 1)`,
 
                 boxSizing: "content-box",
+                overflow: "hidden",
               }}
             >
+              <svg
+                viewBox={`${
+                  -(PREVIEW_PADDING / keyboardSize.width) * layout.width
+                } ${
+                  -(PREVIEW_PADDING / keyboardSize.height) * layout.height
+                } ${
+                  layout.width +
+                  2 * (PREVIEW_PADDING / keyboardSize.width) * layout.width
+                } ${
+                  layout.height +
+                  2 * (PREVIEW_PADDING / keyboardSize.height) * layout.height
+                }`}
+                aria-hidden="true"
+                className="keyboard-plugin-layer"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              >
+                {renderPlugins(true)}
+              </svg>
               <Box
                 className="keyboard-svg"
                 style={{
@@ -373,38 +425,9 @@ export default function Preview({
                   height: keyboardSize.height,
                   position: "relative",
                   lineHeight: 0,
+                  zIndex: 1,
                 }}
               >
-                <svg
-                  viewBox={`0 0 ${layout.width} ${layout.height}`}
-                  aria-hidden="true"
-                  className="keyboard-plugin-layer"
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    overflow: "visible",
-                    pointerEvents: "none",
-                    zIndex: 0,
-                  }}
-                >
-                  {renderPlugins(true)}
-                  <rect
-                    x={0}
-                    y={0}
-                    width={layout.width}
-                    height={layout.height}
-                    fill="none"
-                    stroke={
-                      selectedKey === BACKGROUND_REF ||
-                      dropTargetKey === BACKGROUND_REF
-                        ? "white"
-                        : "none"
-                    }
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
                 <Box
                   style={{ position: "relative", zIndex: 1 }}
                   dangerouslySetInnerHTML={{ __html: svg }}

@@ -27,6 +27,7 @@ import type { KeyPlugin, WorkspaceData } from "./types/workspace";
 const MIN_ZOOM = 25;
 const MAX_ZOOM = 200;
 const ZOOM_STEP = 10;
+const BACKGROUND_REF = "__background__";
 
 export default function App() {
   const [geometry, setGeometry] = useState<GeometryData | null>(null);
@@ -63,12 +64,16 @@ export default function App() {
     if (!workspace) return;
     const definition = pluginById(pluginId);
     if (!definition) return;
+    const config: Record<string, unknown> = structuredClone(
+      definition.defaultConfig,
+    );
+    if (key === BACKGROUND_REF) delete config.down;
     const instance = await addKeyPlugin(
       workspace.id,
       key,
       definition.id,
       definition.version,
-      structuredClone(definition.defaultConfig),
+      config,
     );
     changePlugins([...workspace.plugins, instance]);
     setInspectorTab("properties");

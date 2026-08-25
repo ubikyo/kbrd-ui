@@ -19,6 +19,8 @@ import { pluginById, plugins } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
 import type { KeyPlugin, WorkspaceData } from "../types/workspace";
 
+const BACKGROUND_REF = "__background__";
+
 type Props = {
   workspace: WorkspaceData | null;
   selectedKey: string | null;
@@ -237,7 +239,12 @@ export default function Inspector({
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
                 const summary = pluginSummary(item);
-                const propertyState = propertyStates[item.id] ?? "main";
+                const isBackground = item.key_ref === BACKGROUND_REF;
+                const storedPropertyState = propertyStates[item.id] ?? "main";
+                const propertyState =
+                  isBackground && storedPropertyState === "down"
+                    ? "up"
+                    : storedPropertyState;
                 const down = downState(item.config);
                 const up = upConfig(item.config);
                 function patchDown(data: Partial<typeof down>) {
@@ -374,11 +381,11 @@ export default function Inspector({
                         }}
                       >
                         <Tabs.List grow>
-                          <Tabs.Tab value="main">Main</Tabs.Tab>
+                          <Tabs.Tab value="main">Option</Tabs.Tab>
                           <Tabs.Tab value="up" disabled={!item.enabled}>
-                            Up
+                            {isBackground ? "Main" : "Up"}
                           </Tabs.Tab>
-                          {down.enabled && (
+                          {!isBackground && down.enabled && (
                             <Tabs.Tab value="down" disabled={!item.enabled}>
                               Down
                             </Tabs.Tab>
@@ -402,25 +409,27 @@ export default function Inspector({
                                 void patch(item, { enabled: !disabled });
                               }}
                             />
-                            <Switch
-                              label="Down state"
-                              checked={down.enabled}
-                              onChange={(event) => {
-                                const enabled = event.currentTarget.checked;
-                                if (!enabled) {
-                                  setPropertyStates((states) => ({
-                                    ...states,
-                                    [item.id]: "main",
-                                  }));
-                                  onPreviewDownPluginChange(null);
-                                }
-                                patchDown({
-                                  enabled,
-                                  config:
-                                    down.config ?? structuredClone(up),
-                                });
-                              }}
-                            />
+                            {!isBackground && (
+                              <Switch
+                                label="Down state"
+                                checked={down.enabled}
+                                onChange={(event) => {
+                                  const enabled = event.currentTarget.checked;
+                                  if (!enabled) {
+                                    setPropertyStates((states) => ({
+                                      ...states,
+                                      [item.id]: "main",
+                                    }));
+                                    onPreviewDownPluginChange(null);
+                                  }
+                                  patchDown({
+                                    enabled,
+                                    config:
+                                      down.config ?? structuredClone(up),
+                                  });
+                                }}
+                              />
+                            )}
                           </Stack>
                         </Tabs.Panel>
 
@@ -435,7 +444,7 @@ export default function Inspector({
                           />
                         </Tabs.Panel>
 
-                        {down.enabled && (
+                        {!isBackground && down.enabled && (
                           <Tabs.Panel value="down" pt="xl">
                             <Stack gap="xl">
                               <Editor
