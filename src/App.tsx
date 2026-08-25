@@ -128,7 +128,7 @@ export default function App() {
         <Splitter
           orientation="horizontal"
           lineSize={1}
-          handleColor="var(--kbrd-border-color)"
+          handleColor="#FFFFFF"
           style={{
             position: "relative",
             height: "calc(100vh - 64px)",
