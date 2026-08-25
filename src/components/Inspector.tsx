@@ -394,10 +394,11 @@ export default function Inspector({
                     </Accordion.Control>
                     <ActionIcon
                       color="red"
-                      variant="subtle"
+                      variant="transparent"
                       mr="xs"
                       aria-label={`Delete ${systemPluginName} disabled`}
                       disabled
+                      style={{ backgroundColor: "transparent" }}
                     >
                       <MdDelete />
                     </ActionIcon>
