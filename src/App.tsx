@@ -79,6 +79,10 @@ export default function App() {
     if (!workspace) return;
     const definition = pluginById(pluginId);
     if (!definition) return;
+    const target = geometry?.layout.keys.find((item) => item.ref === key);
+    if (definition.capabilities.includes("action") && target?.type !== "key") {
+      return;
+    }
     const config: Record<string, unknown> = structuredClone(
       definition.defaultConfig,
     );

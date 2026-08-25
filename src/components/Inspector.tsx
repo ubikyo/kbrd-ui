@@ -572,7 +572,9 @@ export default function Inspector({
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
                 const summary = pluginSummary(item);
-                const supportsDown = targetType === "key";
+                const supportsDown =
+                  targetType === "key" &&
+                  plugin.capabilities.includes("render");
                 const storedPropertyState = propertyStates[item.id] ?? "main";
                 const propertyState =
                   !supportsDown && storedPropertyState === "down"
