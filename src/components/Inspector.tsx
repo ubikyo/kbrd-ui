@@ -94,7 +94,7 @@ export default function Inspector({
 
   return (
     <Box h="100%" bg="var(--kbrd-color-body)" style={{ overflow: "auto" }}>
-      <Tabs value={tab} onChange={onTabChange}>
+      <Tabs value={tab} onChange={onTabChange} variant="outline">
         <Tabs.List grow>
           <Tabs.Tab value="plugins">Plugins</Tabs.Tab>
           <Tabs.Tab value="properties">Properties</Tabs.Tab>
