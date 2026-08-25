@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "KBRD Inter";
+  src: url("/api/fonts/inter-regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 html,
 body,
 #root {
@@ -37,6 +45,7 @@ body {
   position: relative;
   z-index: 1;
   border-bottom-color: var(--kbrd-color-body);
+  color: white;
 }
 
 .property-editor-panel .mantine-Accordion-content {

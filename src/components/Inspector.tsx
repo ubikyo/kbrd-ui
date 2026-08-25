@@ -171,10 +171,7 @@ export default function Inspector({
                         {categoryPlugins.map((plugin, index) => (
                           <Box
                             key={plugin.id}
-                            pt="sm"
-                            pb={
-                              index < categoryPlugins.length - 1 ? "sm" : 0
-                            }
+                            py="sm"
                             draggable
                             style={{
                               borderBottom:
