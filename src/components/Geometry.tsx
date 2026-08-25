@@ -67,6 +67,8 @@ export default function Geometry({ onChange }: Props) {
         onChange={setMenuOpened}
         position="bottom-start"
         width={300}
+        shadow="md"
+        offset={0}
       >
         <Menu.Target>
           <UnstyledButton
