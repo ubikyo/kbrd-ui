@@ -339,7 +339,16 @@ export default function Inspector({
                     <Accordion.Control style={{ flex: 1, paddingLeft: 0 }}>
                       {systemPluginName}
                     </Accordion.Control>
-                    <Box w={46} style={{ flexShrink: 0 }} />
+                    <ActionIcon
+                      color="red"
+                      variant="subtle"
+                      mr="xs"
+                      aria-hidden
+                      tabIndex={-1}
+                      style={{ visibility: "hidden" }}
+                    >
+                      <MdDelete />
+                    </ActionIcon>
                   </Group>
                   {targetType !== "background" && (
                     <Accordion.Panel className="property-editor-panel">
@@ -717,6 +726,7 @@ export default function Inspector({
                                   label="Delay"
                                   suffix=" ms"
                                   min={0}
+                                  step={100}
                                   allowNegative={false}
                                   value={down.delay}
                                   onChange={(value) =>

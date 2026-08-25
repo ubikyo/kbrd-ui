@@ -40,7 +40,7 @@ export type KeyLayout = {
   height: number;
   ref: string;
   name: string;
-  parts: unknown[];
+  parts: GeometryPart[];
   type: "key" | "space";
 };
 

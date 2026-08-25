@@ -61,6 +61,41 @@ const VIEWPORT_MARGIN = 60;
 const PREVIEW_PADDING = 30;
 const BORDER_WIDTH = 1;
 
+function geometryPath(geometry: GeometryLayout["keys"][number]) {
+  if (!geometry.parts.length) return null;
+
+  const rectangles = geometry.parts.map((part, index) => {
+    const previousHeight = geometry.parts
+      .slice(0, index)
+      .reduce((total, item) => total + item.height, 0);
+    const partX =
+      part.align === "left"
+        ? geometry.x
+        : part.align === "center"
+          ? geometry.x + (geometry.width - part.width) / 2
+          : geometry.x + geometry.width - part.width;
+    return {
+      x: partX,
+      y: geometry.y + previousHeight,
+      width: part.width,
+      height: part.height,
+    };
+  });
+  const top = rectangles[0];
+  const bottom = rectangles[rectangles.length - 1];
+  const bottomEdge = bottom.y + bottom.height;
+
+  return [
+    `M${top.x},${top.y}`,
+    `H${top.x + top.width}`,
+    `V${bottomEdge}`,
+    `H${bottom.x}`,
+    `V${bottom.y}`,
+    `H${top.x}`,
+    "Z",
+  ].join(" ");
+}
+
 export default function Preview({
   svg,
   selectedKey,
@@ -74,7 +109,6 @@ export default function Preview({
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const keyboardRef = useRef<HTMLDivElement>(null);
-  const selectedKeySelector = CSS.escape(selectedKey ?? "");
 
   const [viewport, setViewport] = useState<Size>({
     width: 0,
@@ -137,7 +171,6 @@ export default function Preview({
       const ref = element.dataset.key ?? "";
       const type = element.dataset.type ?? "key";
       const config = properties.get(ref);
-      const selected = selectedKey === ref;
       const down =
         type === "key" &&
         Boolean(config?.downEnabled) &&
@@ -154,7 +187,7 @@ export default function Preview({
             : (config?.upBorderWidth ?? legacyWidth ?? 1),
         ),
       );
-      const displayWidth = selected ? 2 : borderEnabled ? borderWidth : 1;
+      const displayWidth = borderEnabled ? borderWidth : 1;
       element.setAttribute("fill", "#00000000");
       element.setAttribute(
         "stroke",
@@ -199,7 +232,6 @@ export default function Preview({
   }, [
     pressedKey,
     previewDownTarget,
-    selectedKey,
     svg,
     workspace?.key_properties,
   ]);
@@ -399,18 +431,37 @@ export default function Preview({
             />
           );
         }
+        const clipId = `kbrd-plugin-clip-${instance.id}`;
+        const path = geometryPath(geometry);
         return (
-          <StatefulPluginRenderer
-            key={instance.id}
-            Renderer={Renderer}
-            config={instance.config}
-            geometry={geometry}
-            pressed={
-              geometry.type === "key" && pressedKey === instance.key_ref
-            }
-            pressToken={pressToken}
-            forceDown={previewDownPluginId === instance.id}
-          />
+          <g key={instance.id}>
+            <defs>
+              <clipPath id={clipId}>
+                {path ? (
+                  <path d={path} />
+                ) : (
+                  <rect
+                    x={geometry.x}
+                    y={geometry.y}
+                    width={geometry.width}
+                    height={geometry.height}
+                  />
+                )}
+              </clipPath>
+            </defs>
+            <g clipPath={`url(#${clipId})`}>
+              <StatefulPluginRenderer
+                Renderer={Renderer}
+                config={instance.config}
+                geometry={geometry}
+                pressed={
+                  geometry.type === "key" && pressedKey === instance.key_ref
+                }
+                pressToken={pressToken}
+                forceDown={previewDownPluginId === instance.id}
+              />
+            </g>
+          </g>
         );
       });
   }
@@ -540,6 +591,53 @@ export default function Preview({
                   }}
                 >
                   {renderPlugins(false)}
+                  {selectedKey && selectedKey !== BACKGROUND_REF && (() => {
+                    const selectedGeometry = layout.keys.find(
+                      (item) => item.ref === selectedKey,
+                    );
+                    if (!selectedGeometry) return null;
+
+                    // Le contour de sélection est rendu après les plugins : une
+                    // image couvrant toute la touche ne peut donc plus le masquer.
+                    const insetX = keyboardSize
+                      ? layout.width / keyboardSize.width
+                      : 0;
+                    const insetY = keyboardSize
+                      ? layout.height / keyboardSize.height
+                      : 0;
+                    const selectedPath = geometryPath(selectedGeometry);
+                    if (selectedPath) {
+                      return (
+                        <path
+                          d={selectedPath}
+                          fill="none"
+                          stroke="#00ff00"
+                          strokeWidth={2}
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="none"
+                        />
+                      );
+                    }
+                    return (
+                      <rect
+                        x={selectedGeometry.x + insetX}
+                        y={selectedGeometry.y + insetY}
+                        width={Math.max(
+                          0,
+                          selectedGeometry.width - insetX * 2,
+                        )}
+                        height={Math.max(
+                          0,
+                          selectedGeometry.height - insetY * 2,
+                        )}
+                        fill="none"
+                        stroke="#00ff00"
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                    );
+                  })()}
                 </svg>
               </Box>
             </Box>
@@ -566,15 +664,6 @@ export default function Preview({
           .keyboard-svg .keyboard-plugin-layer,
           .keyboard-svg .keyboard-plugin-layer * {
             pointer-events: none !important;
-          }
-
-          .keyboard-svg .kbrd-key:hover {
-            stroke: rgba(255, 255, 255, 0.75);
-          }
-
-          .keyboard-svg .kbrd-key[data-key="${selectedKeySelector}"] {
-            stroke: #00ff00;
-            stroke-width: 2px;
           }
 
           .keyboard-svg .kbrd-key[data-key="${CSS.escape(dropTargetKey ?? "")}"] {
