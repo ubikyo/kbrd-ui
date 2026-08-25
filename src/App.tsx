@@ -127,8 +127,7 @@ export default function App() {
       >
         <Splitter
           orientation="horizontal"
-          withHandle={false}
-          lineSize={5}
+          lineSize={1}
           handleColor="var(--kbrd-border-color)"
           style={{
             position: "relative",
