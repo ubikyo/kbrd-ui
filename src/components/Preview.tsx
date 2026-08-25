@@ -1,7 +1,8 @@
 import { Box } from "@mantine/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { pluginById } from "../plugins/registry";
+import { pluginById, type PluginDefinition } from "../plugins/registry";
+import { downState, effectiveConfig } from "../plugins/state";
 import type { GeometryLayout } from "../types/geometry";
 import type { WorkspaceData } from "../types/workspace";
 
@@ -19,6 +20,36 @@ type Size = {
   width: number;
   height: number;
 };
+
+function StatefulPluginRenderer({
+  Renderer,
+  config,
+  pressed,
+  pressToken,
+  geometry,
+}: {
+  Renderer: PluginDefinition["Renderer"];
+  config: Record<string, unknown>;
+  pressed: boolean;
+  pressToken: number;
+  geometry: GeometryLayout["keys"][number];
+}) {
+  const [readyToken, setReadyToken] = useState<number | null>(null);
+  const down = downState(config);
+
+  useEffect(() => {
+    if (!pressed || down.inherited || down.delay <= 0) return;
+    const timer = window.setTimeout(() => setReadyToken(pressToken), down.delay);
+    return () => window.clearTimeout(timer);
+  }, [pressed, pressToken, down.inherited, down.delay]);
+
+  const downVisible =
+    pressed &&
+    !down.inherited &&
+    (down.delay <= 0 || readyToken === pressToken);
+
+  return <Renderer config={effectiveConfig(config, downVisible)} {...geometry} />;
+}
 
 const VIEWPORT_MARGIN = 60;
 const PREVIEW_PADDING = 30;
@@ -41,6 +72,8 @@ export default function Preview({
     height: 0,
   });
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
+  const [pressToken, setPressToken] = useState(0);
 
   /*
    * Récupère les dimensions natives du SVG depuis son viewBox.
@@ -80,6 +113,16 @@ export default function Preview({
     observer.observe(element);
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const release = () => setPressedKey(null);
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+    };
   }, []);
 
   useEffect(() => {
@@ -199,6 +242,10 @@ export default function Preview({
       w="100%"
       h="100%"
       onClick={handleClick}
+      onPointerDown={(event) => {
+        setPressedKey(keyFromEvent(event.target) ?? null);
+        setPressToken((value) => value + 1);
+      }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -280,10 +327,13 @@ export default function Preview({
                       if (!key || !plugin) return null;
                       const Renderer = plugin.Renderer;
                       return (
-                        <Renderer
+                        <StatefulPluginRenderer
                           key={instance.id}
+                          Renderer={Renderer}
                           config={instance.config}
-                          {...key}
+                          geometry={key}
+                          pressed={pressedKey === instance.key_ref}
+                          pressToken={pressToken}
                         />
                       );
                     })}

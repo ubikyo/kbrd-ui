@@ -2,16 +2,24 @@ import {
   Accordion,
   ActionIcon,
   Box,
+  Button,
   Group,
-  Menu,
+  Input,
+  Modal,
+  NumberInput,
+  Paper,
+  SegmentedControl,
+  Stack,
+  Switch,
   Tabs,
   Text,
 } from "@mantine/core";
-import { MdDelete, MdDragIndicator, MdMoreVert } from "react-icons/md";
+import { MdDelete, MdDragIndicator } from "react-icons/md";
 import { useRef, useState } from "react";
 
 import { deleteKeyPlugin, updateKeyPlugin } from "../api/workspaces";
 import { pluginById, plugins } from "../plugins/registry";
+import { downState, upConfig } from "../plugins/state";
 import type { KeyPlugin, WorkspaceData } from "../types/workspace";
 
 type Props = {
@@ -61,6 +69,10 @@ export default function Inspector({
   onTabChange,
   onChange,
 }: Props) {
+  const [propertyStates, setPropertyStates] = useState<
+    Record<number, "up" | "down">
+  >({});
+  const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{
     id: number;
     edge: "before" | "after";
@@ -132,6 +144,7 @@ export default function Inspector({
     onChange(allInstances.filter((plugin) => plugin.id !== item.id));
     if (pending) await updateKeyPlugin(item.id, pending.data);
     await deleteKeyPlugin(item.id);
+    setDeleting(null);
   }
 
   return (
@@ -224,6 +237,25 @@ export default function Inspector({
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
                 const summary = pluginSummary(item);
+                const propertyState = propertyStates[item.id] ?? "up";
+                const down = downState(item.config);
+                const up = upConfig(item.config);
+                const editorConfig =
+                  propertyState === "down" && !down.inherited
+                    ? (down.config ?? up)
+                    : up;
+                const editorDisabled =
+                  !item.enabled ||
+                  (propertyState === "down" && down.inherited);
+
+                function patchDown(data: Partial<typeof down>) {
+                  patch(item, {
+                    config: {
+                      ...up,
+                      down: { ...down, ...data },
+                    },
+                  });
+                }
                 return (
                   <Accordion.Item
                     key={item.id}
@@ -322,49 +354,100 @@ export default function Inspector({
                           {summary && ` (${summary})`}
                         </Text>
                       </Accordion.Control>
-                      <Menu position="bottom-end">
-                        <Menu.Target>
-                          <ActionIcon
-                            className="property-menu-button"
-                            variant="subtle"
-                            aria-label="Actions du plugin"
-                            mr="xs"
-                          >
-                            <MdMoreVert />
-                          </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown
-                          style={{
-                            backgroundColor: "white",
-                            color: "black",
-                            borderTop:
-                              "1px solid var(--kbrd-border-color)",
-                          }}
-                        >
-                          <Menu.Item
-                            style={{ color: "black" }}
-                            onClick={() =>
-                              void patch(item, { enabled: !item.enabled })
-                            }
-                          >
-                            {item.enabled ? "Désactiver" : "Activer"}
-                          </Menu.Item>
-                          <Menu.Item
-                            style={{ color: "black" }}
-                            leftSection={<MdDelete />}
-                            onClick={() => void remove(item)}
-                          >
-                            Supprimer
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
+                      <ActionIcon
+                        color="red"
+                        variant="outline"
+                        aria-label={`Supprimer ${plugin.name}`}
+                        mr="xs"
+                        onClick={() => setDeleting(item)}
+                      >
+                        <MdDelete />
+                      </ActionIcon>
                     </Group>
                     <Accordion.Panel className="property-editor-panel">
-                      <Editor
-                        disabled={!item.enabled}
-                        config={item.config}
-                        onChange={(config) => void patch(item, { config })}
-                      />
+                      <Stack gap="lg">
+                        <Input.Wrapper label="State">
+                          <SegmentedControl
+                            mt="xs"
+                            fullWidth
+                            value={propertyState}
+                            onChange={(value) =>
+                              setPropertyStates((states) => ({
+                                ...states,
+                                [item.id]: value as "up" | "down",
+                              }))
+                            }
+                            data={[
+                              { label: "Up", value: "up" },
+                              { label: "Down", value: "down" },
+                            ]}
+                          />
+                        </Input.Wrapper>
+
+                        {propertyState === "down" && (
+                          <Paper withBorder p="md">
+                            <Stack gap="md">
+                              <Text fw={600}>Option</Text>
+                              <Switch
+                                label="Inherited"
+                                checked={down.inherited}
+                                onChange={(event) => {
+                                  const inherited = event.currentTarget.checked;
+                                  patchDown({
+                                    inherited,
+                                    config:
+                                      down.config ?? structuredClone(up),
+                                  });
+                                }}
+                              />
+                              <NumberInput
+                                label="Delay"
+                                suffix=" ms"
+                                min={0}
+                                allowNegative={false}
+                                disabled={down.inherited}
+                                value={down.delay}
+                                onChange={(value) =>
+                                  patchDown({
+                                    delay:
+                                      typeof value === "number" ? value : 0,
+                                  })
+                                }
+                              />
+                              <Switch
+                                label="Désactiver"
+                                checked={!item.enabled}
+                                onChange={(event) =>
+                                  void patch(item, {
+                                    enabled: !event.currentTarget.checked,
+                                  })
+                                }
+                              />
+                            </Stack>
+                          </Paper>
+                        )}
+
+                        <Box
+                          style={{
+                            opacity: editorDisabled ? 0.5 : 1,
+                            pointerEvents: editorDisabled ? "none" : undefined,
+                          }}
+                        >
+                          <Editor
+                            disabled={editorDisabled}
+                            config={editorConfig}
+                            onChange={(config) => {
+                              if (propertyState === "down") {
+                                patchDown({ config });
+                              } else {
+                                patch(item, {
+                                  config: { ...config, down },
+                                });
+                              }
+                            }}
+                          />
+                        </Box>
+                      </Stack>
                     </Accordion.Panel>
                   </Accordion.Item>
                 );
@@ -373,6 +456,36 @@ export default function Inspector({
           )}
         </Tabs.Panel>
       </Tabs>
+
+      <Modal
+        opened={deleting !== null}
+        onClose={() => setDeleting(null)}
+        title={<Text fw={700}>Supprimer le plugin</Text>}
+        centered
+        size="sm"
+      >
+        <Stack>
+          <Text>
+            Supprimer définitivement{" "}
+            <Text component="span" fw={600}>
+              {deleting ? pluginById(deleting.plugin_id)?.name : "ce plugin"}
+            </Text>{" "}
+            de cette touche ?
+          </Text>
+          <Group justify="flex-end">
+            <Button color="gray" onClick={() => setDeleting(null)}>
+              Annuler
+            </Button>
+            <Button
+              color="red"
+              leftSection={<MdDelete size={16} />}
+              onClick={() => deleting && void remove(deleting)}
+            >
+              Supprimer
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Box>
   );
 }

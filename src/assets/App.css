@@ -53,11 +53,6 @@ body {
   padding-bottom: var(--mantine-spacing-xl);
 }
 
-.property-menu-button:hover {
-  background: white;
-  color: black;
-}
-
 .navbar {
   background-color: var(--mantine-color-dark-7);
   border-right: 1px solid var(--mantine-color-dark-5);
