@@ -11,9 +11,13 @@ body {
 }
 
 .inspector-accordion-heading {
-  border-bottom: 2px solid var(--kbrd-border-alt);
   background: var(--kbrd-color-body);
   transition: background-color 120ms ease;
+}
+
+.mantine-Accordion-item[data-active]
+  > .inspector-accordion-heading {
+  border-bottom: 2px solid var(--kbrd-border-alt);
 }
 
 .inspector-accordion-heading:hover {
@@ -26,6 +30,23 @@ body {
 
 .plugin-category-panel .mantine-Accordion-content {
   padding-inline: var(--mantine-spacing-xs);
+  padding-bottom: 0;
+}
+
+.inspector-tabs .mantine-Tabs-tab[data-active] {
+  position: relative;
+  z-index: 1;
+  border-bottom-color: var(--kbrd-color-body);
+}
+
+.property-editor-panel .mantine-Accordion-content {
+  padding-top: var(--mantine-spacing-xl);
+  padding-bottom: var(--mantine-spacing-xl);
+}
+
+.property-menu-button:hover {
+  background: white;
+  color: black;
 }
 
 .navbar {

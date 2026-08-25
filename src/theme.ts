@@ -16,6 +16,10 @@ export const theme = createTheme({
           borderTop: "none",
           boxSizing: "border-box",
         },
+        item: {
+          padding: "var(--mantine-spacing-xs) var(--mantine-spacing-sm)",
+          borderRadius: "var(--mantine-radius-xs)",
+        },
       },
     }),
     Splitter: Splitter.extend({

@@ -22,6 +22,18 @@ type Props = {
   onChange: (plugins: KeyPlugin[]) => void;
 };
 
+function pluginSummary(item: KeyPlugin) {
+  if (item.plugin_id === "kbrd.label") {
+    const text = item.config.text;
+    return typeof text === "string" && text.trim() ? text.trim() : null;
+  }
+  if (item.plugin_id === "kbrd.image") {
+    const name = item.config.name ?? item.config.media;
+    return typeof name === "string" && name.trim() ? name.trim() : null;
+  }
+  return null;
+}
+
 function setDragSymbol(event: React.DragEvent, symbol = "⠿") {
   const dragImage = document.createElement("div");
   dragImage.textContent = symbol;
@@ -159,7 +171,10 @@ export default function Inspector({
                         {categoryPlugins.map((plugin, index) => (
                           <Box
                             key={plugin.id}
-                            py="sm"
+                            pt="sm"
+                            pb={
+                              index < categoryPlugins.length - 1 ? "sm" : 0
+                            }
                             draggable
                             style={{
                               borderBottom:
@@ -211,17 +226,13 @@ export default function Inspector({
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
+                const summary = pluginSummary(item);
                 return (
                   <Accordion.Item
                     key={item.id}
                     value={String(item.id)}
                     style={{
-                      boxShadow:
-                        dropIndicator?.id === item.id
-                          ? dropIndicator.edge === "before"
-                            ? "inset 0 2px var(--kbrd-border-color)"
-                            : "inset 0 -2px var(--kbrd-border-color)"
-                          : undefined,
+                      position: "relative",
                     }}
                     onDragOver={(event) => {
                       if (
@@ -267,6 +278,22 @@ export default function Inspector({
                       }
                     }}
                   >
+                    {dropIndicator?.id === item.id && (
+                      <Box
+                        aria-hidden
+                        style={{
+                          position: "absolute",
+                          zIndex: 10,
+                          left: 0,
+                          right: 0,
+                          [dropIndicator.edge === "before" ? "top" : "bottom"]:
+                            -1,
+                          height: 2,
+                          pointerEvents: "none",
+                          backgroundColor: "var(--kbrd-border-color)",
+                        }}
+                      />
+                    )}
                     <Group
                       className="inspector-accordion-heading"
                       gap={0}
@@ -293,11 +320,15 @@ export default function Inspector({
                         />
                       </Box>
                       <Accordion.Control style={{ flex: 1 }}>
-                        <Text fw={600}>{plugin.name}</Text>
+                        <Text fw={600} truncate>
+                          {plugin.name}
+                          {summary && ` (${summary})`}
+                        </Text>
                       </Accordion.Control>
                       <Menu position="bottom-end">
                         <Menu.Target>
                           <ActionIcon
+                            className="property-menu-button"
                             variant="subtle"
                             aria-label="Actions du plugin"
                             mr="xs"
@@ -306,13 +337,11 @@ export default function Inspector({
                           </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown
-                          bg="white"
-                          c="black"
-                          styles={{
-                            dropdown: {
-                              borderTop:
-                                "1px solid var(--kbrd-border-color)",
-                            },
+                          style={{
+                            backgroundColor: "white",
+                            color: "black",
+                            borderTop:
+                              "1px solid var(--kbrd-border-color)",
                           }}
                         >
                           <Menu.Item
@@ -333,7 +362,7 @@ export default function Inspector({
                         </Menu.Dropdown>
                       </Menu>
                     </Group>
-                    <Accordion.Panel>
+                    <Accordion.Panel className="property-editor-panel">
                       <Editor
                         disabled={!item.enabled}
                         config={item.config}

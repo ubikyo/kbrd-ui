@@ -118,7 +118,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             </Group>
           </UnstyledButton>
         </Menu.Target>
-        <Menu.Dropdown>
+        <Menu.Dropdown ml={-1} w={301}>
           <Menu.Label>Workspaces</Menu.Label>
           {items.map((item) => (
             <Menu.Item
