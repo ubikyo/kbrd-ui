@@ -119,6 +119,9 @@ export default function Inspector({
     id: number;
     edge: "before" | "after";
   } | null>(null);
+  const [draggedPropertyId, setDraggedPropertyId] = useState<number | null>(
+    null,
+  );
   const pendingSaves = useRef(
     new Map<
       number,
@@ -132,6 +135,14 @@ export default function Inspector({
   const instances = allInstances
     .filter((plugin) => plugin.key_ref === selectedKey)
     .sort((left, right) => left.position - right.position);
+  const propertyGroups = [...new Set(plugins.map((plugin) => plugin.category))]
+    .map((category) => ({
+      category,
+      items: instances.filter(
+        (item) => pluginById(item.plugin_id)?.category === category,
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
   const keyProperties = workspace?.key_properties ?? [];
   const selectedProperty = keyProperties.find(
     (property) => property.key_ref === selectedKey,
@@ -211,16 +222,32 @@ export default function Inspector({
     targetId: number,
     edge: "before" | "after",
   ) {
-    const from = instances.findIndex((item) => item.id === draggedId);
-    if (from === -1 || draggedId === targetId) return;
+    const draggedItem = instances.find((item) => item.id === draggedId);
+    const targetItem = instances.find((item) => item.id === targetId);
+    if (!draggedItem || !targetItem || draggedId === targetId) return;
+    const category = pluginById(draggedItem.plugin_id)?.category;
+    if (!category || pluginById(targetItem.plugin_id)?.category !== category) {
+      return;
+    }
 
-    const positions = instances.map((item) => item.position);
-    const reordered = [...instances];
+    const categoryInstances = instances.filter(
+      (item) => pluginById(item.plugin_id)?.category === category,
+    );
+    const from = categoryInstances.findIndex((item) => item.id === draggedId);
+
+    const positions = categoryInstances.map((item) => item.position);
+    const reordered = [...categoryInstances];
     const [dragged] = reordered.splice(from, 1);
     const targetIndex = reordered.findIndex((item) => item.id === targetId);
     if (targetIndex === -1) return;
     reordered.splice(targetIndex + (edge === "after" ? 1 : 0), 0, dragged);
-    if (reordered.every((item, index) => item.id === instances[index].id)) return;
+    if (
+      reordered.every(
+        (item, index) => item.id === categoryInstances[index].id,
+      )
+    ) {
+      return;
+    }
     const positioned = reordered.map((item, index) => ({
       ...item,
       position: positions[index],
@@ -232,8 +259,8 @@ export default function Inspector({
       positioned
         .filter(
           (item) =>
-            instances.find((instance) => instance.id === item.id)?.position !==
-            item.position,
+            categoryInstances.find((instance) => instance.id === item.id)
+              ?.position !== item.position,
         )
         .map((item) => updateKeyPlugin(item.id, { position: item.position })),
     );
@@ -561,13 +588,18 @@ export default function Inspector({
               </Accordion>
 
               {instances.length > 0 && (
-                <Accordion
+                <Stack
                   key={`${selectedKey}-plugins`}
-                  multiple
-                  className="property-accordion"
+                  gap="lg"
                   style={{ order: 1 }}
                 >
-              {instances.map((item) => {
+              {propertyGroups.map((group) => (
+                <Box key={group.category}>
+                  <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
+                    {group.category}
+                  </Text>
+                  <Accordion multiple className="property-accordion">
+              {group.items.map((item) => {
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
@@ -599,6 +631,12 @@ export default function Inspector({
                     }}
                     onDragOver={(event) => {
                       if (
+                        draggedPropertyId !== null &&
+                        pluginById(
+                          instances.find(
+                            (instance) => instance.id === draggedPropertyId,
+                          )?.plugin_id ?? "",
+                        )?.category === plugin.category &&
                         event.dataTransfer.types.includes(
                           "application/kbrd-property",
                         )
@@ -613,6 +651,8 @@ export default function Inspector({
                               ? "before"
                               : "after",
                         });
+                      } else {
+                        setDropIndicator(null);
                       }
                     }}
                     onDragLeave={(event) => {
@@ -673,9 +713,13 @@ export default function Inspector({
                             "application/kbrd-property",
                             String(item.id),
                           );
+                          setDraggedPropertyId(item.id);
                           setDragSymbol(event);
                         }}
-                        onDragEnd={() => setDropIndicator(null)}
+                        onDragEnd={() => {
+                          setDraggedPropertyId(null);
+                          setDropIndicator(null);
+                        }}
                       >
                         <MdDragIndicator
                           aria-label={`Move ${plugin.name}`}
@@ -821,7 +865,10 @@ export default function Inspector({
                   </Accordion.Item>
                 );
               })}
-                </Accordion>
+                  </Accordion>
+                </Box>
+              ))}
+                </Stack>
               )}
             </Stack>
           )}
