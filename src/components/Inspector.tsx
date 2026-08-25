@@ -355,17 +355,16 @@ export default function Inspector({
           )}
         </Tabs.Panel>
 
-        <Tabs.Panel value="properties" p="md">
+        <Tabs.Panel value="properties" pt="lg" pb="lg">
           {!selectedKey ? (
             <Text c="dimmed">No key selected</Text>
           ) : (
             <Stack gap={0}>
-              <Accordion
-                key={`${selectedKey}-system`}
-                multiple
-                className="property-accordion"
-                style={{ order: 2 }}
-              >
+              <Box key={`${selectedKey}-system`} style={{ order: 1 }}>
+                <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
+                  Display
+                </Text>
+                <Accordion multiple className="property-accordion">
                 <Accordion.Item value="system">
                   <Group
                     className="inspector-accordion-heading"
@@ -585,19 +584,25 @@ export default function Inspector({
                     </Accordion.Panel>
                   )}
                 </Accordion.Item>
-              </Accordion>
+                </Accordion>
+              </Box>
 
               {instances.length > 0 && (
                 <Stack
                   key={`${selectedKey}-plugins`}
-                  gap="lg"
+                  gap={0}
                   style={{ order: 1 }}
                 >
               {propertyGroups.map((group) => (
-                <Box key={group.category}>
-                  <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                    {group.category}
-                  </Text>
+                <Box
+                  key={group.category}
+                  mt={group.category === "Display" ? 0 : 48}
+                >
+                  {group.category !== "Display" && (
+                    <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
+                      {group.category}
+                    </Text>
+                  )}
                   <Accordion multiple className="property-accordion">
               {group.items.map((item) => {
                 const plugin = pluginById(item.plugin_id);
