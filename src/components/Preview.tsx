@@ -135,8 +135,11 @@ export default function Preview({
     );
     root.querySelectorAll<SVGGraphicsElement>(".kbrd-key").forEach((element) => {
       const ref = element.dataset.key ?? "";
+      const type = element.dataset.type ?? "key";
       const config = properties.get(ref);
+      const selected = selectedKey === ref;
       const down =
+        type === "key" &&
         Boolean(config?.downEnabled) &&
         (pressedKey === ref || previewDownTarget === ref);
       const borderEnabled = config?.borderEnabled ?? true;
@@ -151,7 +154,7 @@ export default function Preview({
             : (config?.upBorderWidth ?? legacyWidth ?? 1),
         ),
       );
-      const displayWidth = borderEnabled ? borderWidth : 1;
+      const displayWidth = selected ? 2 : borderEnabled ? borderWidth : 1;
       element.setAttribute("fill", "#00000000");
       element.setAttribute(
         "stroke",
@@ -193,7 +196,13 @@ export default function Preview({
         );
       }
     });
-  }, [pressedKey, previewDownTarget, svg, workspace?.key_properties]);
+  }, [
+    pressedKey,
+    previewDownTarget,
+    selectedKey,
+    svg,
+    workspace?.key_properties,
+  ]);
 
   useEffect(() => {
     const release = () => setPressedKey(null);
@@ -396,7 +405,9 @@ export default function Preview({
             Renderer={Renderer}
             config={instance.config}
             geometry={geometry}
-            pressed={pressedKey === instance.key_ref}
+            pressed={
+              geometry.type === "key" && pressedKey === instance.key_ref
+            }
             pressToken={pressToken}
             forceDown={previewDownPluginId === instance.id}
           />
@@ -463,6 +474,12 @@ export default function Preview({
                 padding: PREVIEW_PADDING,
 
                 border: `${BORDER_WIDTH}px solid rgba(255, 255, 255, 1)`,
+                borderColor:
+                  selectedKey === BACKGROUND_REF ? "#00ff00" : "white",
+                outline:
+                  selectedKey === BACKGROUND_REF
+                    ? "1px solid #00ff00"
+                    : undefined,
 
                 boxSizing: "content-box",
                 overflow: "hidden",
@@ -556,7 +573,8 @@ export default function Preview({
           }
 
           .keyboard-svg .kbrd-key[data-key="${selectedKeySelector}"] {
-            stroke: rgba(255, 255, 255, 1);
+            stroke: #00ff00;
+            stroke-width: 2px;
           }
 
           .keyboard-svg .kbrd-key[data-key="${CSS.escape(dropTargetKey ?? "")}"] {

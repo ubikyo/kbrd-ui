@@ -40,6 +40,10 @@ body {
   background: transparent;
 }
 
+.inspector-accordion-heading .mantine-Accordion-label {
+  font-weight: 400;
+}
+
 .plugin-category-panel .mantine-Accordion-content {
   padding-inline: var(--mantine-spacing-xs);
   padding-bottom: 0;

@@ -147,9 +147,13 @@ export default function Inspector({
     selectedKey === BACKGROUND_REF
       ? "background"
       : (layout?.keys.find((key) => key.ref === selectedKey)?.type ?? "key");
-  const targetState = selectedKey
+  const storedTargetState = selectedKey
     ? (targetStates[selectedKey] ?? "option")
     : "option";
+  const targetState =
+    targetType !== "key" && storedTargetState === "down"
+      ? "up"
+      : storedTargetState;
   const systemPluginName =
     targetType === "background"
       ? "Workspace"
@@ -320,14 +324,23 @@ export default function Inspector({
           ) : (
             <Stack gap={0}>
               <Accordion
+                key={`${selectedKey}-system`}
                 multiple
-                defaultValue={["system"]}
                 className="property-accordion"
+                style={{ order: 2 }}
               >
                 <Accordion.Item value="system">
-                  <Box className="inspector-accordion-heading">
-                    <Accordion.Control>{systemPluginName}</Accordion.Control>
-                  </Box>
+                  <Group
+                    className="inspector-accordion-heading"
+                    gap={0}
+                    wrap="nowrap"
+                  >
+                    <Box w={24} style={{ flexShrink: 0 }} />
+                    <Accordion.Control style={{ flex: 1, paddingLeft: 0 }}>
+                      {systemPluginName}
+                    </Accordion.Control>
+                    <Box w={46} style={{ flexShrink: 0 }} />
+                  </Group>
                   {targetType !== "background" && (
                     <Accordion.Panel className="property-editor-panel">
                       <Tabs
@@ -350,7 +363,7 @@ export default function Inspector({
                         <Tabs.List grow>
                           <Tabs.Tab value="option">Option</Tabs.Tab>
                           <Tabs.Tab value="up">Up</Tabs.Tab>
-                          {propertyConfig.downEnabled && (
+                          {targetType === "key" && propertyConfig.downEnabled && (
                             <Tabs.Tab value="down">Down</Tabs.Tab>
                           )}
                         </Tabs.List>
@@ -368,24 +381,26 @@ export default function Inspector({
                                 }
                               />
                             </Group>
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Down state</Text>
-                              <Switch
-                                size="sm"
-                                checked={propertyConfig.downEnabled}
-                                onChange={(event) => {
-                                  const enabled = event.currentTarget.checked;
-                                  patchKeyProperty({ downEnabled: enabled });
-                                  if (!enabled) {
-                                    setTargetStates((states) => ({
-                                      ...states,
-                                      [selectedKey]: "option",
-                                    }));
-                                    onPreviewDownTargetChange(null);
-                                  }
-                                }}
-                              />
-                            </Group>
+                            {targetType === "key" && (
+                              <Group justify="space-between" wrap="nowrap">
+                                <Text size="sm">Down state</Text>
+                                <Switch
+                                  size="sm"
+                                  checked={propertyConfig.downEnabled}
+                                  onChange={(event) => {
+                                    const enabled = event.currentTarget.checked;
+                                    patchKeyProperty({ downEnabled: enabled });
+                                    if (!enabled) {
+                                      setTargetStates((states) => ({
+                                        ...states,
+                                        [selectedKey]: "option",
+                                      }));
+                                      onPreviewDownTargetChange(null);
+                                    }
+                                  }}
+                                />
+                              </Group>
+                            )}
                           </Stack>
                         </Tabs.Panel>
                         <Tabs.Panel value="up" pt="xl">
@@ -424,7 +439,7 @@ export default function Inspector({
                             </Group>
                           </Stack>
                         </Tabs.Panel>
-                        {propertyConfig.downEnabled && (
+                        {targetType === "key" && propertyConfig.downEnabled && (
                           <Tabs.Panel value="down" pt="xl">
                             <Stack gap="sm">
                               <Group justify="space-between" wrap="nowrap">
@@ -468,19 +483,22 @@ export default function Inspector({
                 </Accordion.Item>
               </Accordion>
 
-              {instances.length === 0 ? (
-                <Text c="dimmed">No plugin on this target</Text>
-              ) : (
-                <Accordion multiple className="property-accordion">
+              {instances.length > 0 && (
+                <Accordion
+                  key={`${selectedKey}-plugins`}
+                  multiple
+                  className="property-accordion"
+                  style={{ order: 1 }}
+                >
               {instances.map((item) => {
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
                 const summary = pluginSummary(item);
-                const isBackground = item.key_ref === BACKGROUND_REF;
+                const supportsDown = targetType === "key";
                 const storedPropertyState = propertyStates[item.id] ?? "main";
                 const propertyState =
-                  isBackground && storedPropertyState === "down"
+                  !supportsDown && storedPropertyState === "down"
                     ? "up"
                     : storedPropertyState;
                 const down = downState(item.config);
@@ -567,7 +585,7 @@ export default function Inspector({
                     >
                       <Box
                         draggable
-                        px="xs"
+                        px={4}
                         py="sm"
                         onDragStart={(event) => {
                           event.stopPropagation();
@@ -585,8 +603,10 @@ export default function Inspector({
                           style={{ cursor: "grab", display: "block" }}
                         />
                       </Box>
-                      <Accordion.Control style={{ flex: 1 }}>
-                        <Text fw={600} truncate>
+                      <Accordion.Control
+                        style={{ flex: 1, paddingLeft: 0 }}
+                      >
+                        <Text truncate>
                           {plugin.name}
                           {summary && ` (${summary})`}
                         </Text>
@@ -621,9 +641,9 @@ export default function Inspector({
                         <Tabs.List grow>
                           <Tabs.Tab value="main">Option</Tabs.Tab>
                           <Tabs.Tab value="up" disabled={!item.enabled}>
-                            {isBackground ? "Main" : "Up"}
+                            {supportsDown ? "Up" : "Main"}
                           </Tabs.Tab>
-                          {!isBackground && down.enabled && (
+                          {supportsDown && down.enabled && (
                             <Tabs.Tab value="down" disabled={!item.enabled}>
                               Down
                             </Tabs.Tab>
@@ -647,7 +667,7 @@ export default function Inspector({
                                 void patch(item, { enabled: !disabled });
                               }}
                             />
-                            {!isBackground && (
+                            {supportsDown && (
                               <Switch
                                 label="Down state"
                                 checked={down.enabled}
@@ -682,7 +702,7 @@ export default function Inspector({
                           />
                         </Tabs.Panel>
 
-                        {!isBackground && down.enabled && (
+                        {supportsDown && down.enabled && (
                           <Tabs.Panel value="down" pt="xl">
                             <Stack gap="xl">
                               <Editor
