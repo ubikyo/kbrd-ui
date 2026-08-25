@@ -19,7 +19,7 @@ export const theme = createTheme({
     }),
     Splitter: Splitter.extend({
       styles: {
-        handle: {
+        thumb: {
           backgroundColor: "#FFFFFF",
         },
       },
