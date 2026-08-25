@@ -6,7 +6,7 @@ describe("plugin states", () => {
   const config = {
     text: "Up",
     down: {
-      inherited: false,
+      enabled: true,
       delay: 125,
       config: { text: "Down" },
     },
@@ -19,17 +19,17 @@ describe("plugin states", () => {
     expect(effectiveConfig(config, true)).toEqual({ text: "Down" });
   });
 
-  it("uses Up when Down is inherited", () => {
-    const inherited = {
+  it("uses Up when Down is disabled", () => {
+    const disabled = {
       text: "Up",
-      down: { inherited: true, delay: 0, config: { text: "Ignored" } },
+      down: { enabled: false, delay: 0, config: { text: "Ignored" } },
     };
-    expect(effectiveConfig(inherited, true)).toEqual({ text: "Up" });
+    expect(effectiveConfig(disabled, true)).toEqual({ text: "Up" });
   });
 
-  it("defaults legacy configurations to inherited Down", () => {
+  it("defaults legacy configurations to disabled Down", () => {
     expect(downState({ text: "Legacy" })).toEqual({
-      inherited: true,
+      enabled: false,
       delay: 0,
     });
   });

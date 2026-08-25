@@ -3,12 +3,10 @@ import {
   ActionIcon,
   Box,
   Button,
+  Divider,
   Group,
-  Input,
   Modal,
   NumberInput,
-  Paper,
-  SegmentedControl,
   Stack,
   Switch,
   Tabs,
@@ -70,7 +68,7 @@ export default function Inspector({
   onChange,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
-    Record<number, "up" | "down">
+    Record<number, "main" | "up" | "down">
   >({});
   const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{
@@ -237,17 +235,9 @@ export default function Inspector({
                 if (!plugin) return null;
                 const Editor = plugin.Editor;
                 const summary = pluginSummary(item);
-                const propertyState = propertyStates[item.id] ?? "up";
+                const propertyState = propertyStates[item.id] ?? "main";
                 const down = downState(item.config);
                 const up = upConfig(item.config);
-                const editorConfig =
-                  propertyState === "down" && !down.inherited
-                    ? (down.config ?? up)
-                    : up;
-                const editorDisabled =
-                  !item.enabled ||
-                  (propertyState === "down" && down.inherited);
-
                 function patchDown(data: Partial<typeof down>) {
                   patch(item, {
                     config: {
@@ -365,47 +355,95 @@ export default function Inspector({
                       </ActionIcon>
                     </Group>
                     <Accordion.Panel className="property-editor-panel">
-                      <Stack gap="lg">
-                        <Input.Wrapper label="State">
-                          <SegmentedControl
-                            mt="xs"
-                            fullWidth
-                            value={propertyState}
-                            onChange={(value) =>
-                              setPropertyStates((states) => ({
-                                ...states,
-                                [item.id]: value as "up" | "down",
-                              }))
-                            }
-                            data={[
-                              { label: "Up", value: "up" },
-                              { label: "Down", value: "down" },
-                            ]}
-                          />
-                        </Input.Wrapper>
+                      <Tabs
+                        value={propertyState}
+                        onChange={(value) =>
+                          setPropertyStates((states) => ({
+                            ...states,
+                            [item.id]: (value ?? "main") as
+                              | "main"
+                              | "up"
+                              | "down",
+                          }))
+                        }
+                      >
+                        <Tabs.List grow>
+                          <Tabs.Tab value="main">Main</Tabs.Tab>
+                          <Tabs.Tab value="up" disabled={!item.enabled}>
+                            Up
+                          </Tabs.Tab>
+                          {down.enabled && (
+                            <Tabs.Tab value="down" disabled={!item.enabled}>
+                              Down
+                            </Tabs.Tab>
+                          )}
+                        </Tabs.List>
 
-                        {propertyState === "down" && (
-                          <Paper withBorder p="md">
-                            <Stack gap="md">
-                              <Text fw={600}>Option</Text>
-                              <Switch
-                                label="Inherited"
-                                checked={down.inherited}
-                                onChange={(event) => {
-                                  const inherited = event.currentTarget.checked;
-                                  patchDown({
-                                    inherited,
-                                    config:
-                                      down.config ?? structuredClone(up),
-                                  });
-                                }}
+                        <Tabs.Panel value="main" pt="xl">
+                          <Stack gap="lg">
+                            <Switch
+                              label="Disabled"
+                              checked={!item.enabled}
+                              onChange={(event) => {
+                                const disabled = event.currentTarget.checked;
+                                if (disabled) {
+                                  setPropertyStates((states) => ({
+                                    ...states,
+                                    [item.id]: "main",
+                                  }));
+                                }
+                                void patch(item, { enabled: !disabled });
+                              }}
+                            />
+                            <Switch
+                              label="Down state"
+                              checked={down.enabled}
+                              onChange={(event) => {
+                                const enabled = event.currentTarget.checked;
+                                if (!enabled) {
+                                  setPropertyStates((states) => ({
+                                    ...states,
+                                    [item.id]: "main",
+                                  }));
+                                }
+                                patchDown({
+                                  enabled,
+                                  config:
+                                    down.config ?? structuredClone(up),
+                                });
+                              }}
+                            />
+                          </Stack>
+                        </Tabs.Panel>
+
+                        <Tabs.Panel value="up" pt="xl">
+                          <Editor
+                            config={up}
+                            onChange={(config) =>
+                              patch(item, {
+                                config: { ...config, down },
+                              })
+                            }
+                          />
+                        </Tabs.Panel>
+
+                        {down.enabled && (
+                          <Tabs.Panel value="down" pt="xl">
+                            <Stack gap="xl">
+                              <Editor
+                                config={down.config ?? up}
+                                onChange={(config) => patchDown({ config })}
+                              />
+                              <Divider
+                                color="white"
+                                size={2}
+                                aria-label="Options de l'état Down"
                               />
                               <NumberInput
                                 label="Delay"
                                 suffix=" ms"
                                 min={0}
                                 allowNegative={false}
-                                disabled={down.inherited}
                                 value={down.delay}
                                 onChange={(value) =>
                                   patchDown({
@@ -414,40 +452,10 @@ export default function Inspector({
                                   })
                                 }
                               />
-                              <Switch
-                                label="Désactiver"
-                                checked={!item.enabled}
-                                onChange={(event) =>
-                                  void patch(item, {
-                                    enabled: !event.currentTarget.checked,
-                                  })
-                                }
-                              />
                             </Stack>
-                          </Paper>
+                          </Tabs.Panel>
                         )}
-
-                        <Box
-                          style={{
-                            opacity: editorDisabled ? 0.5 : 1,
-                            pointerEvents: editorDisabled ? "none" : undefined,
-                          }}
-                        >
-                          <Editor
-                            disabled={editorDisabled}
-                            config={editorConfig}
-                            onChange={(config) => {
-                              if (propertyState === "down") {
-                                patchDown({ config });
-                              } else {
-                                patch(item, {
-                                  config: { ...config, down },
-                                });
-                              }
-                            }}
-                          />
-                        </Box>
-                      </Stack>
+                      </Tabs>
                     </Accordion.Panel>
                   </Accordion.Item>
                 );

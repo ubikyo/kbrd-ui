@@ -1,5 +1,5 @@
 export type PluginDownState = {
-  inherited: boolean;
+  enabled: boolean;
   delay: number;
   config?: Record<string, unknown>;
 };
@@ -13,11 +13,14 @@ export function upConfig(config: Record<string, unknown>) {
 export function downState(config: Record<string, unknown>): PluginDownState {
   const value = config.down;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { inherited: true, delay: 0 };
+    return { enabled: false, delay: 0 };
   }
   const down = value as Record<string, unknown>;
   return {
-    inherited: down.inherited !== false,
+    enabled:
+      typeof down.enabled === "boolean"
+        ? down.enabled
+        : down.inherited === false,
     delay:
       typeof down.delay === "number" && Number.isFinite(down.delay)
         ? Math.max(0, down.delay)
@@ -38,5 +41,5 @@ export function effectiveConfig(
   const up = upConfig(config);
   if (!useDown) return up;
   const down = downState(config);
-  return down.inherited ? up : (down.config ?? up);
+  return down.enabled ? (down.config ?? up) : up;
 }

@@ -38,14 +38,14 @@ function StatefulPluginRenderer({
   const down = downState(config);
 
   useEffect(() => {
-    if (!pressed || down.inherited || down.delay <= 0) return;
+    if (!pressed || !down.enabled || down.delay <= 0) return;
     const timer = window.setTimeout(() => setReadyToken(pressToken), down.delay);
     return () => window.clearTimeout(timer);
-  }, [pressed, pressToken, down.inherited, down.delay]);
+  }, [pressed, pressToken, down.enabled, down.delay]);
 
   const downVisible =
     pressed &&
-    !down.inherited &&
+    down.enabled &&
     (down.delay <= 0 || readyToken === pressToken);
 
   return <Renderer config={effectiveConfig(config, downVisible)} {...geometry} />;
