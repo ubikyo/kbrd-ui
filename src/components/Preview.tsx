@@ -2,7 +2,6 @@ import { Box } from "@mantine/core";
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -18,7 +17,6 @@ import type {
 } from "../types/workspace";
 
 type PreviewProps = {
-  svg: string;
   selectedKey: string | null;
   onSelectKey: (key: string | null) => void;
   zoom: number;
@@ -113,7 +111,6 @@ function geometryPath(geometry: GeometryLayout["keys"][number]) {
 }
 
 export default function Preview({
-  svg,
   selectedKey,
   onSelectKey,
   zoom,
@@ -124,7 +121,6 @@ export default function Preview({
   previewDownTarget,
 }: PreviewProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const keyboardRef = useRef<HTMLDivElement>(null);
 
   const [viewport, setViewport] = useState<Size>({
     width: 0,
@@ -154,24 +150,6 @@ export default function Preview({
   );
 
   /*
-   * Récupère les dimensions natives du SVG depuis son viewBox.
-   */
-  const svgSize = useMemo(() => {
-    const match = svg.match(
-      /viewBox=["']\s*([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s*["']/i,
-    );
-
-    if (!match) {
-      return null;
-    }
-
-    return {
-      width: Number(match[3]),
-      height: Number(match[4]),
-    };
-  }, [svg]);
-
-  /*
    * Surveillance du viewport.
    */
   useEffect(() => {
@@ -192,82 +170,6 @@ export default function Preview({
 
     return () => observer.disconnect();
   }, []);
-
-  useLayoutEffect(() => {
-    const root = keyboardRef.current;
-    if (!root) return;
-    root.querySelectorAll<SVGGraphicsElement>(".kbrd-key").forEach((element) => {
-      const ref = element.dataset.key ?? "";
-      const type = element.dataset.type ?? "key";
-      const config = keyProperties.get(ref);
-      const down =
-        type === "key" &&
-        Boolean(config?.downEnabled) &&
-        (isKeyDown(ref) || previewDownTarget === ref);
-      const borderEnabled = config?.borderEnabled ?? true;
-      const legacyWidth = (config as { borderWidth?: number } | undefined)
-        ?.borderWidth;
-      const borderWidth = Math.max(
-        1,
-        Math.min(
-          4,
-          down
-            ? (config?.downBorderWidth ?? legacyWidth ?? 1)
-            : (config?.upBorderWidth ?? legacyWidth ?? 1),
-        ),
-      );
-      const displayWidth = borderEnabled ? borderWidth : 1;
-      element.setAttribute("fill", "#00000000");
-      element.setAttribute(
-        "stroke",
-        borderEnabled
-          ? down
-            ? (config?.downBorderColor ?? "#ffffff")
-            : (config?.upBorderColor ?? DEFAULT_UP_BORDER_COLOR)
-          : "none",
-      );
-      element.setAttribute("stroke-width", String(displayWidth));
-      element.setAttribute("vector-effect", "non-scaling-stroke");
-
-      if (element instanceof SVGRectElement) {
-        const svg = element.ownerSVGElement;
-        const bounds = svg?.getBoundingClientRect();
-        const viewBox = svg?.viewBox.baseVal;
-        const insetX =
-          bounds?.width && viewBox
-            ? (displayWidth / 2) * (viewBox.width / bounds.width)
-            : 0;
-        const insetY =
-          bounds?.height && viewBox
-            ? (displayWidth / 2) * (viewBox.height / bounds.height)
-            : 0;
-        const x = Number(element.dataset.x ?? element.getAttribute("x") ?? 0);
-        const y = Number(element.dataset.y ?? element.getAttribute("y") ?? 0);
-        const width = Number(
-          element.dataset.width ?? element.getAttribute("width") ?? 0,
-        );
-        const height = Number(
-          element.dataset.height ?? element.getAttribute("height") ?? 0,
-        );
-        element.setAttribute("x", String(x + insetX));
-        element.setAttribute("y", String(y + insetY));
-        element.setAttribute("width", String(Math.max(0, width - insetX * 2)));
-        element.setAttribute(
-          "height",
-          String(Math.max(0, height - insetY * 2)),
-        );
-      }
-    });
-  }, [
-    pressedKey,
-    previewDownTarget,
-    svg,
-    toggledKeys,
-    viewport.height,
-    viewport.width,
-    keyProperties,
-    isKeyDown,
-  ]);
 
   useEffect(() => {
     const release = () => setPressedKey(null);
@@ -304,7 +206,7 @@ export default function Preview({
    * Le ratio du SVG est conservé.
    */
   const keyboardSize = useMemo(() => {
-    if (!svgSize || viewport.width <= 0 || viewport.height <= 0) {
+    if (layout.width <= 0 || layout.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
       return null;
     }
 
@@ -324,7 +226,7 @@ export default function Preview({
       return null;
     }
 
-    const ratio = svgSize.width / svgSize.height;
+    const ratio = layout.width / layout.height;
 
     let width = availableWidth;
     let height = width / ratio;
@@ -342,7 +244,74 @@ export default function Preview({
       width,
       height,
     };
-  }, [svgSize, viewport]);
+  }, [layout.height, layout.width, viewport]);
+
+  function renderKeyBorders() {
+    if (!keyboardSize) return null;
+
+    return layout.keys.map((geometry) => {
+      const config = keyProperties.get(geometry.ref);
+      const down =
+        geometry.type === "key" &&
+        Boolean(config?.downEnabled) &&
+        (isKeyDown(geometry.ref) || previewDownTarget === geometry.ref);
+      const borderEnabled = config?.borderEnabled ?? true;
+      const legacyWidth = (config as { borderWidth?: number } | undefined)
+        ?.borderWidth;
+      const borderWidth = Math.max(
+        1,
+        Math.min(
+          4,
+          down
+            ? (config?.downBorderWidth ?? legacyWidth ?? 1)
+            : (config?.upBorderWidth ?? legacyWidth ?? 1),
+        ),
+      );
+      const stroke = borderEnabled
+        ? down
+          ? (config?.downBorderColor ?? "#ffffff")
+          : (config?.upBorderColor ?? DEFAULT_UP_BORDER_COLOR)
+        : "none";
+      const path = geometryPath(geometry);
+
+      if (path) {
+        return (
+          <path
+            key={geometry.ref}
+            className="kbrd-key"
+            data-key={geometry.ref}
+            data-type={geometry.type}
+            d={path}
+            fill="#00000000"
+            stroke={stroke}
+            strokeWidth={borderWidth}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      }
+
+      const insetX = (borderWidth / 2) * (layout.width / keyboardSize.width);
+      const insetY = (borderWidth / 2) * (layout.height / keyboardSize.height);
+      return (
+        <rect
+          key={geometry.ref}
+          className="kbrd-key"
+          data-key={geometry.ref}
+          data-type={geometry.type}
+          x={geometry.x + insetX}
+          y={geometry.y + insetY}
+          width={Math.max(0, geometry.width - insetX * 2)}
+          height={Math.max(0, geometry.height - insetY * 2)}
+          rx={(2 * layout.width) / keyboardSize.width}
+          ry={(2 * layout.height) / keyboardSize.height}
+          fill="#00000000"
+          stroke={stroke}
+          strokeWidth={borderWidth}
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+    });
+  }
 
   function keyFromEvent(
     target: EventTarget | null,
@@ -616,7 +585,6 @@ export default function Preview({
                 {renderPlugins(true)}
               </svg>
               <Box
-                ref={keyboardRef}
                 className="keyboard-svg"
                 style={{
                   width: keyboardSize.width,
@@ -642,15 +610,21 @@ export default function Preview({
                 >
                   {renderPlugins(false)}
                 </svg>
-                <Box
+                <svg
                   className="keyboard-border-layer"
+                  viewBox={`0 0 ${layout.width} ${layout.height}`}
+                  aria-hidden="true"
                   style={{
                     position: "absolute",
                     inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
                     zIndex: 2,
                   }}
-                  dangerouslySetInnerHTML={{ __html: svg }}
-                />
+                >
+                  {renderKeyBorders()}
+                </svg>
                 <svg
                   className="keyboard-selection-layer"
                   viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -731,7 +705,6 @@ export default function Preview({
 
           .keyboard-svg .kbrd-key {
             cursor: pointer;
-            transition: stroke 100ms ease;
           }
 
           .keyboard-svg .keyboard-plugin-layer,

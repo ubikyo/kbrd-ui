@@ -174,7 +174,6 @@ export default function App() {
               {geometry?.svg && (
                 <Preview
                   key={`${geometry.id}-${workspace?.id ?? "none"}`}
-                  svg={geometry.svg}
                   layout={geometry.layout}
                   workspace={workspace}
                   selectedKey={selectedKey}
