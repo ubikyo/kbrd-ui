@@ -58,13 +58,13 @@ type Props = {
 };
 
 function pluginSummary(item: KeyPlugin) {
-  if (item.plugin_id === "kbrd.label") {
+  if (item.plugin_id === "kbrd.render-label") {
     const text = item.config.text;
     return typeof text === "string" && text.trim()
       ? truncate(text.trim())
       : null;
   }
-  if (item.plugin_id === "kbrd.image") {
+  if (item.plugin_id === "kbrd.render-image") {
     const name = item.config.name ?? item.config.media;
     return typeof name === "string" && name.trim()
       ? truncate(name.trim())
@@ -362,10 +362,10 @@ export default function Inspector({
             <Stack gap={0}>
               <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
                 {!propertyGroups.some(
-                  (group) => group.category === "Display",
+                  (group) => group.category === "Render",
                 ) && (
                   <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                    Display
+                    Render
                   </Text>
                 )}
                 <Accordion multiple className="property-accordion">
@@ -613,8 +613,8 @@ export default function Inspector({
               {propertyGroups.map((group) => (
                 <Box
                   key={group.category}
-                  mt={group.category === "Display" ? 0 : 48}
-                  style={{ order: group.category === "Display" ? 1 : 3 }}
+                  mt={group.category === "Render" ? 0 : 48}
+                  style={{ order: group.category === "Render" ? 1 : 3 }}
                 >
                   <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
                     {group.category}
