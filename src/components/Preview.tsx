@@ -420,12 +420,6 @@ export default function Preview({
       : undefined;
   }
 
-  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
-    onSelectKey(
-      keyFromEvent(event.target, event.clientX, event.clientY) ?? null,
-    );
-  }
-
   function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
     const key = keyFromEvent(event.target, event.clientX, event.clientY);
     if (!workspace || !key) {
@@ -535,7 +529,6 @@ export default function Preview({
       ref={viewportRef}
       w="100%"
       h="100%"
-      onClick={handleClick}
       onPointerDown={(event) => {
         const key =
           keyFromEvent(event.target, event.clientX, event.clientY) ?? null;

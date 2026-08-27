@@ -5,6 +5,7 @@ import {
   Button,
   ColorInput,
   Group,
+  Menu,
   Modal,
   NumberInput,
   Select,
@@ -13,7 +14,12 @@ import {
   Tabs,
   Text,
 } from "@mantine/core";
-import { MdDelete, MdDragIndicator } from "react-icons/md";
+import {
+  MdContentCopy,
+  MdDelete,
+  MdDragIndicator,
+  MdMoreVert,
+} from "react-icons/md";
 import { useRef, useState } from "react";
 
 import {
@@ -55,6 +61,7 @@ type Props = {
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
   onPreviewDownTargetChange: (keyRef: string | null) => void;
+  onDuplicateFrom: () => void;
 };
 
 function pluginSummary(item: KeyPlugin) {
@@ -110,6 +117,7 @@ export default function Inspector({
   onKeyPropertiesChange,
   onPreviewDownPluginChange,
   onPreviewDownTargetChange,
+  onDuplicateFrom,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
     Record<number, "main" | "up" | "down">
@@ -363,6 +371,30 @@ export default function Inspector({
             <Text c="dimmed">No key selected</Text>
           ) : (
             <Stack gap={0}>
+              {targetType === "key" && (
+                <Group justify="flex-end" mb="md">
+                  <Menu position="bottom-end" width={180}>
+                    <Menu.Target>
+                      <Button
+                        variant="subtle"
+                        color="gray"
+                        size="xs"
+                        leftSection={<MdMoreVert />}
+                      >
+                        Actions
+                      </Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item
+                        leftSection={<MdContentCopy />}
+                        onClick={onDuplicateFrom}
+                      >
+                        Duplicate from
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
+              )}
               <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
                 {!propertyGroups.some(
                   (group) => group.category === "Render",

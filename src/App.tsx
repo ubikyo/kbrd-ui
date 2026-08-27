@@ -3,14 +3,15 @@ import {
   AppShell,
   Box,
   Group,
+  Notification,
   Splitter,
   Text,
   UnstyledButton,
 } from "@mantine/core";
 
-import { MdAdd, MdRemove } from "react-icons/md";
+import { MdAdd, MdContentCopy, MdRemove } from "react-icons/md";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import kbrdLogo from "./assets/media/KBRD.svg";
 
@@ -20,7 +21,7 @@ import type { GeometryData } from "./types/geometry";
 import Preview from "./components/Preview";
 import Inspector from "./components/Inspector";
 import Workspace from "./components/Workspace";
-import { addKeyPlugin } from "./api/workspaces";
+import { addKeyPlugin, duplicateKeyPlugins } from "./api/workspaces";
 import { pluginById } from "./plugins/registry";
 import type {
   KeyPlugin,
@@ -48,11 +49,17 @@ export default function App() {
   const [previewDownTarget, setPreviewDownTarget] = useState<string | null>(
     null,
   );
+  const [duplicateDestination, setDuplicateDestination] = useState<
+    string | null
+  >(null);
+  const duplicateDestinationRef = useRef<string | null>(null);
 
   const changeGeometry = useCallback((value: GeometryData | null) => {
     setGeometry(value);
     setWorkspace(null);
     setSelectedKey(null);
+    duplicateDestinationRef.current = null;
+    setDuplicateDestination(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
     setZoom(100);
@@ -61,6 +68,8 @@ export default function App() {
   const changeWorkspace = useCallback((value: WorkspaceData | null) => {
     setWorkspace(value);
     setSelectedKey(null);
+    duplicateDestinationRef.current = null;
+    setDuplicateDestination(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
   }, []);
@@ -107,12 +116,39 @@ export default function App() {
   }
 
   function selectKey(key: string | null) {
+    const destination = duplicateDestinationRef.current;
+    const source = geometry?.layout.keys.find(
+      (item) => item.ref === key && item.type === "key",
+    );
+    if (destination && source && workspace) {
+      duplicateDestinationRef.current = null;
+      void duplicateKeyPlugins(workspace.id, destination, source.ref).then(
+        (plugins) => {
+          changePlugins(plugins);
+          setDuplicateDestination(null);
+        },
+        () => setDuplicateDestination(null),
+      );
+      return;
+    }
+    if (destination) return;
     if (key !== selectedKey) {
       setPreviewDownPluginId(null);
       setPreviewDownTarget(null);
     }
     setSelectedKey(key);
     if (key) setInspectorTab("properties");
+  }
+
+  function startDuplicateFrom() {
+    if (!selectedKey) return;
+    duplicateDestinationRef.current = selectedKey;
+    setDuplicateDestination(selectedKey);
+  }
+
+  function cancelDuplicateFrom() {
+    duplicateDestinationRef.current = null;
+    setDuplicateDestination(null);
   }
 
   return (
@@ -250,10 +286,27 @@ export default function App() {
               onKeyPropertiesChange={changeKeyProperties}
               onPreviewDownPluginChange={setPreviewDownPluginId}
               onPreviewDownTargetChange={setPreviewDownTarget}
+              onDuplicateFrom={startDuplicateFrom}
             />
           </Splitter.Pane>
         </Splitter>
       </AppShell.Main>
+      {duplicateDestination && (
+        <Notification
+          icon={<MdContentCopy size={18} />}
+          title="Duplicate from"
+          onClose={cancelDuplicateFrom}
+          withBorder
+          style={{
+            position: "fixed",
+            left: 20,
+            bottom: 20,
+            zIndex: 1000,
+          }}
+        >
+          Click the key to duplicate.
+        </Notification>
+      )}
     </AppShell>
   );
 }

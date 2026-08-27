@@ -57,6 +57,19 @@ export const addKeyPlugin = (
     },
   );
 
+export const duplicateKeyPlugins = (
+  workspaceId: number,
+  key: string,
+  sourceKey: string,
+) =>
+  api<KeyPlugin[]>(
+    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}/plugins/duplicate-from`,
+    {
+      method: "POST",
+      body: JSON.stringify({ source_key_ref: sourceKey }),
+    },
+  );
+
 export const updateKeyPlugin = (id: number, data: Partial<KeyPlugin>) =>
   api<KeyPlugin>(`/api/key-plugin/${id}`, {
     method: "PUT",

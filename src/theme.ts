@@ -24,7 +24,6 @@ export const theme = createTheme({
           borderRadius: "0 0 8px 8px",
           border: "1px solid var(--kbrd-border-color)",
           backgroundColor: "var(--kbrd-color-body)",
-          borderTop: "none",
           boxSizing: "border-box",
         },
         item: {
