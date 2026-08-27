@@ -41,6 +41,8 @@ function StatefulPluginRenderer({
   pressToken,
   forceDown,
   geometry,
+  clipId,
+  canOverflow,
 }: {
   Renderer: PluginDefinition["Renderer"];
   config: Record<string, unknown>;
@@ -48,6 +50,8 @@ function StatefulPluginRenderer({
   pressToken: number;
   forceDown: boolean;
   geometry: GeometryLayout["keys"][number];
+  clipId: string;
+  canOverflow: boolean;
 }) {
   const [releasedToken, setReleasedToken] = useState(pressToken);
   const down = downState(config);
@@ -76,7 +80,17 @@ function StatefulPluginRenderer({
   const downVisible =
     down.enabled && (forceDown || pressed || releasePending);
 
-  return <Renderer config={effectiveConfig(config, downVisible)} {...geometry} />;
+  const renderedConfig = effectiveConfig(config, downVisible);
+  const clipPath =
+    canOverflow && renderedConfig.unconstrained === true
+      ? undefined
+      : `url(#${clipId})`;
+
+  return (
+    <g clipPath={clipPath}>
+      <Renderer config={renderedConfig} {...geometry} />
+    </g>
+  );
 }
 
 const VIEWPORT_MARGIN = 60;
@@ -506,19 +520,17 @@ export default function Preview({
                 )}
               </clipPath>
             </defs>
-            <g clipPath={`url(#${clipId})`}>
-              <StatefulPluginRenderer
-                key={`${instance.id}-${pluginDown.enabled}-${pluginDown.delay}`}
-                Renderer={Renderer}
-                config={instance.config}
-                geometry={geometry}
-                pressed={
-                  geometry.type === "key" && isKeyDown(instance.key_ref)
-                }
-                pressToken={pressTokens[instance.key_ref] ?? 0}
-                forceDown={previewDownPluginId === instance.id}
-              />
-            </g>
+            <StatefulPluginRenderer
+              key={`${instance.id}-${pluginDown.enabled}-${pluginDown.delay}`}
+              Renderer={Renderer}
+              config={instance.config}
+              geometry={geometry}
+              pressed={geometry.type === "key" && isKeyDown(instance.key_ref)}
+              pressToken={pressTokens[instance.key_ref] ?? 0}
+              forceDown={previewDownPluginId === instance.id}
+              clipId={clipId}
+              canOverflow={instance.plugin_id === "kbrd.render-video"}
+            />
           </g>
         );
       });

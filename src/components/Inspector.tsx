@@ -914,6 +914,7 @@ export default function Inspector({
                         <Tabs.Panel value="up" pt="xl">
                           <Editor
                             config={up}
+                            targetType={targetType}
                             onChange={(config) =>
                               patch(item, {
                                 config: { ...config, down },
@@ -927,6 +928,7 @@ export default function Inspector({
                             <Stack gap="xl">
                               <Editor
                                 config={down.config ?? up}
+                                targetType={targetType}
                                 onChange={(config) => patchDown({ config })}
                               />
                               <Box

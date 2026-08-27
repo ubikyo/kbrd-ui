@@ -5,6 +5,7 @@ export type PluginEditorProps = {
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
   disabled?: boolean;
+  targetType?: "key" | "background" | "space";
 };
 
 export type PluginRendererProps = {
