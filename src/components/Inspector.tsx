@@ -18,6 +18,7 @@ import {
   MdContentCopy,
   MdDelete,
   MdDragIndicator,
+  MdDriveFileMove,
   MdMoreVert,
 } from "react-icons/md";
 import { useRef, useState } from "react";
@@ -63,6 +64,7 @@ type Props = {
   onPreviewDownTargetChange: (keyRef: string | null) => void;
   onDuplicateFrom: () => void;
   onDuplicateTo: () => void;
+  onMoveTo: () => void;
   onClearAll: () => Promise<void>;
 };
 
@@ -121,6 +123,7 @@ export default function Inspector({
   onPreviewDownTargetChange,
   onDuplicateFrom,
   onDuplicateTo,
+  onMoveTo,
   onClearAll,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
@@ -309,6 +312,26 @@ export default function Inspector({
     setClearing(false);
   }
 
+  async function startMoveTo() {
+    if (!workspace || !selectedKey) return;
+    const saves: Promise<unknown>[] = [];
+    const pendingProperty = pendingPropertySaves.current.get(selectedKey);
+    if (pendingProperty) {
+      clearTimeout(pendingProperty);
+      pendingPropertySaves.current.delete(selectedKey);
+      saves.push(updateKeyProperties(workspace.id, selectedKey, propertyConfig));
+    }
+    for (const instance of instances) {
+      const pending = pendingSaves.current.get(instance.id);
+      if (!pending) continue;
+      clearTimeout(pending.timer);
+      pendingSaves.current.delete(instance.id);
+      saves.push(updateKeyPlugin(instance.id, pending.data));
+    }
+    await Promise.all(saves);
+    onMoveTo();
+  }
+
   return (
     <Box
       h="100%"
@@ -417,6 +440,12 @@ export default function Inspector({
                         onClick={onDuplicateTo}
                       >
                         Duplicate to
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<MdDriveFileMove />}
+                        onClick={() => void startMoveTo()}
+                      >
+                        Move to
                       </Menu.Item>
                       <Menu.Divider />
                       <Menu.Item

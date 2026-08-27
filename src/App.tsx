@@ -10,7 +10,7 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 
-import { MdAdd, MdContentCopy, MdRemove } from "react-icons/md";
+import { MdAdd, MdContentCopy, MdDriveFileMove, MdRemove } from "react-icons/md";
 
 import { useCallback, useRef, useState } from "react";
 
@@ -22,7 +22,12 @@ import type { GeometryData } from "./types/geometry";
 import Preview from "./components/Preview";
 import Inspector from "./components/Inspector";
 import Workspace from "./components/Workspace";
-import { addKeyPlugin, clearKey, duplicateKeyPlugins } from "./api/workspaces";
+import {
+  addKeyPlugin,
+  clearKey,
+  duplicateKeyPlugins,
+  moveKey,
+} from "./api/workspaces";
 import { pluginById } from "./plugins/registry";
 import type {
   KeyPlugin,
@@ -50,26 +55,26 @@ export default function App() {
   const [previewDownTarget, setPreviewDownTarget] = useState<string | null>(
     null,
   );
-  const [duplicateOperation, setDuplicateOperation] = useState<{
-    direction: "from" | "to";
+  const [keyOperation, setKeyOperation] = useState<{
+    direction: "from" | "to" | "move";
     key: string;
   } | null>(null);
-  const duplicateOperationRef = useRef<{
-    direction: "from" | "to";
+  const keyOperationRef = useRef<{
+    direction: "from" | "to" | "move";
     key: string;
   } | null>(null);
 
-  function stopDuplicate() {
-    duplicateOperationRef.current = null;
-    setDuplicateOperation(null);
+  function stopKeyOperation() {
+    keyOperationRef.current = null;
+    setKeyOperation(null);
   }
 
   const changeGeometry = useCallback((value: GeometryData | null) => {
     setGeometry(value);
     setWorkspace(null);
     setSelectedKey(null);
-    duplicateOperationRef.current = null;
-    setDuplicateOperation(null);
+    keyOperationRef.current = null;
+    setKeyOperation(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
     setZoom(100);
@@ -78,8 +83,8 @@ export default function App() {
   const changeWorkspace = useCallback((value: WorkspaceData | null) => {
     setWorkspace(value);
     setSelectedKey(null);
-    duplicateOperationRef.current = null;
-    setDuplicateOperation(null);
+    keyOperationRef.current = null;
+    setKeyOperation(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
   }, []);
@@ -126,28 +131,42 @@ export default function App() {
   }
 
   function selectKey(key: string | null) {
-    const duplicate = duplicateOperationRef.current;
+    const operation = keyOperationRef.current;
     const clickedKey = geometry?.layout.keys.find(
       (item) => item.ref === key && item.type === "key",
     );
-    if (duplicate && clickedKey && workspace) {
-      const source = duplicate.direction === "from" ? clickedKey.ref : duplicate.key;
+    if (operation && clickedKey && workspace) {
+      const source = operation.direction === "from" ? clickedKey.ref : operation.key;
       const destination =
-        duplicate.direction === "from" ? duplicate.key : clickedKey.ref;
+        operation.direction === "from" ? operation.key : clickedKey.ref;
       if (source === destination) return;
-      if (duplicate.direction === "from") duplicateOperationRef.current = null;
+      if (operation.direction === "move") {
+        keyOperationRef.current = null;
+        void moveKey(workspace.id, source, destination).then(
+          (value) => {
+            setWorkspace(value);
+            setSelectedKey(destination);
+            setKeyOperation(null);
+            setPreviewDownPluginId(null);
+            setPreviewDownTarget(null);
+          },
+          () => setKeyOperation(null),
+        );
+        return;
+      }
+      if (operation.direction === "from") keyOperationRef.current = null;
       void duplicateKeyPlugins(workspace.id, destination, source).then(
         (plugins) => {
           changePlugins(plugins);
-          if (duplicate.direction === "from") setDuplicateOperation(null);
+          if (operation.direction === "from") setKeyOperation(null);
         },
         () => {
-          if (duplicate.direction === "from") setDuplicateOperation(null);
+          if (operation.direction === "from") setKeyOperation(null);
         },
       );
       return;
     }
-    if (duplicate) return;
+    if (operation) return;
     if (key !== selectedKey) {
       setPreviewDownPluginId(null);
       setPreviewDownTarget(null);
@@ -159,15 +178,22 @@ export default function App() {
   function startDuplicateFrom() {
     if (!selectedKey) return;
     const operation = { direction: "from" as const, key: selectedKey };
-    duplicateOperationRef.current = operation;
-    setDuplicateOperation(operation);
+    keyOperationRef.current = operation;
+    setKeyOperation(operation);
   }
 
   function startDuplicateTo() {
     if (!selectedKey) return;
     const operation = { direction: "to" as const, key: selectedKey };
-    duplicateOperationRef.current = operation;
-    setDuplicateOperation(operation);
+    keyOperationRef.current = operation;
+    setKeyOperation(operation);
+  }
+
+  function startMoveTo() {
+    if (!selectedKey) return;
+    const operation = { direction: "move" as const, key: selectedKey };
+    keyOperationRef.current = operation;
+    setKeyOperation(operation);
   }
 
   async function clearSelectedKey() {
@@ -315,20 +341,29 @@ export default function App() {
               onPreviewDownTargetChange={setPreviewDownTarget}
               onDuplicateFrom={startDuplicateFrom}
               onDuplicateTo={startDuplicateTo}
+              onMoveTo={startMoveTo}
               onClearAll={clearSelectedKey}
             />
           </Splitter.Pane>
         </Splitter>
       </AppShell.Main>
-      {duplicateOperation && (
+      {keyOperation && (
         <Notification
-          icon={<MdContentCopy size={18} />}
-          title={
-            duplicateOperation.direction === "from"
-              ? "Duplicate from"
-              : "Duplicate to"
+          icon={
+            keyOperation.direction === "move" ? (
+              <MdDriveFileMove size={18} />
+            ) : (
+              <MdContentCopy size={18} />
+            )
           }
-          onClose={stopDuplicate}
+          title={
+            keyOperation.direction === "from"
+              ? "Duplicate from"
+              : keyOperation.direction === "to"
+                ? "Duplicate to"
+                : "Move to"
+          }
+          onClose={stopKeyOperation}
           withBorder
           style={{
             position: "fixed",
@@ -339,11 +374,13 @@ export default function App() {
         >
           <Group gap="md" wrap="nowrap">
             <Text size="sm">
-              {duplicateOperation.direction === "from"
+              {keyOperation.direction === "from"
                 ? "Click the source key to duplicate."
-                : "Click each destination key to duplicate."}
+                : keyOperation.direction === "to"
+                  ? "Click each destination key to duplicate."
+                  : "Click the destination key to move."}
             </Text>
-            <Button size="compact-xs" color="red" onClick={stopDuplicate}>
+            <Button size="compact-xs" color="red" onClick={stopKeyOperation}>
               STOP
             </Button>
           </Group>

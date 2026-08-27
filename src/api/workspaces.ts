@@ -76,6 +76,19 @@ export const clearKey = (workspaceId: number, key: string) =>
     { method: "DELETE" },
   );
 
+export const moveKey = (
+  workspaceId: number,
+  sourceKey: string,
+  destinationKey: string,
+) =>
+  api<WorkspaceData>(
+    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(sourceKey)}/move-to`,
+    {
+      method: "POST",
+      body: JSON.stringify({ destination_key_ref: destinationKey }),
+    },
+  );
+
 export const updateKeyPlugin = (id: number, data: Partial<KeyPlugin>) =>
   api<KeyPlugin>(`/api/key-plugin/${id}`, {
     method: "PUT",
