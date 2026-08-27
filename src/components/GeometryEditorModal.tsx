@@ -30,6 +30,14 @@ type Props = {
   onDeleted: () => void;
 };
 
+function isValidGeometry(value: string) {
+  try {
+    return Array.isArray(JSON.parse(value));
+  } catch {
+    return false;
+  }
+}
+
 export default function GeometryEditorModal({
   editing,
   onClose,
@@ -122,6 +130,8 @@ export default function GeometryEditorModal({
                 label="Name"
                 placeholder="ISO"
                 value={name}
+                error={!name.trim() ? "Name is required" : undefined}
+                success={Boolean(name.trim())}
                 onChange={(event) => setName(event.currentTarget.value)}
                 required
               />
@@ -129,6 +139,7 @@ export default function GeometryEditorModal({
                 variant="filled"
                 label="Author"
                 value={author}
+                success
                 onChange={(event) => setAuthor(event.currentTarget.value)}
               />
             </Group>
@@ -140,6 +151,7 @@ export default function GeometryEditorModal({
                 { value: "px", label: "Pixels (px)" },
               ]}
               value={unit}
+              success
               allowDeselect={false}
               onChange={(value) => {
                 if (value === "mm" || value === "px") setUnit(value);
@@ -149,6 +161,7 @@ export default function GeometryEditorModal({
               variant="filled"
               label="Description"
               value={description}
+              success
               onChange={(event) => setDescription(event.currentTarget.value)}
               autosize
               minRows={2}
@@ -164,6 +177,7 @@ export default function GeometryEditorModal({
                 setError("");
               }}
               error={error}
+              success={!error && isValidGeometry(geometry)}
               minRows={30}
               resize="vertical"
               styles={{ input: { fontFamily: "monospace", minHeight: 520 } }}

@@ -79,7 +79,8 @@ export default function WorkspaceEditorModal({
             variant="filled"
             label="Name"
             value={name}
-            error={error || undefined}
+            error={error || (!name.trim() ? "Name is required" : undefined)}
+            success={!error && Boolean(name.trim())}
             onChange={(event) => {
               setName(event.currentTarget.value);
               setError("");
@@ -89,6 +90,7 @@ export default function WorkspaceEditorModal({
             variant="filled"
             label="Description"
             value={description}
+            success
             onChange={(event) => setDescription(event.currentTarget.value)}
           />
           <Group justify="space-between">

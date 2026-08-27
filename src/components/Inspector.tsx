@@ -39,6 +39,18 @@ import type {
 } from "../types/workspace";
 
 const BACKGROUND_REF = "__background__";
+const COLOR_SWATCHES = [
+  "#ffffff",
+  "#adb5bd",
+  "#ff6b6b",
+  "#ffd43b",
+  "#51cf66",
+  "#339af0",
+  "#845ef7",
+  "#000000",
+];
+const isHexColor = (value: string, alpha = false) =>
+  new RegExp(alpha ? "^#[0-9a-f]{8}$" : "^#[0-9a-f]{6}$", "i").test(value);
 const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
   keyMode: "momentary",
   downEnabled: false,
@@ -544,6 +556,7 @@ export default function Inspector({
                                   { value: "toggle", label: "Toggle" },
                                 ]}
                                 value={propertyConfig.keyMode}
+                                success
                                 onChange={(value) =>
                                   patchKeyProperty({
                                     keyMode:
@@ -583,6 +596,16 @@ export default function Inspector({
                                 size="xs"
                                 format="hexa"
                                 value={propertyConfig.upBackgroundColor}
+                                swatches={COLOR_SWATCHES}
+                                error={
+                                  isHexColor(propertyConfig.upBackgroundColor, true)
+                                    ? undefined
+                                    : "Invalid color"
+                                }
+                                success={isHexColor(
+                                  propertyConfig.upBackgroundColor,
+                                  true,
+                                )}
                                 onChange={(value) =>
                                   patchKeyProperty({ upBackgroundColor: value })
                                 }
@@ -608,6 +631,13 @@ export default function Inspector({
                                 format="hex"
                                 value={propertyConfig.upBorderColor}
                                 disabled={!propertyConfig.upBorderEnabled}
+                                swatches={COLOR_SWATCHES}
+                                error={
+                                  isHexColor(propertyConfig.upBorderColor)
+                                    ? undefined
+                                    : "Invalid color"
+                                }
+                                success={isHexColor(propertyConfig.upBorderColor)}
                                 onChange={(value) =>
                                   patchKeyProperty({ upBorderColor: value })
                                 }
@@ -624,6 +654,7 @@ export default function Inspector({
                                 clampBehavior="strict"
                                 value={propertyConfig.upBorderWidth}
                                 disabled={!propertyConfig.upBorderEnabled}
+                                success
                                 onChange={(value) =>
                                   patchKeyProperty({
                                     upBorderWidth:
@@ -644,6 +675,19 @@ export default function Inspector({
                                   size="xs"
                                   format="hexa"
                                   value={propertyConfig.downBackgroundColor}
+                                  swatches={COLOR_SWATCHES}
+                                  error={
+                                    isHexColor(
+                                      propertyConfig.downBackgroundColor,
+                                      true,
+                                    )
+                                      ? undefined
+                                      : "Invalid color"
+                                  }
+                                  success={isHexColor(
+                                    propertyConfig.downBackgroundColor,
+                                    true,
+                                  )}
                                   onChange={(value) =>
                                     patchKeyProperty({
                                       downBackgroundColor: value,
@@ -672,6 +716,15 @@ export default function Inspector({
                                   format="hex"
                                   value={propertyConfig.downBorderColor}
                                   disabled={!propertyConfig.downBorderEnabled}
+                                  swatches={COLOR_SWATCHES}
+                                  error={
+                                    isHexColor(propertyConfig.downBorderColor)
+                                      ? undefined
+                                      : "Invalid color"
+                                  }
+                                  success={isHexColor(
+                                    propertyConfig.downBorderColor,
+                                  )}
                                   onChange={(value) =>
                                     patchKeyProperty({ downBorderColor: value })
                                   }
@@ -688,6 +741,7 @@ export default function Inspector({
                                   clampBehavior="strict"
                                   value={propertyConfig.downBorderWidth}
                                   disabled={!propertyConfig.downBorderEnabled}
+                                  success
                                   onChange={(value) =>
                                     patchKeyProperty({
                                       downBorderWidth:
@@ -974,6 +1028,7 @@ export default function Inspector({
                                   step={100}
                                   allowNegative={false}
                                   value={down.delay}
+                                  success
                                   onChange={(value) =>
                                     patchDown({
                                       delay:
