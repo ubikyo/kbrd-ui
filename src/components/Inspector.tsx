@@ -69,7 +69,10 @@ type Props = {
 };
 
 function pluginSummary(item: KeyPlugin) {
-  if (item.plugin_id === "kbrd.render-label") {
+  if (
+    item.plugin_id === "kbrd.render-label" ||
+    item.plugin_id === "kbrd.render-key-symbol"
+  ) {
     const text = item.config.text;
     return typeof text === "string" && text.trim()
       ? truncate(text.trim())
