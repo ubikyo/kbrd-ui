@@ -62,6 +62,8 @@ type Props = {
   onPreviewDownPluginChange: (pluginId: number | null) => void;
   onPreviewDownTargetChange: (keyRef: string | null) => void;
   onDuplicateFrom: () => void;
+  onDuplicateTo: () => void;
+  onClearAll: () => Promise<void>;
 };
 
 function pluginSummary(item: KeyPlugin) {
@@ -118,11 +120,14 @@ export default function Inspector({
   onPreviewDownPluginChange,
   onPreviewDownTargetChange,
   onDuplicateFrom,
+  onDuplicateTo,
+  onClearAll,
 }: Props) {
   const [propertyStates, setPropertyStates] = useState<
     Record<number, "main" | "up" | "down">
   >({});
   const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
+  const [clearing, setClearing] = useState(false);
   const [targetStates, setTargetStates] = useState<
     Record<string, "option" | "up" | "down">
   >({});
@@ -288,6 +293,22 @@ export default function Inspector({
     setDeleting(null);
   }
 
+  async function clearAll() {
+    if (!selectedKey) return;
+    const pendingProperty = pendingPropertySaves.current.get(selectedKey);
+    if (pendingProperty) clearTimeout(pendingProperty);
+    pendingPropertySaves.current.delete(selectedKey);
+    for (const instance of instances) {
+      const pending = pendingSaves.current.get(instance.id);
+      if (pending) clearTimeout(pending.timer);
+      pendingSaves.current.delete(instance.id);
+    }
+    await onClearAll();
+    onPreviewDownPluginChange(null);
+    onPreviewDownTargetChange(null);
+    setClearing(false);
+  }
+
   return (
     <Box
       h="100%"
@@ -390,6 +411,20 @@ export default function Inspector({
                         onClick={onDuplicateFrom}
                       >
                         Duplicate from
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<MdContentCopy />}
+                        onClick={onDuplicateTo}
+                      >
+                        Duplicate to
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        color="red"
+                        leftSection={<MdDelete />}
+                        onClick={() => setClearing(true)}
+                      >
+                        Clear all
                       </Menu.Item>
                     </Menu.Dropdown>
                   </Menu>
@@ -930,6 +965,32 @@ export default function Inspector({
           )}
         </Tabs.Panel>
       </Tabs>
+
+      <Modal
+        opened={clearing}
+        onClose={() => setClearing(false)}
+        title={<Text fw={700}>Clear key</Text>}
+        centered
+        size="sm"
+      >
+        <Stack>
+          <Text>
+            Permanently clear all plugins and properties from this key?
+          </Text>
+          <Group justify="flex-end">
+            <Button color="gray" onClick={() => setClearing(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              leftSection={<MdDelete size={16} />}
+              onClick={() => void clearAll()}
+            >
+              Clear all
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={deleting !== null}

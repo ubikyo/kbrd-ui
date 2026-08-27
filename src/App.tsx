@@ -2,6 +2,7 @@ import {
   ActionIcon,
   AppShell,
   Box,
+  Button,
   Group,
   Notification,
   Splitter,
@@ -21,7 +22,7 @@ import type { GeometryData } from "./types/geometry";
 import Preview from "./components/Preview";
 import Inspector from "./components/Inspector";
 import Workspace from "./components/Workspace";
-import { addKeyPlugin, duplicateKeyPlugins } from "./api/workspaces";
+import { addKeyPlugin, clearKey, duplicateKeyPlugins } from "./api/workspaces";
 import { pluginById } from "./plugins/registry";
 import type {
   KeyPlugin,
@@ -49,17 +50,26 @@ export default function App() {
   const [previewDownTarget, setPreviewDownTarget] = useState<string | null>(
     null,
   );
-  const [duplicateDestination, setDuplicateDestination] = useState<
-    string | null
-  >(null);
-  const duplicateDestinationRef = useRef<string | null>(null);
+  const [duplicateOperation, setDuplicateOperation] = useState<{
+    direction: "from" | "to";
+    key: string;
+  } | null>(null);
+  const duplicateOperationRef = useRef<{
+    direction: "from" | "to";
+    key: string;
+  } | null>(null);
+
+  function stopDuplicate() {
+    duplicateOperationRef.current = null;
+    setDuplicateOperation(null);
+  }
 
   const changeGeometry = useCallback((value: GeometryData | null) => {
     setGeometry(value);
     setWorkspace(null);
     setSelectedKey(null);
-    duplicateDestinationRef.current = null;
-    setDuplicateDestination(null);
+    duplicateOperationRef.current = null;
+    setDuplicateOperation(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
     setZoom(100);
@@ -68,8 +78,8 @@ export default function App() {
   const changeWorkspace = useCallback((value: WorkspaceData | null) => {
     setWorkspace(value);
     setSelectedKey(null);
-    duplicateDestinationRef.current = null;
-    setDuplicateDestination(null);
+    duplicateOperationRef.current = null;
+    setDuplicateOperation(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
   }, []);
@@ -116,22 +126,28 @@ export default function App() {
   }
 
   function selectKey(key: string | null) {
-    const destination = duplicateDestinationRef.current;
-    const source = geometry?.layout.keys.find(
+    const duplicate = duplicateOperationRef.current;
+    const clickedKey = geometry?.layout.keys.find(
       (item) => item.ref === key && item.type === "key",
     );
-    if (destination && source && workspace) {
-      duplicateDestinationRef.current = null;
-      void duplicateKeyPlugins(workspace.id, destination, source.ref).then(
+    if (duplicate && clickedKey && workspace) {
+      const source = duplicate.direction === "from" ? clickedKey.ref : duplicate.key;
+      const destination =
+        duplicate.direction === "from" ? duplicate.key : clickedKey.ref;
+      if (source === destination) return;
+      if (duplicate.direction === "from") duplicateOperationRef.current = null;
+      void duplicateKeyPlugins(workspace.id, destination, source).then(
         (plugins) => {
           changePlugins(plugins);
-          setDuplicateDestination(null);
+          if (duplicate.direction === "from") setDuplicateOperation(null);
         },
-        () => setDuplicateDestination(null),
+        () => {
+          if (duplicate.direction === "from") setDuplicateOperation(null);
+        },
       );
       return;
     }
-    if (destination) return;
+    if (duplicate) return;
     if (key !== selectedKey) {
       setPreviewDownPluginId(null);
       setPreviewDownTarget(null);
@@ -142,13 +158,24 @@ export default function App() {
 
   function startDuplicateFrom() {
     if (!selectedKey) return;
-    duplicateDestinationRef.current = selectedKey;
-    setDuplicateDestination(selectedKey);
+    const operation = { direction: "from" as const, key: selectedKey };
+    duplicateOperationRef.current = operation;
+    setDuplicateOperation(operation);
   }
 
-  function cancelDuplicateFrom() {
-    duplicateDestinationRef.current = null;
-    setDuplicateDestination(null);
+  function startDuplicateTo() {
+    if (!selectedKey) return;
+    const operation = { direction: "to" as const, key: selectedKey };
+    duplicateOperationRef.current = operation;
+    setDuplicateOperation(operation);
+  }
+
+  async function clearSelectedKey() {
+    if (!workspace || !selectedKey) return;
+    const value = await clearKey(workspace.id, selectedKey);
+    setWorkspace(value);
+    setPreviewDownPluginId(null);
+    setPreviewDownTarget(null);
   }
 
   return (
@@ -287,15 +314,21 @@ export default function App() {
               onPreviewDownPluginChange={setPreviewDownPluginId}
               onPreviewDownTargetChange={setPreviewDownTarget}
               onDuplicateFrom={startDuplicateFrom}
+              onDuplicateTo={startDuplicateTo}
+              onClearAll={clearSelectedKey}
             />
           </Splitter.Pane>
         </Splitter>
       </AppShell.Main>
-      {duplicateDestination && (
+      {duplicateOperation && (
         <Notification
           icon={<MdContentCopy size={18} />}
-          title="Duplicate from"
-          onClose={cancelDuplicateFrom}
+          title={
+            duplicateOperation.direction === "from"
+              ? "Duplicate from"
+              : "Duplicate to"
+          }
+          onClose={stopDuplicate}
           withBorder
           style={{
             position: "fixed",
@@ -304,7 +337,16 @@ export default function App() {
             zIndex: 1000,
           }}
         >
-          Click the key to duplicate.
+          <Group gap="md" wrap="nowrap">
+            <Text size="sm">
+              {duplicateOperation.direction === "from"
+                ? "Click the source key to duplicate."
+                : "Click each destination key to duplicate."}
+            </Text>
+            <Button size="compact-xs" color="red" onClick={stopDuplicate}>
+              STOP
+            </Button>
+          </Group>
         </Notification>
       )}
     </AppShell>

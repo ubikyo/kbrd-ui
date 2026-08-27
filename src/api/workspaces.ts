@@ -70,6 +70,12 @@ export const duplicateKeyPlugins = (
     },
   );
 
+export const clearKey = (workspaceId: number, key: string) =>
+  api<WorkspaceData>(
+    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}`,
+    { method: "DELETE" },
+  );
+
 export const updateKeyPlugin = (id: number, data: Partial<KeyPlugin>) =>
   api<KeyPlugin>(`/api/key-plugin/${id}`, {
     method: "PUT",

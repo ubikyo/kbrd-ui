@@ -90,6 +90,12 @@ export default function Workspace({ geometryId, onChange }: Props) {
         width={250}
         shadow="md"
         offset={0}
+        styles={{
+          dropdown: {
+            borderRadius: "0 0 8px 8px",
+            borderTop: "none",
+          },
+        }}
       >
         <Menu.Target>
           <UnstyledButton

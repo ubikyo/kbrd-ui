@@ -21,7 +21,6 @@ export const theme = createTheme({
     Menu: Menu.extend({
       styles: {
         dropdown: {
-          borderRadius: "0 0 8px 8px",
           border: "1px solid var(--kbrd-border-color)",
           backgroundColor: "var(--kbrd-color-body)",
           boxSizing: "border-box",
