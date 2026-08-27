@@ -64,7 +64,10 @@ function pluginSummary(item: KeyPlugin) {
       ? truncate(text.trim())
       : null;
   }
-  if (item.plugin_id === "kbrd.render-image") {
+  if (
+    item.plugin_id === "kbrd.render-image" ||
+    item.plugin_id === "kbrd.render-video"
+  ) {
     const name = item.config.name ?? item.config.media;
     return typeof name === "string" && name.trim()
       ? truncate(name.trim())
