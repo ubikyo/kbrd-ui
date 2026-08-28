@@ -8,7 +8,6 @@ import {
   Menu,
   Modal,
   NumberInput,
-  Select,
   Stack,
   Switch,
   Tabs,
@@ -251,6 +250,13 @@ export default function Inspector({
   );
   const pendingSaves = usePendingSaves<number, Partial<KeyPlugin>>();
   const pendingPropertySaves = usePendingSaves<string, KeyPropertyConfig>();
+  // Layout plugins (positioning/kind) are only draggable in Layout mode;
+  // Invoke/Display plugins (behaviour/content) only in Mapping mode.
+  const draggablePlugins = plugins.filter((plugin) =>
+    mode === "layout"
+      ? plugin.category === "Layout"
+      : plugin.category !== "Layout",
+  );
   const allInstances = workspace?.plugins ?? [];
   const instances = allInstances
     .filter((plugin) => plugin.key_ref === selectedKey)
@@ -428,9 +434,9 @@ export default function Inspector({
             <Text c="dimmed">Create a workspace to add plugins.</Text>
           ) : (
             <Accordion multiple>
-              {[...new Set(plugins.map((plugin) => plugin.category))].map(
+              {[...new Set(draggablePlugins.map((plugin) => plugin.category))].map(
                 (category) => {
-                  const categoryPlugins = plugins.filter(
+                  const categoryPlugins = draggablePlugins.filter(
                     (plugin) => plugin.category === category,
                   );
                   return (
@@ -534,7 +540,7 @@ export default function Inspector({
               )}
               <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
                 {!propertyGroups.some(
-                  (group) => group.category === "Render",
+                  (group) => group.category === "Display",
                 ) && (
                   <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
                     Render
@@ -603,28 +609,6 @@ export default function Inspector({
                         </Tabs.List>
                         <Tabs.Panel value="option" pt="xl">
                           <Stack gap="md">
-                            <PropertyRow label="Type">
-                              <Select
-                                w="100%"
-                                aria-label="Type"
-                                size="xs"
-                                allowDeselect={false}
-                                data={[
-                                  { value: "momentary", label: "Momentary" },
-                                  { value: "toggle", label: "Toggle" },
-                                ]}
-                                value={propertyConfig.keyMode}
-                                success
-                                onChange={(value) =>
-                                  patchKeyProperty({
-                                    keyMode:
-                                      value === "toggle"
-                                        ? "toggle"
-                                        : "momentary",
-                                  })
-                                }
-                              />
-                            </PropertyRow>
                             <PropertyRow label="Enable down state ?" align="center" compactControl>
                               <Switch
                                 aria-label="Enable down state ?"
@@ -705,8 +689,8 @@ export default function Inspector({
               {propertyGroups.map((group) => (
                 <Box
                   key={group.category}
-                  mt={group.category === "Render" ? 0 : 48}
-                  style={{ order: group.category === "Render" ? 1 : 3 }}
+                  mt={group.category === "Display" ? 0 : 48}
+                  style={{ order: group.category === "Display" ? 1 : 3 }}
                 >
                   <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
                     {group.category}

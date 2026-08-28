@@ -222,7 +222,7 @@ export default function App() {
             <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
               {/* TODO(preview-rebuild): Factory temporarily stands in for
                   Preview while that component is redesigned from scratch. */}
-              <Factory {...layoutSettings} />
+              <Factory {...layoutSettings} mode={mode} />
 
               <SegmentedControl
                 value={mode}
