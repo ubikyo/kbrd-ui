@@ -22,6 +22,7 @@ import {
   MdMoreVert,
 } from "react-icons/md";
 import { useState } from "react";
+import { PropertyRow } from "@kbrd/plugins/web";
 
 import {
   deleteKeyPlugin,
@@ -155,10 +156,10 @@ function KeyStateFields({
 }: KeyStateFieldsProps) {
   return (
     <Stack gap="sm">
-      <Group justify="space-between" wrap="nowrap">
-        <Text size="sm">Background color</Text>
+      <PropertyRow label="Background color">
         <ColorInput
-          w={160}
+          w="100%"
+          aria-label="Background color"
           size="xs"
           format="hexa"
           value={backgroundColor}
@@ -167,21 +168,21 @@ function KeyStateFields({
           success={isHexColor(backgroundColor, true)}
           onChange={onBackgroundColorChange}
         />
-      </Group>
-      <Group justify="space-between" wrap="nowrap">
-        <Text size="sm">Border</Text>
+      </PropertyRow>
+      <PropertyRow label="Border" align="center" compactControl>
         <Switch
+          aria-label="Border"
           size="sm"
           checked={borderEnabled}
           onChange={(event) =>
             onBorderEnabledChange(event.currentTarget.checked)
           }
         />
-      </Group>
-      <Group justify="space-between" wrap="nowrap">
-        <Text size="sm">Border color</Text>
+      </PropertyRow>
+      <PropertyRow label="Border color">
         <ColorInput
-          w={160}
+          w="100%"
+          aria-label="Border color"
           size="xs"
           format="hex"
           value={borderColor}
@@ -191,11 +192,11 @@ function KeyStateFields({
           success={isHexColor(borderColor)}
           onChange={onBorderColorChange}
         />
-      </Group>
-      <Group justify="space-between" wrap="nowrap">
-        <Text size="sm">Border size</Text>
+      </PropertyRow>
+      <PropertyRow label="Border size">
         <NumberInput
-          w={160}
+          w="100%"
+          aria-label="Border size"
           size="xs"
           min={1}
           max={4}
@@ -208,7 +209,7 @@ function KeyStateFields({
             onBorderWidthChange(typeof value === "number" ? value : 1)
           }
         />
-      </Group>
+      </PropertyRow>
     </Stack>
   );
 }
@@ -597,10 +598,10 @@ export default function Inspector({
                         </Tabs.List>
                         <Tabs.Panel value="option" pt="xl">
                           <Stack gap="md">
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Type</Text>
+                            <PropertyRow label="Type">
                               <Select
-                                w={160}
+                                w="100%"
+                                aria-label="Type"
                                 size="xs"
                                 allowDeselect={false}
                                 data={[
@@ -618,10 +619,10 @@ export default function Inspector({
                                   })
                                 }
                               />
-                            </Group>
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Down state</Text>
+                            </PropertyRow>
+                            <PropertyRow label="Down state" align="center" compactControl>
                               <Switch
+                                aria-label="Down state"
                                 size="sm"
                                 checked={propertyConfig.downEnabled}
                                 onChange={(event) => {
@@ -636,7 +637,7 @@ export default function Inspector({
                                   }
                                 }}
                               />
-                            </Group>
+                            </PropertyRow>
                           </Stack>
                         </Tabs.Panel>
                         <Tabs.Panel value="up" pt="xl">
@@ -882,9 +883,9 @@ export default function Inspector({
 
                         <Tabs.Panel value="main" pt="xl">
                           <Stack gap="lg">
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Disabled</Text>
+                            <PropertyRow label="Disabled" align="center" compactControl>
                               <Switch
+                                aria-label="Disabled"
                                 size="sm"
                                 checked={!item.enabled}
                                 onChange={(event) => {
@@ -899,11 +900,11 @@ export default function Inspector({
                                   void patch(item, { enabled: !disabled });
                                 }}
                               />
-                            </Group>
+                            </PropertyRow>
                             {supportsDown && (
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Down state</Text>
+                              <PropertyRow label="Down state" align="center" compactControl>
                                 <Switch
+                                  aria-label="Down state"
                                   size="sm"
                                   checked={down.enabled}
                                   onChange={(event) => {
@@ -922,7 +923,7 @@ export default function Inspector({
                                     });
                                   }}
                                 />
-                              </Group>
+                              </PropertyRow>
                             )}
                           </Stack>
                         </Tabs.Panel>
@@ -951,21 +952,24 @@ export default function Inspector({
                                 pt="xs"
                                 style={{ borderTop: "2px solid white" }}
                               >
-                                <NumberInput
-                                  label="Delay"
-                                  suffix=" ms"
-                                  min={0}
-                                  step={100}
-                                  allowNegative={false}
-                                  value={down.delay}
-                                  success
-                                  onChange={(value) =>
-                                    patchDown({
-                                      delay:
-                                        typeof value === "number" ? value : 0,
-                                    })
-                                  }
-                                />
+                                <PropertyRow label="Delay">
+                                  <NumberInput
+                                    w="100%"
+                                    aria-label="Delay"
+                                    suffix=" ms"
+                                    min={0}
+                                    step={100}
+                                    allowNegative={false}
+                                    value={down.delay}
+                                    success
+                                    onChange={(value) =>
+                                      patchDown({
+                                        delay:
+                                          typeof value === "number" ? value : 0,
+                                      })
+                                    }
+                                  />
+                                </PropertyRow>
                               </Box>
                             </Stack>
                           </Tabs.Panel>

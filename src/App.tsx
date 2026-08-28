@@ -328,7 +328,7 @@ export default function App() {
               </Group>
             </Box>
           </Splitter.Pane>
-          <Splitter.Pane defaultSize={25} min={20} max={50}>
+          <Splitter.Pane defaultSize={25} min="440px">
             <Inspector
               workspace={workspace}
               selectedKey={selectedKey}
