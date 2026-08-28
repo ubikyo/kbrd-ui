@@ -10,7 +10,13 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 
-import { MdAdd, MdContentCopy, MdDriveFileMove, MdRemove } from "react-icons/md";
+import {
+  MdAdd,
+  MdContentCopy,
+  MdDriveFileMove,
+  MdRemove,
+  MdSettings,
+} from "react-icons/md";
 
 import { useCallback, useRef, useState } from "react";
 
@@ -21,6 +27,7 @@ import type { GeometryData } from "./types/geometry";
 
 import Preview from "./components/Preview";
 import Inspector from "./components/Inspector";
+import SettingsModal from "./components/SettingsModal";
 import Workspace from "./components/Workspace";
 import {
   addKeyPlugin,
@@ -46,6 +53,8 @@ export default function App() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
+
+  const [settingsOpened, setSettingsOpened] = useState(false);
 
   const [zoom, setZoom] = useState(100);
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
@@ -243,8 +252,25 @@ export default function App() {
               onChange={changeWorkspace}
             />
           )}
+
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            ml="auto"
+            mr="md"
+            aria-label="Settings"
+            onClick={() => setSettingsOpened(true)}
+          >
+            <MdSettings size={20} />
+          </ActionIcon>
         </Group>
       </AppShell.Header>
+
+      <SettingsModal
+        opened={settingsOpened}
+        onClose={() => setSettingsOpened(false)}
+      />
 
       <AppShell.Main
         bg="var(--kbrd-color-body)"
