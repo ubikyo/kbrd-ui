@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
+import { Box, Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
 import { MdStraighten } from "react-icons/md";
-import { PropertyRow } from "@kbrd/plugins/web";
 
 const DEFAULT_UNIT_MM = 19.05;
 
@@ -46,55 +45,64 @@ export default function SettingsModal({ opened, onClose }: Props) {
           flexDirection: "column",
           height: "70vh",
         },
-        body: { display: "flex", flex: 1, minHeight: 0, padding: 0 },
+        body: { display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: 0 },
       }}
     >
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        orientation="vertical"
-        style={{ flex: 1, minHeight: 0 }}
-      >
-        <Tabs.List
-          w={180}
-          style={{
-            flexShrink: 0,
-            borderRight: "1px solid var(--kbrd-border-color)",
-          }}
+      <Box style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          orientation="vertical"
+          variant="outline"
+          style={
+            {
+              height: "100%",
+              "--tab-border-color": "var(--kbrd-border-color)",
+            } as React.CSSProperties
+          }
         >
-          <Tabs.Tab value="geometry" leftSection={<MdStraighten size={16} />}>
-            Geometry
-          </Tabs.Tab>
-        </Tabs.List>
+          <Tabs.List w={180} style={{ flexShrink: 0 }}>
+            <Tabs.Tab value="geometry" leftSection={<MdStraighten size={16} />}>
+              Geometry
+            </Tabs.Tab>
+          </Tabs.List>
 
-        <Tabs.Panel
-          value="geometry"
-          px="lg"
-          pb="lg"
-          pt={0}
-          style={{ overflowY: "auto" }}
-        >
-          <Stack gap="md">
-            <Title order={4}>Geometry</Title>
-            <PropertyRow label="Unit (1U)">
-              <NumberInput
-                w="100%"
-                aria-label="Unit (1U)"
-                suffix=" mm"
-                min={0}
-                step={0.05}
-                decimalScale={2}
-                fixedDecimalScale
-                value={unit}
-                success
-                onChange={(value) =>
-                  setUnit(typeof value === "number" ? value : DEFAULT_UNIT_MM)
-                }
-              />
-            </PropertyRow>
-          </Stack>
-        </Tabs.Panel>
-      </Tabs>
+          <Tabs.Panel
+            value="geometry"
+            px="lg"
+            pb="lg"
+            style={{ overflowY: "auto" }}
+          >
+            <Stack gap="md">
+              <Title order={4}>Geometry</Title>
+              <Box
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 4fr) minmax(0, 6fr)",
+                  columnGap: "var(--mantine-spacing-md)",
+                  alignItems: "center",
+                }}
+              >
+                <Text size="sm">Unit (1U)</Text>
+                <NumberInput
+                  w="100%"
+                  aria-label="Unit (1U)"
+                  suffix=" mm"
+                  min={0}
+                  step={0.05}
+                  decimalScale={2}
+                  fixedDecimalScale
+                  value={unit}
+                  success
+                  onChange={(value) =>
+                    setUnit(typeof value === "number" ? value : DEFAULT_UNIT_MM)
+                  }
+                />
+              </Box>
+            </Stack>
+          </Tabs.Panel>
+        </Tabs>
+      </Box>
 
       <Group
         justify="flex-end"
