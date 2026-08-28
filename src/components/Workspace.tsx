@@ -105,6 +105,7 @@ export default function Workspace({ geometryId, onChange }: Props) {
             style={{
               width: 250,
               boxSizing: "border-box",
+              borderLeft: "1px solid var(--kbrd-border-color)",
               borderRight: "1px solid var(--kbrd-border-color)",
             }}
           >
