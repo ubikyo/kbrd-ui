@@ -620,9 +620,9 @@ export default function Inspector({
                                 }
                               />
                             </PropertyRow>
-                            <PropertyRow label="Down state" align="center" compactControl>
+                            <PropertyRow label="Enable down state ?" align="center" compactControl>
                               <Switch
-                                aria-label="Down state"
+                                aria-label="Enable down state ?"
                                 size="sm"
                                 checked={propertyConfig.downEnabled}
                                 onChange={(event) => {
@@ -902,9 +902,9 @@ export default function Inspector({
                               />
                             </PropertyRow>
                             {supportsDown && (
-                              <PropertyRow label="Down state" align="center" compactControl>
+                              <PropertyRow label="Enable down state ?" align="center" compactControl>
                                 <Switch
-                                  aria-label="Down state"
+                                  aria-label="Enable down state ?"
                                   size="sm"
                                   checked={down.enabled}
                                   onChange={(event) => {
