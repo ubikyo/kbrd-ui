@@ -1,21 +1,10 @@
 import { api } from "./client";
-import type { GeometryData, GeometryPayload } from "../types/geometry";
+import type { GeometryData } from "../types/geometry";
 
 const GEOMETRY_URL = "/api/geometry";
 
-export const listGeometries = () => api<GeometryData[]>(GEOMETRY_URL);
-
-export const createGeometry = (payload: GeometryPayload) =>
-  api<GeometryData>(GEOMETRY_URL, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-
-export const updateGeometry = (id: number, payload: GeometryPayload) =>
-  api<GeometryData>(`${GEOMETRY_URL}/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-
-export const deleteGeometry = (id: number) =>
-  api<{ ok: boolean }>(`${GEOMETRY_URL}/${id}`, { method: "DELETE" });
+// The geometry picker is gone; this resolves whichever geometry KBRD-API
+// considers current — the active one, "default" by name, or the first
+// alphabetically — see `kbrd_api.api.geometry.Geometry.find_default`.
+export const getActiveGeometry = () =>
+  api<GeometryData>(`${GEOMETRY_URL}/active`);
