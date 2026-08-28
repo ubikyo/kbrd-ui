@@ -3,11 +3,23 @@ import {
   type CSSVariablesResolver,
   Menu,
   Modal,
+  NumberInput,
   Splitter,
+  Tabs,
 } from "@mantine/core";
 
 export const theme = createTheme({
   components: {
+    NumberInput: NumberInput.extend({
+      styles: {
+        control: { "--control-border": "none" },
+      },
+    }),
+    Tabs: Tabs.extend({
+      vars: () => ({
+        root: { "--tabs-color": "#FFFFFF" },
+      }),
+    }),
     Modal: Modal.extend({
       styles: {
         content: {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
+import { Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
 import { MdStraighten } from "react-icons/md";
 import { PropertyRow } from "@kbrd/plugins/web";
 
@@ -12,12 +12,30 @@ type Props = {
 
 export default function SettingsModal({ opened, onClose }: Props) {
   const [tab, setTab] = useState<string | null>("geometry");
+  const [savedUnit, setSavedUnit] = useState<number>(DEFAULT_UNIT_MM);
   const [unit, setUnit] = useState<number>(DEFAULT_UNIT_MM);
+
+  // Reset the draft to the last saved value whenever the modal opens back up.
+  const [wasOpened, setWasOpened] = useState(opened);
+  if (opened !== wasOpened) {
+    setWasOpened(opened);
+    if (opened) setUnit(savedUnit);
+  }
+
+  function cancel() {
+    setUnit(savedUnit);
+    onClose();
+  }
+
+  function save() {
+    setSavedUnit(unit);
+    onClose();
+  }
 
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={cancel}
       title={<Text fw={700}>Settings</Text>}
       centered
       size="lg"
@@ -49,7 +67,13 @@ export default function SettingsModal({ opened, onClose }: Props) {
           </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="geometry" p="lg" style={{ overflowY: "auto" }}>
+        <Tabs.Panel
+          value="geometry"
+          px="lg"
+          pb="lg"
+          pt={0}
+          style={{ overflowY: "auto" }}
+        >
           <Stack gap="md">
             <Title order={4}>Geometry</Title>
             <PropertyRow label="Unit (1U)">
@@ -71,6 +95,18 @@ export default function SettingsModal({ opened, onClose }: Props) {
           </Stack>
         </Tabs.Panel>
       </Tabs>
+
+      <Group
+        justify="flex-end"
+        p="md"
+        style={{
+          flexShrink: 0,
+          borderTop: "1px solid var(--kbrd-border-color)",
+        }}
+      >
+        <Button color="gray" onClick={cancel}>Cancel</Button>
+        <Button onClick={save}>Save</Button>
+      </Group>
     </Modal>
   );
 }
