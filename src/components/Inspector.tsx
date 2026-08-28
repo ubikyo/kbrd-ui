@@ -948,32 +948,24 @@ export default function Inspector({
                                 targetType={targetType}
                                 onChange={(config) => patchDown({ config })}
                               />
-                              <Box
-                                pt="xs"
-                                style={{
-                                  borderTop:
-                                    "2px solid var(--kbrd-border-color)",
-                                }}
-                              >
-                                <PropertyRow label="Delay">
-                                  <NumberInput
-                                    w="100%"
-                                    aria-label="Delay"
-                                    suffix=" ms"
-                                    min={0}
-                                    step={100}
-                                    allowNegative={false}
-                                    value={down.delay}
-                                    success
-                                    onChange={(value) =>
-                                      patchDown({
-                                        delay:
-                                          typeof value === "number" ? value : 0,
-                                      })
-                                    }
-                                  />
-                                </PropertyRow>
-                              </Box>
+                              <PropertyRow label="Delay">
+                                <NumberInput
+                                  w="100%"
+                                  aria-label="Delay"
+                                  suffix=" ms"
+                                  min={0}
+                                  step={100}
+                                  allowNegative={false}
+                                  value={down.delay}
+                                  success
+                                  onChange={(value) =>
+                                    patchDown({
+                                      delay:
+                                        typeof value === "number" ? value : 0,
+                                    })
+                                  }
+                                />
+                              </PropertyRow>
                             </Stack>
                           </Tabs.Panel>
                         )}
