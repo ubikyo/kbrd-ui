@@ -25,7 +25,9 @@ export function rowColOf(index: number, itemsX: number) {
 }
 
 /** Top-left corner of a grid slot, on the uniform 1U-pitch grid every
- * cell's origin sits on regardless of its own size. */
+ * cell's origin sits on regardless of its own size. Only `y` still matches
+ * how `<Factory>` actually renders a row — `x` assumes every earlier column
+ * is exactly 1U wide, which `layoutRow` no longer does. */
 export function cellOriginMm(
   index: number,
   itemsX: number,
@@ -76,4 +78,74 @@ export function occupiedCells(
     }
   }
   return occupiedBy;
+}
+
+/** One rendered slot in a row laid out by `layoutRow`. */
+export type RowSlot = {
+  index: number;
+  // True for the row's trailing, unassigned remainder — not a real placed
+  // cell yet, just wherever a new one would land next.
+  isFiller: boolean;
+  x: number;
+  width: number;
+};
+
+/**
+ * Lays a row out left to right as an actual flow, not a grid of fixed 1U
+ * slots: each cell sits right after the previous one's edge plus `gapMm`,
+ * so a 1.25U key really is 1.25U wide and everything after it shifts over
+ * — it doesn't overflow into a neighbour's slot or leave one squeezed.
+ *
+ * Only cells that already exist in `cells` are placed, in column order;
+ * the loop stops at the first column nothing has been dropped on yet, so
+ * `1U, 1U, …` doesn't need every one of `itemsX` columns filled in one by
+ * one. Whatever Unit budget is left over (`itemsX` minus the sum of
+ * `colspan * unit` for every placed cell) becomes a single trailing filler
+ * slot sized to that remainder, ready for the next drop — this is what
+ * keeps every row at the same overall Unit budget regardless of how it's
+ * actually split up (e.g. 9U as nine 1U keys, or as 2.75U + six 1U + a
+ * 0.25U remainder).
+ */
+export function layoutRow(
+  row: number,
+  itemsX: number,
+  cells: Record<number, GridCell>,
+  occupied: ReadonlyMap<number, number>,
+  unitMm: number,
+  gapMm: number,
+): RowSlot[] {
+  const slots: RowSlot[] = [];
+  let usedUnits = 0;
+  let x = 0;
+  let nextCol = 0;
+
+  for (let col = 0; col < itemsX; col++) {
+    const index = row * itemsX + col;
+    if (occupied.has(index)) {
+      nextCol = col + 1;
+      continue;
+    }
+    const cell = cells[index];
+    if (!cell) break; // first not-yet-placed column: the rest is the remainder
+
+    const { width } = cellSizeMm(cell, unitMm, gapMm);
+    if (slots.length > 0) x += gapMm;
+    slots.push({ index, isFiller: false, x, width });
+    x += width;
+    usedUnits += cell.colspan * cell.unit;
+    nextCol = col + 1;
+  }
+
+  const remaining = itemsX - usedUnits;
+  if (remaining > 1e-9 && nextCol < itemsX) {
+    if (slots.length > 0) x += gapMm;
+    slots.push({
+      index: row * itemsX + nextCol,
+      isFiller: true,
+      x,
+      width: remaining * unitMm,
+    });
+  }
+
+  return slots;
 }

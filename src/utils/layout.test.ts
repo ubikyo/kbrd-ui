@@ -3,12 +3,18 @@ import {
   cellOriginMm,
   cellSizeMm,
   defaultLayout,
+  layoutRow,
   maxItems,
   occupiedCells,
   pitchMm,
   rowColOf,
 } from "./layout";
-import { defaultGridCell, type LayoutData } from "../types/layout";
+import { defaultGridCell, type GridCell, type LayoutData } from "../types/layout";
+
+const cellAt = (patch: Partial<GridCell> = {}) => ({
+  ...defaultGridCell(),
+  ...patch,
+});
 
 const layout = (id: number, name: string) => ({ id, name }) as LayoutData;
 
@@ -88,4 +94,70 @@ test("occupiedCells ignores spans that would run off the grid", () => {
   const cells = { 4: { ...defaultGridCell(), colspan: 3 } };
   const occupied = occupiedCells(cells, 5, 1);
   expect(occupied.size).toBe(0);
+});
+
+test("layoutRow fills a full row of plain 1U keys with no remainder", () => {
+  const cells: Record<number, GridCell> = {};
+  for (let i = 0; i < 9; i++) cells[i] = cellAt();
+  const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
+  expect(slots).toHaveLength(9);
+  expect(slots.every((slot) => !slot.isFiller && slot.width === 1)).toBe(true);
+  expect(slots[8].x).toBe(8);
+});
+
+test("layoutRow: 1.25U, 1.25U, six 1U leaves a 0.5U remainder", () => {
+  const cells: Record<number, GridCell> = {
+    0: cellAt({ unit: 1.25 }),
+    1: cellAt({ unit: 1.25 }),
+    2: cellAt(),
+    3: cellAt(),
+    4: cellAt(),
+    5: cellAt(),
+    6: cellAt(),
+    7: cellAt(),
+  };
+  const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
+  expect(slots).toHaveLength(9);
+  const filler = slots[8];
+  expect(filler.isFiller).toBe(true);
+  expect(filler.index).toBe(8);
+  expect(filler.width).toBeCloseTo(0.5);
+});
+
+test("layoutRow: 2.75U plus six 1U leaves a 0.25U remainder", () => {
+  const cells: Record<number, GridCell> = {
+    0: cellAt({ unit: 2.75 }),
+    1: cellAt(),
+    2: cellAt(),
+    3: cellAt(),
+    4: cellAt(),
+    5: cellAt(),
+    6: cellAt(),
+  };
+  const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
+  const filler = slots[slots.length - 1];
+  expect(filler.isFiller).toBe(true);
+  expect(filler.width).toBeCloseTo(0.25);
+});
+
+test("layoutRow renders an untouched row as one big filler", () => {
+  const slots = layoutRow(0, 9, {}, new Map(), 1, 0);
+  expect(slots).toEqual([{ index: 0, isFiller: true, x: 0, width: 9 }]);
+});
+
+test("layoutRow starts the next key right after the previous one's real edge", () => {
+  const cells: Record<number, GridCell> = {
+    0: cellAt({ unit: 1.25 }),
+    1: cellAt(),
+  };
+  const slots = layoutRow(0, 9, cells, new Map(), 10, 3);
+  expect(slots[0]).toMatchObject({ x: 0, width: 12.5 });
+  expect(slots[1]).toMatchObject({ x: 12.5 + 3, width: 10 });
+});
+
+test("layoutRow skips columns a rowspan from a previous row already covers", () => {
+  const occupied = new Map([[9, 0]]); // row 1, col 0 covered by row 0's cell
+  const cells: Record<number, GridCell> = { 10: cellAt() }; // row 1, col 1
+  const slots = layoutRow(1, 9, cells, occupied, 1, 0);
+  expect(slots[0]).toMatchObject({ index: 10, x: 0 });
 });

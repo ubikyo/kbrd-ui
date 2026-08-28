@@ -16,6 +16,7 @@ type Props = {
   // Invoke/Display plugins attached in Mapping mode (only meaningful once
   // `typeId` is kbrd.layout-key).
   pluginIds?: string[];
+  isSelected?: boolean;
   isDropTarget?: boolean;
   onClick?: (event: MouseEvent<SVGGElement>) => void;
   onDragOver?: (event: DragEvent<SVGGElement>) => void;
@@ -32,6 +33,7 @@ export default function LayoutItem({
   height,
   typeId = null,
   pluginIds = [],
+  isSelected = false,
   isDropTarget = false,
   onClick,
   onDragOver,
@@ -41,7 +43,7 @@ export default function LayoutItem({
   const type = typeId ? pluginById(typeId) : null;
   const stroke = isDropTarget
     ? "var(--kbrd-border-alt)"
-    : type
+    : isSelected
       ? SELECTED_STROKE
       : "var(--kbrd-border-color)";
   const labels = type
@@ -64,7 +66,7 @@ export default function LayoutItem({
         fill="transparent"
         stroke={stroke}
         strokeWidth={1}
-        strokeDasharray={type ? undefined : "4 3"}
+        strokeDasharray={isSelected ? undefined : "4 3"}
         vectorEffect="non-scaling-stroke"
       />
       {labels.length > 0 && (
