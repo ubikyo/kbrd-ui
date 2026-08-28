@@ -21,7 +21,7 @@ import { useCallback, useRef, useState } from "react";
 import kbrdLogo from "./assets/media/KBRD.svg";
 
 import Layout from "./components/Layout";
-import type { LayoutData } from "./types/layout";
+import type { LayoutData, LayoutSettings } from "./types/layout";
 
 import Factory from "./components/Factory";
 import Inspector from "./components/Inspector";
@@ -34,8 +34,21 @@ import type {
   WorkspaceData,
 } from "./types/workspace";
 
+// KBRD-DEV's reference panel (see kbrd_dev/config.py's calibration comment),
+// used only to seed Settings › Geometry before the user confirms the real
+// numbers — see `LayoutSettings`.
+const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
+  unitMm: 19.05,
+  physicalWidthMm: 216,
+  physicalHeightMm: 135,
+  gapMm: 3,
+};
+
 export default function App() {
   const [layout, setLayout] = useState<LayoutData | null>(null);
+  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>(
+    DEFAULT_LAYOUT_SETTINGS,
+  );
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -185,6 +198,8 @@ export default function App() {
       <SettingsModal
         opened={settingsOpened}
         onClose={() => setSettingsOpened(false)}
+        settings={layoutSettings}
+        onSave={setLayoutSettings}
       />
 
       <AppShell.Main
@@ -207,7 +222,7 @@ export default function App() {
             <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
               {/* TODO(preview-rebuild): Factory temporarily stands in for
                   Preview while that component is redesigned from scratch. */}
-              <Factory />
+              <Factory {...layoutSettings} />
 
               <SegmentedControl
                 value={mode}

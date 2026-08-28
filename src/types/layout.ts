@@ -54,3 +54,12 @@ export type LayoutPayload = Pick<
   LayoutData,
   "name" | "description" | "author" | "unit" | "geometry"
 >;
+
+/** Physical grid settings edited in Settings › Geometry, shared between
+ * `SettingsModal` (the editor) and `Factory` (the preview grid). */
+export type LayoutSettings = {
+  unitMm: number;
+  physicalWidthMm: number;
+  physicalHeightMm: number;
+  gapMm: number;
+};

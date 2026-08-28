@@ -3,14 +3,11 @@ import { Box, Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from
 import { MdStraighten } from "react-icons/md";
 
 import { getDevice, type DeviceStatus } from "../api/device";
+import type { LayoutSettings } from "../types/layout";
+import { maxItems, pitchMm } from "../utils/layout";
 
-const DEFAULT_UNIT_MM = 19.05;
 const DEVICE_POLL_INTERVAL_MS = 5000;
 const MM_PER_INCH = 25.4;
-// KBRD-DEV's reference panel (see kbrd_dev/config.py's calibration comment),
-// used only to seed the field before the user confirms the real numbers.
-const DEFAULT_PHYSICAL_WIDTH_MM = 216;
-const DEFAULT_PHYSICAL_HEIGHT_MM = 135;
 
 type FieldRowProps = {
   label: string;
@@ -47,40 +44,25 @@ function DisplayRow({ label, value }: { label: string; value: string }) {
 type Props = {
   opened: boolean;
   onClose: () => void;
+  settings: LayoutSettings;
+  onSave: (settings: LayoutSettings) => void;
 };
 
-export default function SettingsModal({ opened, onClose }: Props) {
+export default function SettingsModal({
+  opened,
+  onClose,
+  settings,
+  onSave,
+}: Props) {
   const [tab, setTab] = useState<string | null>("geometry");
-  const [savedUnit, setSavedUnit] = useState<number>(DEFAULT_UNIT_MM);
-  const [unit, setUnit] = useState<number>(DEFAULT_UNIT_MM);
-  // EDID doesn't report a physical size on every panel (KBRD-DEV's DSI
-  // touchscreen included — `modetest -c` shows it, but the DRM connector
-  // never surfaces it through the sysfs `edid` blob kbrd_dev.edid reads).
-  // Since DPI and the max key count both depend on it, these two are a
-  // mandatory manual fallback rather than something read from the device.
-  const [savedPhysicalWidthMm, setSavedPhysicalWidthMm] = useState<number>(
-    DEFAULT_PHYSICAL_WIDTH_MM,
-  );
-  const [physicalWidthMm, setPhysicalWidthMm] = useState<number>(
-    DEFAULT_PHYSICAL_WIDTH_MM,
-  );
-  const [savedPhysicalHeightMm, setSavedPhysicalHeightMm] = useState<number>(
-    DEFAULT_PHYSICAL_HEIGHT_MM,
-  );
-  const [physicalHeightMm, setPhysicalHeightMm] = useState<number>(
-    DEFAULT_PHYSICAL_HEIGHT_MM,
-  );
+  const [draft, setDraft] = useState<LayoutSettings>(settings);
   const [device, setDevice] = useState<DeviceStatus>({ connected: false });
 
   // Reset the draft to the last saved values whenever the modal opens back up.
   const [wasOpened, setWasOpened] = useState(opened);
   if (opened !== wasOpened) {
     setWasOpened(opened);
-    if (opened) {
-      setUnit(savedUnit);
-      setPhysicalWidthMm(savedPhysicalWidthMm);
-      setPhysicalHeightMm(savedPhysicalHeightMm);
-    }
+    if (opened) setDraft(settings);
   }
 
   useEffect(() => {
@@ -102,35 +84,41 @@ export default function SettingsModal({ opened, onClose }: Props) {
     };
   }, [opened]);
 
+  function patch(data: Partial<LayoutSettings>) {
+    setDraft((current) => ({ ...current, ...data }));
+  }
+
   function cancel() {
-    setUnit(savedUnit);
-    setPhysicalWidthMm(savedPhysicalWidthMm);
-    setPhysicalHeightMm(savedPhysicalHeightMm);
+    setDraft(settings);
     onClose();
   }
 
   function save() {
-    setSavedUnit(unit);
-    setSavedPhysicalWidthMm(physicalWidthMm);
-    setSavedPhysicalHeightMm(physicalHeightMm);
+    onSave(draft);
     onClose();
   }
 
-  const hasValidPhysicalSize = physicalWidthMm > 0 && physicalHeightMm > 0;
+  const hasValidPhysicalSize =
+    draft.physicalWidthMm > 0 && draft.physicalHeightMm > 0;
 
   const resolutionValue = device.connected
     ? `${device.width} × ${device.height} px`
     : "—";
   const dpiValue =
     device.connected && hasValidPhysicalSize
-      ? `${Math.round(device.width / (physicalWidthMm / MM_PER_INCH))} × ${Math.round(
-          device.height / (physicalHeightMm / MM_PER_INCH),
+      ? `${Math.round(device.width / (draft.physicalWidthMm / MM_PER_INCH))} × ${Math.round(
+          device.height / (draft.physicalHeightMm / MM_PER_INCH),
         )} dpi`
       : "—";
-  const maxKeysValue =
-    hasValidPhysicalSize && unit > 0
-      ? `${Math.floor(physicalWidthMm / unit)} × ${Math.floor(physicalHeightMm / unit)}`
-      : "—";
+  const pitch = pitchMm(draft.unitMm, draft.gapMm);
+  const maxItemsValue = hasValidPhysicalSize
+    ? `${maxItems(draft.physicalWidthMm, draft.unitMm, draft.gapMm)} × ${maxItems(
+        draft.physicalHeightMm,
+        draft.unitMm,
+        draft.gapMm,
+      )}`
+    : "—";
+  const pitchValue = pitch > 0 ? `${pitch.toFixed(2)} mm` : "—";
 
   return (
     <Modal
@@ -185,10 +173,10 @@ export default function SettingsModal({ opened, onClose }: Props) {
                   step={0.05}
                   decimalScale={2}
                   fixedDecimalScale
-                  value={unit}
+                  value={draft.unitMm}
                   success
                   onChange={(value) =>
-                    setUnit(typeof value === "number" ? value : DEFAULT_UNIT_MM)
+                    patch({ unitMm: typeof value === "number" ? value : 0 })
                   }
                 />
               </FieldRow>
@@ -200,11 +188,13 @@ export default function SettingsModal({ opened, onClose }: Props) {
                   min={1}
                   step={1}
                   required
-                  value={physicalWidthMm}
-                  error={physicalWidthMm > 0 ? undefined : "Required"}
-                  success={physicalWidthMm > 0}
+                  value={draft.physicalWidthMm}
+                  error={draft.physicalWidthMm > 0 ? undefined : "Required"}
+                  success={draft.physicalWidthMm > 0}
                   onChange={(value) =>
-                    setPhysicalWidthMm(typeof value === "number" ? value : 0)
+                    patch({
+                      physicalWidthMm: typeof value === "number" ? value : 0,
+                    })
                   }
                 />
               </FieldRow>
@@ -216,11 +206,28 @@ export default function SettingsModal({ opened, onClose }: Props) {
                   min={1}
                   step={1}
                   required
-                  value={physicalHeightMm}
-                  error={physicalHeightMm > 0 ? undefined : "Required"}
-                  success={physicalHeightMm > 0}
+                  value={draft.physicalHeightMm}
+                  error={draft.physicalHeightMm > 0 ? undefined : "Required"}
+                  success={draft.physicalHeightMm > 0}
                   onChange={(value) =>
-                    setPhysicalHeightMm(typeof value === "number" ? value : 0)
+                    patch({
+                      physicalHeightMm: typeof value === "number" ? value : 0,
+                    })
+                  }
+                />
+              </FieldRow>
+              <FieldRow label="Gap">
+                <NumberInput
+                  w="100%"
+                  aria-label="Gap"
+                  suffix=" mm"
+                  min={0}
+                  step={0.5}
+                  decimalScale={2}
+                  value={draft.gapMm}
+                  success
+                  onChange={(value) =>
+                    patch({ gapMm: typeof value === "number" ? value : 0 })
                   }
                 />
               </FieldRow>
@@ -228,7 +235,8 @@ export default function SettingsModal({ opened, onClose }: Props) {
               <Title order={4} mt="md">Display</Title>
               <DisplayRow label="Resolution (px)" value={resolutionValue} />
               <DisplayRow label="DPI (x / y)" value={dpiValue} />
-              <DisplayRow label="Max keys (W × H)" value={maxKeysValue} />
+              <DisplayRow label="Max items" value={maxItemsValue} />
+              <DisplayRow label="Pitch" value={pitchValue} />
             </Stack>
           </Tabs.Panel>
         </Tabs>
