@@ -24,6 +24,13 @@ export function rowColOf(index: number, itemsX: number) {
   return { row: Math.floor(index / itemsX), col: index % itemsX };
 }
 
+/** Reference footprint of `items` 1U slots laid out with `gapMm` between
+ * them — the same total width/height `maxItems` fits within `physicalMm`.
+ * The fixed target every row (or the whole grid) is centered/closed to. */
+export function gridSizeMm(items: number, unitMm: number, gapMm: number) {
+  return items > 0 ? items * unitMm + (items - 1) * gapMm : 0;
+}
+
 /** Top-left corner of a grid slot, on the uniform 1U-pitch grid every
  * cell's origin sits on regardless of its own size. Only `y` still matches
  * how `<Factory>` actually renders a row — `x` assumes every earlier column
@@ -135,7 +142,7 @@ export function layoutRow(
   }
 
   if (nextCol < itemsX) {
-    const reference = itemsX * unitMm + (itemsX - 1) * gapMm;
+    const reference = gridSizeMm(itemsX, unitMm, gapMm);
     const leadGap = slots.length > 0 ? gapMm : 0;
     const fillerWidth = reference - x - leadGap;
     if (fillerWidth > 1e-9) {

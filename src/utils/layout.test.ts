@@ -3,6 +3,7 @@ import {
   cellOriginMm,
   cellSizeMm,
   defaultLayout,
+  gridSizeMm,
   layoutRow,
   maxItems,
   occupiedCells,
@@ -47,6 +48,12 @@ test("maxItems fits as many items as the gap allows", () => {
 test("maxItems is zero when there is nothing to fit", () => {
   expect(maxItems(0, 10, 2)).toBe(0);
   expect(maxItems(100, 0, 0)).toBe(0);
+});
+
+test("gridSizeMm is the footprint maxItems fits within physicalMm", () => {
+  const itemsX = maxItems(216, 19.05, 3);
+  expect(gridSizeMm(itemsX, 19.05, 3)).toBe(itemsX * 19.05 + (itemsX - 1) * 3);
+  expect(gridSizeMm(0, 19.05, 3)).toBe(0);
 });
 
 test("rowColOf derives the row/column from a flat grid index", () => {

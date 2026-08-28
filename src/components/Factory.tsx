@@ -11,6 +11,7 @@ import {
 } from "../types/layout";
 import {
   cellSizeMm,
+  gridSizeMm,
   layoutRow,
   maxItems,
   occupiedCells,
@@ -147,6 +148,13 @@ export default function Factory({
   const occupied =
     itemsX > 0 && itemsY > 0 ? occupiedCells(cells, itemsX, itemsY) : null;
   const rowPitch = pitchMm(unitMm, gapMm);
+  // The grid's own footprint is often slightly smaller than the physical
+  // display (maxItems floors down) — center it in the leftover space
+  // rather than pinning it to the top-left corner.
+  const gridOffsetX =
+    (physicalWidthMm - gridSizeMm(itemsX, unitMm, gapMm)) / 2;
+  const gridOffsetY =
+    (physicalHeightMm - gridSizeMm(itemsY, unitMm, gapMm)) / 2;
 
   function handleDragOver(index: number, event: DragEvent<SVGGElement>) {
     if (!event.dataTransfer.types.includes(PLUGIN_DRAG_TYPE)) return;
@@ -235,38 +243,45 @@ export default function Factory({
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
           />
-          {occupied &&
-            Array.from({ length: itemsY }, (_, row) =>
-              layoutRow(row, itemsX, cells, occupied, unitMm, gapMm).map(
-                (slot) => {
-                  const cell = cells[slot.index];
-                  const height = cell
-                    ? cellSizeMm(cell, unitMm, gapMm).height
-                    : unitMm;
-                  return (
-                    <LayoutItem
-                      key={slot.index}
-                      x={slot.x}
-                      y={row * rowPitch}
-                      width={slot.width}
-                      height={height}
-                      typeId={cell?.typeId}
-                      pluginIds={cell?.pluginIds}
-                      isSelected={selectedCellIndex === slot.index}
-                      isDropTarget={dropTargetIndex === slot.index}
-                      onClick={() =>
-                        onSelectCell(
-                          selectedCellIndex === slot.index ? null : slot.index,
-                        )
-                      }
-                      onDragOver={(event) => handleDragOver(slot.index, event)}
-                      onDragLeave={() => handleDragLeave(slot.index)}
-                      onDrop={(event) => handleDrop(slot.index, event)}
-                    />
-                  );
-                },
-              ),
-            )}
+          {occupied && (
+            <g transform={`translate(${gridOffsetX}, ${gridOffsetY})`}>
+              {Array.from({ length: itemsY }, (_, row) =>
+                layoutRow(row, itemsX, cells, occupied, unitMm, gapMm).map(
+                  (slot) => {
+                    const cell = cells[slot.index];
+                    const height = cell
+                      ? cellSizeMm(cell, unitMm, gapMm).height
+                      : unitMm;
+                    return (
+                      <LayoutItem
+                        key={slot.index}
+                        x={slot.x}
+                        y={row * rowPitch}
+                        width={slot.width}
+                        height={height}
+                        typeId={cell?.typeId}
+                        pluginIds={cell?.pluginIds}
+                        isSelected={selectedCellIndex === slot.index}
+                        isDropTarget={dropTargetIndex === slot.index}
+                        onClick={() =>
+                          onSelectCell(
+                            selectedCellIndex === slot.index
+                              ? null
+                              : slot.index,
+                          )
+                        }
+                        onDragOver={(event) =>
+                          handleDragOver(slot.index, event)
+                        }
+                        onDragLeave={() => handleDragLeave(slot.index)}
+                        onDrop={(event) => handleDrop(slot.index, event)}
+                      />
+                    );
+                  },
+                ),
+              )}
+            </g>
+          )}
         </svg>
       )}
     </Box>
