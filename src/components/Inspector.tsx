@@ -950,7 +950,10 @@ export default function Inspector({
                               />
                               <Box
                                 pt="xs"
-                                style={{ borderTop: "2px solid white" }}
+                                style={{
+                                  borderTop:
+                                    "2px solid var(--kbrd-border-color)",
+                                }}
                               >
                                 <PropertyRow label="Delay">
                                   <NumberInput
