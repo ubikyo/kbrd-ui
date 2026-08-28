@@ -1,8 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
 import { MdStraighten } from "react-icons/md";
 
+import { getDevice, type DeviceStatus } from "../api/device";
+
 const DEFAULT_UNIT_MM = 19.05;
+const DEVICE_POLL_INTERVAL_MS = 5000;
+const MM_PER_INCH = 25.4;
+
+type FieldRowProps = {
+  label: string;
+  children: React.ReactNode;
+};
+
+/** Same 40/60 label/control split for every field in this modal. */
+function FieldRow({ label, children }: FieldRowProps) {
+  return (
+    <Box
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 4fr) minmax(0, 6fr)",
+        columnGap: "var(--mantine-spacing-md)",
+        alignItems: "center",
+      }}
+    >
+      <Text size="sm">{label}</Text>
+      {children}
+    </Box>
+  );
+}
+
+function DisplayRow({ label, value }: { label: string; value: string }) {
+  return (
+    <FieldRow label={label}>
+      <Text size="sm" c="dimmed">
+        {value}
+      </Text>
+    </FieldRow>
+  );
+}
 
 type Props = {
   opened: boolean;
@@ -13,6 +49,7 @@ export default function SettingsModal({ opened, onClose }: Props) {
   const [tab, setTab] = useState<string | null>("geometry");
   const [savedUnit, setSavedUnit] = useState<number>(DEFAULT_UNIT_MM);
   const [unit, setUnit] = useState<number>(DEFAULT_UNIT_MM);
+  const [device, setDevice] = useState<DeviceStatus>({ connected: false });
 
   // Reset the draft to the last saved value whenever the modal opens back up.
   const [wasOpened, setWasOpened] = useState(opened);
@@ -20,6 +57,25 @@ export default function SettingsModal({ opened, onClose }: Props) {
     setWasOpened(opened);
     if (opened) setUnit(savedUnit);
   }
+
+  useEffect(() => {
+    if (!opened) return;
+    let cancelled = false;
+    function poll() {
+      getDevice().then(
+        (status) => {
+          if (!cancelled) setDevice(status);
+        },
+        () => {},
+      );
+    }
+    poll();
+    const timer = window.setInterval(poll, DEVICE_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [opened]);
 
   function cancel() {
     setUnit(savedUnit);
@@ -30,6 +86,26 @@ export default function SettingsModal({ opened, onClose }: Props) {
     setSavedUnit(unit);
     onClose();
   }
+
+  const hasPhysicalSize =
+    device.connected && device.width_mm !== null && device.height_mm !== null;
+
+  const resolutionValue = device.connected
+    ? `${device.width} × ${device.height} px`
+    : "—";
+  const physicalSizeValue = hasPhysicalSize
+    ? `${device.width_mm} × ${device.height_mm} mm`
+    : "—";
+  const dpiValue =
+    hasPhysicalSize && device.connected
+      ? `${Math.round(device.width / (device.width_mm! / MM_PER_INCH))} × ${Math.round(
+          device.height / (device.height_mm! / MM_PER_INCH),
+        )} dpi`
+      : "—";
+  const maxKeysValue =
+    hasPhysicalSize && device.connected && unit > 0
+      ? `${Math.floor(device.width_mm! / unit)} × ${Math.floor(device.height_mm! / unit)}`
+      : "—";
 
   return (
     <Modal
@@ -75,15 +151,7 @@ export default function SettingsModal({ opened, onClose }: Props) {
           >
             <Stack gap="md">
               <Title order={4}>Geometry</Title>
-              <Box
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 4fr) minmax(0, 6fr)",
-                  columnGap: "var(--mantine-spacing-md)",
-                  alignItems: "center",
-                }}
-              >
-                <Text size="sm">Unit (1U)</Text>
+              <FieldRow label="Unit (1U)">
                 <NumberInput
                   w="100%"
                   aria-label="Unit (1U)"
@@ -98,7 +166,13 @@ export default function SettingsModal({ opened, onClose }: Props) {
                     setUnit(typeof value === "number" ? value : DEFAULT_UNIT_MM)
                   }
                 />
-              </Box>
+              </FieldRow>
+
+              <Title order={4} mt="md">Display</Title>
+              <DisplayRow label="Resolution (px)" value={resolutionValue} />
+              <DisplayRow label="Physical size (mm)" value={physicalSizeValue} />
+              <DisplayRow label="DPI (x / y)" value={dpiValue} />
+              <DisplayRow label="Max keys (W × H)" value={maxKeysValue} />
             </Stack>
           </Tabs.Panel>
         </Tabs>
