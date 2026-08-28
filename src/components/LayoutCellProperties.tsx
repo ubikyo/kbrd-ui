@@ -8,6 +8,9 @@ type Props = {
   cell: GridCell;
   maxColspan: number;
   maxRowspan: number;
+  // True when this is the slot a row's Unit budget runs out on — its width
+  // is always whatever's left over, not something it can set itself.
+  isRemainder: boolean;
   onChange: (patch: Partial<GridCell>) => void;
 };
 
@@ -20,6 +23,7 @@ export default function LayoutCellProperties({
   cell,
   maxColspan,
   maxRowspan,
+  isRemainder,
   onChange,
 }: Props) {
   const type = cell.typeId ? pluginById(cell.typeId) : null;
@@ -27,18 +31,26 @@ export default function LayoutCellProperties({
 
   return (
     <Stack gap="md">
-      <PropertyRow label="Unit">
+      <PropertyRow
+        label="Unit"
+        description={
+          isRemainder
+            ? "Fills whatever's left of the row — not set on this cell."
+            : undefined
+        }
+      >
         <Select
           w="100%"
           aria-label="Unit"
           size="xs"
           allowDeselect={false}
+          disabled={isRemainder}
           data={UNIT_MULTIPLIERS.map((value) => ({
             value: String(value),
             label: `${value}U`,
           }))}
           value={String(cell.unit)}
-          success
+          success={!isRemainder}
           onChange={(value) => {
             const parsed = UNIT_MULTIPLIERS.find(
               (candidate) => String(candidate) === value,
@@ -56,9 +68,9 @@ export default function LayoutCellProperties({
           max={maxColspan}
           allowDecimal={false}
           clampBehavior="strict"
-          disabled={maxColspan <= 1}
+          disabled={isRemainder || maxColspan <= 1}
           value={cell.colspan}
-          success={maxColspan > 1}
+          success={!isRemainder && maxColspan > 1}
           onChange={(value) =>
             onChange({ colspan: typeof value === "number" ? value : 1 })
           }

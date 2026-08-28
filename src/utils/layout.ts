@@ -1,4 +1,4 @@
-import type { GridCell, LayoutData } from "../types/layout";
+import { defaultGridCell, type GridCell, type LayoutData } from "../types/layout";
 
 export function defaultLayout(items: LayoutData[]) {
   return items.find((item) => item.name.toLowerCase() === "default") ?? items[0];
@@ -90,9 +90,10 @@ export function occupiedCells(
 /** One rendered slot in a row laid out by `layoutRow`. */
 export type RowSlot = {
   index: number;
-  // True for the row's trailing, unassigned remainder — not a real placed
-  // cell yet, just wherever a new one would land next.
-  isFiller: boolean;
+  // True when this slot's width isn't its own Unit: it's forced to
+  // whatever's left of the row's Unit budget once every earlier slot in
+  // the row is accounted for, and can't be set independently.
+  isRemainder: boolean;
   x: number;
   width: number;
 };
@@ -103,15 +104,16 @@ export type RowSlot = {
  * so a 1.25U key really is 1.25U wide and everything after it shifts over
  * — it doesn't overflow into a neighbour's slot or leave one squeezed.
  *
- * Only cells that already exist in `cells` are placed, in column order;
- * the loop stops at the first column nothing has been dropped on yet, so
- * `1U, 1U, …` doesn't need every one of `itemsX` columns filled in one by
- * one. Whatever's left of the row's reference width — `itemsX` 1U cells
- * with `gapMm` between them, the same total footprint `maxItems` fits in
- * `physicalMm` — becomes a single trailing filler slot, ready for the next
- * drop. Subtracting physical widths (not summing Unit counts) is what
- * keeps this correct once cells are merged: two 1U cells and one 2U cell
- * don't reserve the same footprint, since merging removes an internal gap.
+ * Every column defaults to a plain 1U cell until something's actually
+ * dropped on it, so an untouched row still renders as `itemsX` individual
+ * slots rather than one big blank rectangle. Walking left to right, the
+ * first column whose own Unit would meet or exceed what's left of the
+ * row's budget becomes that row's remainder: its width is clamped to
+ * exactly what's left (not its configured Unit) and no further columns
+ * are laid out — there's nothing left to give them. This is what makes
+ * `1.25U, 1.25U, six 1U` end in a 0.5U remainder at column 8, while
+ * `2.75U, six 1U` ends in a 0.25U remainder at column 7 (one column
+ * short, since the wider first key ate into the budget faster).
  */
 export function layoutRow(
   row: number,
@@ -123,36 +125,26 @@ export function layoutRow(
 ): RowSlot[] {
   const slots: RowSlot[] = [];
   let x = 0;
-  let nextCol = 0;
+  let usedUnits = 0;
 
   for (let col = 0; col < itemsX; col++) {
     const index = row * itemsX + col;
-    if (occupied.has(index)) {
-      nextCol = col + 1;
-      continue;
-    }
-    const cell = cells[index];
-    if (!cell) break; // first not-yet-placed column: the rest is the remainder
+    if (occupied.has(index)) continue;
 
-    const { width } = cellSizeMm(cell, unitMm, gapMm);
+    const cell = cells[index] ?? defaultGridCell();
+    const footprint = cell.colspan * cell.unit;
+    const remainingUnits = itemsX - usedUnits;
+    const isRemainder = footprint >= remainingUnits - 1e-9;
+    const width = isRemainder
+      ? remainingUnits * unitMm
+      : cellSizeMm(cell, unitMm, gapMm).width;
+
     if (slots.length > 0) x += gapMm;
-    slots.push({ index, isFiller: false, x, width });
+    slots.push({ index, isRemainder, x, width });
     x += width;
-    nextCol = col + 1;
-  }
+    usedUnits += isRemainder ? remainingUnits : footprint;
 
-  if (nextCol < itemsX) {
-    const reference = gridSizeMm(itemsX, unitMm, gapMm);
-    const leadGap = slots.length > 0 ? gapMm : 0;
-    const fillerWidth = reference - x - leadGap;
-    if (fillerWidth > 1e-9) {
-      slots.push({
-        index: row * itemsX + nextCol,
-        isFiller: true,
-        x: x + leadGap,
-        width: fillerWidth,
-      });
-    }
+    if (isRemainder) break; // nothing left for any column after this one
   }
 
   return slots;

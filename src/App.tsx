@@ -28,7 +28,7 @@ import Inspector from "./components/Inspector";
 import SettingsModal from "./components/SettingsModal";
 import Workspace from "./components/Workspace";
 import { clearKey } from "./api/workspaces";
-import { maxItems, rowColOf } from "./utils/layout";
+import { layoutRow, maxItems, occupiedCells, rowColOf } from "./utils/layout";
 import type {
   KeyPlugin,
   KeyProperty,
@@ -168,6 +168,27 @@ export default function App() {
   );
   const selectedCell =
     selectedCellIndex !== null ? cells[selectedCellIndex] : undefined;
+  // Whichever slot a row's Unit budget runs out on can't have its own
+  // Unit/Colspan — its width is always just whatever's left. See `layoutRow`.
+  const isSelectedCellRemainder = (() => {
+    if (selectedCellIndex === null || gridItemsX <= 0 || gridItemsY <= 0) {
+      return false;
+    }
+    const occupied = occupiedCells(cells, gridItemsX, gridItemsY);
+    const { row } = rowColOf(selectedCellIndex, gridItemsX);
+    const slots = layoutRow(
+      row,
+      gridItemsX,
+      cells,
+      occupied,
+      layoutSettings.unitMm,
+      layoutSettings.gapMm,
+    );
+    return (
+      slots.find((slot) => slot.index === selectedCellIndex)?.isRemainder ??
+      false
+    );
+  })();
   const layoutSelection =
     selectedCellIndex !== null && selectedCell
       ? {
@@ -177,6 +198,7 @@ export default function App() {
             gridItemsX - rowColOf(selectedCellIndex, gridItemsX).col,
           maxRowspan:
             gridItemsY - rowColOf(selectedCellIndex, gridItemsX).row,
+          isRemainder: isSelectedCellRemainder,
         }
       : null;
 

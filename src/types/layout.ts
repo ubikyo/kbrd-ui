@@ -66,7 +66,7 @@ export type LayoutSettings = {
 
 /** Standard keycap widths, expressed as a multiple of the board's base Unit. */
 export const UNIT_MULTIPLIERS = [
-  1, 1.25, 1.5, 1.75, 2.25, 2.75, 6.25, 7,
+  0.75, 1, 1.25, 1.5, 1.75, 2.25, 2.75, 6.25, 7,
 ] as const;
 export type UnitMultiplier = (typeof UNIT_MULTIPLIERS)[number];
 

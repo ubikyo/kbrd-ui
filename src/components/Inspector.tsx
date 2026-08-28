@@ -84,6 +84,7 @@ type Props = {
     cell: GridCell;
     maxColspan: number;
     maxRowspan: number;
+    isRemainder: boolean;
   } | null;
   onLayoutCellChange: (index: number, patch: Partial<GridCell>) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
@@ -509,6 +510,7 @@ export default function Inspector({
                 cell={layoutSelection.cell}
                 maxColspan={layoutSelection.maxColspan}
                 maxRowspan={layoutSelection.maxRowspan}
+                isRemainder={layoutSelection.isRemainder}
                 onChange={(patch) =>
                   onLayoutCellChange(layoutSelection.index, patch)
                 }

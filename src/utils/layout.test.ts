@@ -103,64 +103,49 @@ test("occupiedCells ignores spans that would run off the grid", () => {
   expect(occupied.size).toBe(0);
 });
 
-test("layoutRow fills a full row of plain 1U keys with no remainder", () => {
-  const cells: Record<number, GridCell> = {};
-  for (let i = 0; i < 9; i++) cells[i] = cellAt();
-  const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
+test("layoutRow defaults an untouched row to itemsX individual 1U slots", () => {
+  const slots = layoutRow(0, 9, {}, new Map(), 1, 0);
   expect(slots).toHaveLength(9);
-  expect(slots.every((slot) => !slot.isFiller && slot.width === 1)).toBe(true);
+  expect(slots.every((slot) => slot.width === 1)).toBe(true);
+  expect(slots[8].isRemainder).toBe(true);
+  expect(slots.slice(0, 8).every((slot) => !slot.isRemainder)).toBe(true);
   expect(slots[8].x).toBe(8);
 });
 
-test("layoutRow: 1.25U, 1.25U, six 1U leaves a 0.5U remainder", () => {
+test("layoutRow's untouched-row slots reach the display's own edge, gaps included", () => {
+  // Regression: an empty row used to render as one filler sized
+  // `itemsX * unitMm` alone, ignoring the (itemsX - 1) gaps those itemsX
+  // slots have between them — visibly too narrow, stopping well short of
+  // the display's edge.
+  const itemsX = maxItems(216, 19.05, 3); // 9
+  const slots = layoutRow(0, itemsX, {}, new Map(), 19.05, 3);
+  const last = slots[slots.length - 1];
+  expect(last.x + last.width).toBeCloseTo(gridSizeMm(itemsX, 19.05, 3));
+});
+
+test("layoutRow: 1.25U, 1.25U, then plain 1U defaults leave a 0.5U remainder", () => {
   const cells: Record<number, GridCell> = {
     0: cellAt({ unit: 1.25 }),
     1: cellAt({ unit: 1.25 }),
-    2: cellAt(),
-    3: cellAt(),
-    4: cellAt(),
-    5: cellAt(),
-    6: cellAt(),
-    7: cellAt(),
   };
   const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
   expect(slots).toHaveLength(9);
-  const filler = slots[8];
-  expect(filler.isFiller).toBe(true);
-  expect(filler.index).toBe(8);
-  expect(filler.width).toBeCloseTo(0.5);
+  const remainder = slots[8];
+  expect(remainder.isRemainder).toBe(true);
+  expect(remainder.index).toBe(8);
+  expect(remainder.width).toBeCloseTo(0.5);
 });
 
-test("layoutRow: 2.75U plus six 1U leaves a 0.25U remainder", () => {
-  const cells: Record<number, GridCell> = {
-    0: cellAt({ unit: 2.75 }),
-    1: cellAt(),
-    2: cellAt(),
-    3: cellAt(),
-    4: cellAt(),
-    5: cellAt(),
-    6: cellAt(),
-  };
+test("layoutRow: 2.75U then plain 1U defaults leave a 0.25U remainder one column early", () => {
+  const cells: Record<number, GridCell> = { 0: cellAt({ unit: 2.75 }) };
   const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
-  const filler = slots[slots.length - 1];
-  expect(filler.isFiller).toBe(true);
-  expect(filler.width).toBeCloseTo(0.25);
-});
-
-test("layoutRow renders an untouched row as one big filler", () => {
-  const slots = layoutRow(0, 9, {}, new Map(), 1, 0);
-  expect(slots).toEqual([{ index: 0, isFiller: true, x: 0, width: 9 }]);
-});
-
-test("layoutRow's untouched-row filler includes the gaps it stands in for, not just the raw Units", () => {
-  // Regression: the filler used to be `remaining * unitMm` alone, ignoring
-  // the (itemsX - 1) gaps those `itemsX` slots would have had between them
-  // — visibly too narrow, stopping well short of the display's own edge.
-  const itemsX = maxItems(216, 19.05, 3); // 9
-  const slots = layoutRow(0, itemsX, {}, new Map(), 19.05, 3);
-  expect(slots).toEqual([
-    { index: 0, isFiller: true, x: 0, width: itemsX * 19.05 + (itemsX - 1) * 3 },
-  ]);
+  // The wider first key eats the budget faster, so the row runs out at
+  // column 7 — column 8 never gets laid out at all.
+  expect(slots).toHaveLength(8);
+  const remainder = slots[slots.length - 1];
+  expect(remainder.index).toBe(7);
+  expect(remainder.isRemainder).toBe(true);
+  expect(remainder.width).toBeCloseTo(0.25);
 });
 
 test("layoutRow starts the next key right after the previous one's real edge", () => {
