@@ -7,20 +7,23 @@ import {
   Notification,
   Splitter,
   Text,
+  UnstyledButton,
 } from "@mantine/core";
 
 import {
+  MdAdd,
   MdContentCopy,
   MdDriveFileMove,
+  MdRemove,
   MdSettings,
 } from "react-icons/md";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import kbrdLogo from "./assets/media/KBRD.svg";
 
+import Geometry from "./components/Geometry";
 import type { GeometryData } from "./types/geometry";
-import { getActiveGeometry } from "./api/geometries";
 
 import Factory from "./components/Factory";
 import Inspector from "./components/Inspector";
@@ -33,6 +36,10 @@ import type {
   WorkspaceData,
 } from "./types/workspace";
 
+const MIN_ZOOM = 25;
+const MAX_ZOOM = 200;
+const ZOOM_STEP = 10;
+
 export default function App() {
   const [geometry, setGeometry] = useState<GeometryData | null>(null);
 
@@ -42,6 +49,7 @@ export default function App() {
 
   const [settingsOpened, setSettingsOpened] = useState(false);
 
+  const [zoom, setZoom] = useState(100);
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
   // TODO(preview-rebuild): only the setters are used until <Factory> reads
   // these back to force-render a key/plugin's down state, as <Preview> did.
@@ -69,25 +77,8 @@ export default function App() {
     setKeyOperation(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
+    setZoom(100);
   }, []);
-
-  // The geometry picker is gone: load whichever geometry KBRD-API resolves
-  // as current (the active one, "default" by name, or the first
-  // alphabetically — see `kbrd_api.api.geometry.Geometry.find_default`).
-  useEffect(() => {
-    let cancelled = false;
-    getActiveGeometry().then(
-      (value) => {
-        if (!cancelled) changeGeometry(value);
-      },
-      () => {
-        if (!cancelled) changeGeometry(null);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [changeGeometry]);
 
   const changeWorkspace = useCallback((value: WorkspaceData | null) => {
     setWorkspace(value);
@@ -106,6 +97,14 @@ export default function App() {
     setWorkspace((value) =>
       value ? { ...value, key_properties: keyProperties } : null,
     );
+  }
+
+  function zoomOut() {
+    setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP));
+  }
+
+  function zoomIn() {
+    setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP));
   }
 
   // TODO(preview-rebuild): dropping a plugin onto a key and completing a
@@ -173,6 +172,7 @@ export default function App() {
             />
           </Box>
 
+          <Geometry onChange={changeGeometry} />
           {geometry && (
             <Workspace
               key={geometry.id}
@@ -221,6 +221,53 @@ export default function App() {
               {/* TODO(preview-rebuild): Factory temporarily stands in for
                   Preview while that component is redesigned from scratch. */}
               <Factory />
+
+              {/* Zoom */}
+              <Group
+                gap={4}
+                style={{
+                  position: "absolute",
+                  left: 20,
+                  bottom: 20,
+                  zIndex: 20,
+                  padding: 4,
+                  borderRadius: 4,
+                  backgroundColor: "var(--mantine-color-dark-6)",
+                }}
+              >
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  onClick={zoomOut}
+                  disabled={zoom <= MIN_ZOOM}
+                  aria-label="Zoom out"
+                >
+                  <MdRemove size={15} />
+                </ActionIcon>
+
+                <UnstyledButton
+                  onClick={() => setZoom(100)}
+                  style={{
+                    minWidth: 44,
+                    textAlign: "center",
+                  }}
+                  title="Reset to 100%"
+                >
+                  <Text size="xs">{zoom}%</Text>
+                </UnstyledButton>
+
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  onClick={zoomIn}
+                  disabled={zoom >= MAX_ZOOM}
+                  aria-label="Zoom in"
+                >
+                  <MdAdd size={15} />
+                </ActionIcon>
+              </Group>
             </Box>
           </Splitter.Pane>
           <Splitter.Pane defaultSize="550px" min="550px">

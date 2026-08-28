@@ -49,3 +49,8 @@ export type GeometryLayout = {
   height: number;
   keys: KeyLayout[];
 };
+
+export type GeometryPayload = Pick<
+  GeometryData,
+  "name" | "description" | "author" | "unit" | "geometry"
+>;
