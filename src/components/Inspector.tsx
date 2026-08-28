@@ -21,7 +21,7 @@ import {
   MdDriveFileMove,
   MdMoreVert,
 } from "react-icons/md";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   deleteKeyPlugin,
@@ -37,6 +37,8 @@ import type {
   KeyPropertyConfig,
   WorkspaceData,
 } from "../types/workspace";
+import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
+import { usePendingSaves } from "../utils/usePendingSaves";
 
 const BACKGROUND_REF = "__background__";
 const COLOR_SWATCHES = [
@@ -126,6 +128,91 @@ function setDragSymbol(event: React.DragEvent, symbol = "⠿") {
   requestAnimationFrame(() => dragImage.remove());
 }
 
+type KeyStateFieldsProps = {
+  backgroundColor: string;
+  borderEnabled: boolean;
+  borderColor: string;
+  borderWidth: number;
+  onBackgroundColorChange: (value: string) => void;
+  onBorderEnabledChange: (value: boolean) => void;
+  onBorderColorChange: (value: string) => void;
+  onBorderWidthChange: (value: number) => void;
+};
+
+/**
+ * Champs "Background color / Border / Border color / Border size" partagés
+ * entre les onglets "Up" et "Down" des propriétés système d'une touche.
+ */
+function KeyStateFields({
+  backgroundColor,
+  borderEnabled,
+  borderColor,
+  borderWidth,
+  onBackgroundColorChange,
+  onBorderEnabledChange,
+  onBorderColorChange,
+  onBorderWidthChange,
+}: KeyStateFieldsProps) {
+  return (
+    <Stack gap="sm">
+      <Group justify="space-between" wrap="nowrap">
+        <Text size="sm">Background color</Text>
+        <ColorInput
+          w={160}
+          size="xs"
+          format="hexa"
+          value={backgroundColor}
+          swatches={COLOR_SWATCHES}
+          error={isHexColor(backgroundColor, true) ? undefined : "Invalid color"}
+          success={isHexColor(backgroundColor, true)}
+          onChange={onBackgroundColorChange}
+        />
+      </Group>
+      <Group justify="space-between" wrap="nowrap">
+        <Text size="sm">Border</Text>
+        <Switch
+          size="sm"
+          checked={borderEnabled}
+          onChange={(event) =>
+            onBorderEnabledChange(event.currentTarget.checked)
+          }
+        />
+      </Group>
+      <Group justify="space-between" wrap="nowrap">
+        <Text size="sm">Border color</Text>
+        <ColorInput
+          w={160}
+          size="xs"
+          format="hex"
+          value={borderColor}
+          disabled={!borderEnabled}
+          swatches={COLOR_SWATCHES}
+          error={isHexColor(borderColor) ? undefined : "Invalid color"}
+          success={isHexColor(borderColor)}
+          onChange={onBorderColorChange}
+        />
+      </Group>
+      <Group justify="space-between" wrap="nowrap">
+        <Text size="sm">Border size</Text>
+        <NumberInput
+          w={160}
+          size="xs"
+          min={1}
+          max={4}
+          allowDecimal={false}
+          clampBehavior="strict"
+          value={borderWidth}
+          disabled={!borderEnabled}
+          success
+          onChange={(value) =>
+            onBorderWidthChange(typeof value === "number" ? value : 1)
+          }
+        />
+      </Group>
+    </Stack>
+  );
+}
+
 export default function Inspector({
   workspace,
   selectedKey,
@@ -156,15 +243,8 @@ export default function Inspector({
   const [draggedPropertyId, setDraggedPropertyId] = useState<number | null>(
     null,
   );
-  const pendingSaves = useRef(
-    new Map<
-      number,
-      { data: Partial<KeyPlugin>; timer: ReturnType<typeof setTimeout> }
-    >(),
-  );
-  const pendingPropertySaves = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
-  );
+  const pendingSaves = usePendingSaves<number, Partial<KeyPlugin>>();
+  const pendingPropertySaves = usePendingSaves<string, KeyPropertyConfig>();
   const allInstances = workspace?.plugins ?? [];
   const instances = allInstances
     .filter((plugin) => plugin.key_ref === selectedKey)
@@ -181,22 +261,13 @@ export default function Inspector({
   const selectedProperty = keyProperties.find(
     (property) => property.key_ref === selectedKey,
   );
-  const legacyBorderWidth = (
-    selectedProperty?.config as (KeyPropertyConfig & { borderWidth?: number })
-      | undefined
-  )?.borderWidth;
-  const legacyBorderEnabled = selectedProperty?.config.borderEnabled ?? true;
   const propertyConfig: KeyPropertyConfig = {
     ...DEFAULT_KEY_PROPERTIES,
     ...selectedProperty?.config,
-    upBorderWidth:
-      selectedProperty?.config.upBorderWidth ?? legacyBorderWidth ?? 1,
-    downBorderWidth:
-      selectedProperty?.config.downBorderWidth ?? legacyBorderWidth ?? 1,
-    upBorderEnabled:
-      selectedProperty?.config.upBorderEnabled ?? legacyBorderEnabled,
-    downBorderEnabled:
-      selectedProperty?.config.downBorderEnabled ?? legacyBorderEnabled,
+    upBorderWidth: resolveBorderWidth(selectedProperty?.config, false),
+    downBorderWidth: resolveBorderWidth(selectedProperty?.config, true),
+    upBorderEnabled: resolveBorderEnabled(selectedProperty?.config, false),
+    downBorderEnabled: resolveBorderEnabled(selectedProperty?.config, true),
   };
   const targetType =
     selectedKey === BACKGROUND_REF
@@ -224,14 +295,10 @@ export default function Inspector({
       ...keyProperties.filter((item) => item.key_ref !== selectedKey),
       property,
     ]);
-    const pending = pendingPropertySaves.current.get(selectedKey);
-    if (pending) clearTimeout(pending);
-    pendingPropertySaves.current.set(
+    pendingPropertySaves.schedule(
       selectedKey,
-      setTimeout(() => {
-        pendingPropertySaves.current.delete(selectedKey);
-        void updateKeyProperties(workspace.id, selectedKey, config);
-      }, 200),
+      () => config,
+      (saved) => void updateKeyProperties(workspace.id, selectedKey, saved),
     );
   }
 
@@ -241,14 +308,11 @@ export default function Inspector({
       allInstances.map((plugin) => (plugin.id === value.id ? value : plugin)),
     );
 
-    const pending = pendingSaves.current.get(item.id);
-    if (pending) clearTimeout(pending.timer);
-    const merged = { ...pending?.data, ...data };
-    const timer = setTimeout(() => {
-      pendingSaves.current.delete(item.id);
-      void updateKeyPlugin(item.id, merged);
-    }, 200);
-    pendingSaves.current.set(item.id, { data: merged, timer });
+    pendingSaves.schedule(
+      item.id,
+      (previous) => ({ ...previous, ...data }),
+      (merged) => void updateKeyPlugin(item.id, merged),
+    );
   }
 
   async function reorder(
@@ -301,11 +365,9 @@ export default function Inspector({
   }
 
   async function remove(item: KeyPlugin) {
-    const pending = pendingSaves.current.get(item.id);
-    if (pending) clearTimeout(pending.timer);
-    pendingSaves.current.delete(item.id);
+    const pending = pendingSaves.take(item.id);
     onChange(allInstances.filter((plugin) => plugin.id !== item.id));
-    if (pending) await updateKeyPlugin(item.id, pending.data);
+    if (pending) await updateKeyPlugin(item.id, pending);
     await deleteKeyPlugin(item.id);
     onPreviewDownPluginChange(null);
     setDeleting(null);
@@ -313,13 +375,9 @@ export default function Inspector({
 
   async function clearAll() {
     if (!selectedKey) return;
-    const pendingProperty = pendingPropertySaves.current.get(selectedKey);
-    if (pendingProperty) clearTimeout(pendingProperty);
-    pendingPropertySaves.current.delete(selectedKey);
+    pendingPropertySaves.take(selectedKey);
     for (const instance of instances) {
-      const pending = pendingSaves.current.get(instance.id);
-      if (pending) clearTimeout(pending.timer);
-      pendingSaves.current.delete(instance.id);
+      pendingSaves.take(instance.id);
     }
     await onClearAll();
     onPreviewDownPluginChange(null);
@@ -330,18 +388,12 @@ export default function Inspector({
   async function startMoveTo() {
     if (!workspace || !selectedKey) return;
     const saves: Promise<unknown>[] = [];
-    const pendingProperty = pendingPropertySaves.current.get(selectedKey);
-    if (pendingProperty) {
-      clearTimeout(pendingProperty);
-      pendingPropertySaves.current.delete(selectedKey);
+    if (pendingPropertySaves.take(selectedKey)) {
       saves.push(updateKeyProperties(workspace.id, selectedKey, propertyConfig));
     }
     for (const instance of instances) {
-      const pending = pendingSaves.current.get(instance.id);
-      if (!pending) continue;
-      clearTimeout(pending.timer);
-      pendingSaves.current.delete(instance.id);
-      saves.push(updateKeyPlugin(instance.id, pending.data));
+      const pending = pendingSaves.take(instance.id);
+      if (pending) saves.push(updateKeyPlugin(instance.id, pending));
     }
     await Promise.all(saves);
     onMoveTo();
@@ -588,169 +640,47 @@ export default function Inspector({
                           </Stack>
                         </Tabs.Panel>
                         <Tabs.Panel value="up" pt="xl">
-                          <Stack gap="sm">
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Background color</Text>
-                              <ColorInput
-                                w={160}
-                                size="xs"
-                                format="hexa"
-                                value={propertyConfig.upBackgroundColor}
-                                swatches={COLOR_SWATCHES}
-                                error={
-                                  isHexColor(propertyConfig.upBackgroundColor, true)
-                                    ? undefined
-                                    : "Invalid color"
-                                }
-                                success={isHexColor(
-                                  propertyConfig.upBackgroundColor,
-                                  true,
-                                )}
-                                onChange={(value) =>
-                                  patchKeyProperty({ upBackgroundColor: value })
-                                }
-                              />
-                            </Group>
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Border</Text>
-                              <Switch
-                                size="sm"
-                                checked={propertyConfig.upBorderEnabled}
-                                onChange={(event) =>
-                                  patchKeyProperty({
-                                    upBorderEnabled: event.currentTarget.checked,
-                                  })
-                                }
-                              />
-                            </Group>
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Border color</Text>
-                              <ColorInput
-                                w={160}
-                                size="xs"
-                                format="hex"
-                                value={propertyConfig.upBorderColor}
-                                disabled={!propertyConfig.upBorderEnabled}
-                                swatches={COLOR_SWATCHES}
-                                error={
-                                  isHexColor(propertyConfig.upBorderColor)
-                                    ? undefined
-                                    : "Invalid color"
-                                }
-                                success={isHexColor(propertyConfig.upBorderColor)}
-                                onChange={(value) =>
-                                  patchKeyProperty({ upBorderColor: value })
-                                }
-                              />
-                            </Group>
-                            <Group justify="space-between" wrap="nowrap">
-                              <Text size="sm">Border size</Text>
-                              <NumberInput
-                                w={160}
-                                size="xs"
-                                min={1}
-                                max={4}
-                                allowDecimal={false}
-                                clampBehavior="strict"
-                                value={propertyConfig.upBorderWidth}
-                                disabled={!propertyConfig.upBorderEnabled}
-                                success
-                                onChange={(value) =>
-                                  patchKeyProperty({
-                                    upBorderWidth:
-                                      typeof value === "number" ? value : 1,
-                                  })
-                                }
-                              />
-                            </Group>
-                          </Stack>
+                          <KeyStateFields
+                            backgroundColor={propertyConfig.upBackgroundColor}
+                            borderEnabled={propertyConfig.upBorderEnabled}
+                            borderColor={propertyConfig.upBorderColor}
+                            borderWidth={propertyConfig.upBorderWidth}
+                            onBackgroundColorChange={(value) =>
+                              patchKeyProperty({ upBackgroundColor: value })
+                            }
+                            onBorderEnabledChange={(value) =>
+                              patchKeyProperty({ upBorderEnabled: value })
+                            }
+                            onBorderColorChange={(value) =>
+                              patchKeyProperty({ upBorderColor: value })
+                            }
+                            onBorderWidthChange={(value) =>
+                              patchKeyProperty({ upBorderWidth: value })
+                            }
+                          />
                         </Tabs.Panel>
                         {targetType === "key" && propertyConfig.downEnabled && (
                           <Tabs.Panel value="down" pt="xl">
-                            <Stack gap="sm">
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Background color</Text>
-                                <ColorInput
-                                  w={160}
-                                  size="xs"
-                                  format="hexa"
-                                  value={propertyConfig.downBackgroundColor}
-                                  swatches={COLOR_SWATCHES}
-                                  error={
-                                    isHexColor(
-                                      propertyConfig.downBackgroundColor,
-                                      true,
-                                    )
-                                      ? undefined
-                                      : "Invalid color"
-                                  }
-                                  success={isHexColor(
-                                    propertyConfig.downBackgroundColor,
-                                    true,
-                                  )}
-                                  onChange={(value) =>
-                                    patchKeyProperty({
-                                      downBackgroundColor: value,
-                                    })
-                                  }
-                                />
-                              </Group>
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Border</Text>
-                                <Switch
-                                  size="sm"
-                                  checked={propertyConfig.downBorderEnabled}
-                                  onChange={(event) =>
-                                    patchKeyProperty({
-                                      downBorderEnabled:
-                                        event.currentTarget.checked,
-                                    })
-                                  }
-                                />
-                              </Group>
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Border color</Text>
-                                <ColorInput
-                                  w={160}
-                                  size="xs"
-                                  format="hex"
-                                  value={propertyConfig.downBorderColor}
-                                  disabled={!propertyConfig.downBorderEnabled}
-                                  swatches={COLOR_SWATCHES}
-                                  error={
-                                    isHexColor(propertyConfig.downBorderColor)
-                                      ? undefined
-                                      : "Invalid color"
-                                  }
-                                  success={isHexColor(
-                                    propertyConfig.downBorderColor,
-                                  )}
-                                  onChange={(value) =>
-                                    patchKeyProperty({ downBorderColor: value })
-                                  }
-                                />
-                              </Group>
-                              <Group justify="space-between" wrap="nowrap">
-                                <Text size="sm">Border size</Text>
-                                <NumberInput
-                                  w={160}
-                                  size="xs"
-                                  min={1}
-                                  max={4}
-                                  allowDecimal={false}
-                                  clampBehavior="strict"
-                                  value={propertyConfig.downBorderWidth}
-                                  disabled={!propertyConfig.downBorderEnabled}
-                                  success
-                                  onChange={(value) =>
-                                    patchKeyProperty({
-                                      downBorderWidth:
-                                        typeof value === "number" ? value : 1,
-                                    })
-                                  }
-                                />
-                              </Group>
-                            </Stack>
+                            <KeyStateFields
+                              backgroundColor={
+                                propertyConfig.downBackgroundColor
+                              }
+                              borderEnabled={propertyConfig.downBorderEnabled}
+                              borderColor={propertyConfig.downBorderColor}
+                              borderWidth={propertyConfig.downBorderWidth}
+                              onBackgroundColorChange={(value) =>
+                                patchKeyProperty({ downBackgroundColor: value })
+                              }
+                              onBorderEnabledChange={(value) =>
+                                patchKeyProperty({ downBorderEnabled: value })
+                              }
+                              onBorderColorChange={(value) =>
+                                patchKeyProperty({ downBorderColor: value })
+                              }
+                              onBorderWidthChange={(value) =>
+                                patchKeyProperty({ downBorderWidth: value })
+                              }
+                            />
                           </Tabs.Panel>
                         )}
                       </Tabs>

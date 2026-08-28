@@ -15,6 +15,7 @@ import type {
   KeyPropertyConfig,
   WorkspaceData,
 } from "../types/workspace";
+import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
 
 type PreviewProps = {
   selectedKey: string | null;
@@ -100,6 +101,25 @@ const DEFAULT_UP_BORDER_COLOR = "rgba(255, 255, 255, 0.5)";
 
 function keyMode(config: KeyPropertyConfig | undefined): KeyMode {
   return config?.keyMode === "toggle" ? "toggle" : "momentary";
+}
+
+/**
+ * Une touche composite (avec `parts`) a un contour en forme de "L" ou de
+ * "T" décrit par `path`, tandis qu'une touche simple n'a qu'un rectangle.
+ * Ce helper choisit l'élément SVG adapté à partir des props déjà calculées
+ * par l'appelant pour chaque cas, afin d'éviter de dupliquer ce choix.
+ */
+function pathOrRect(
+  key: string,
+  path: string | null,
+  pathProps: React.SVGProps<SVGPathElement>,
+  rectProps: React.SVGProps<SVGRectElement>,
+) {
+  return path ? (
+    <path key={key} d={path} {...pathProps} />
+  ) : (
+    <rect key={key} {...rectProps} />
+  );
 }
 
 function geometryPath(geometry: GeometryLayout["keys"][number]) {
@@ -294,21 +314,19 @@ export default function Preview({
       const fill = down
         ? (config?.downBackgroundColor ?? "#00000000")
         : (config?.upBackgroundColor ?? "#00000000");
-      const path = geometryPath(geometry);
-      if (path) {
-        return <path key={geometry.ref} d={path} fill={fill} />;
-      }
-      return (
-        <rect
-          key={geometry.ref}
-          x={geometry.x}
-          y={geometry.y}
-          width={geometry.width}
-          height={geometry.height}
-          rx={(2 * layout.width) / keyboardSize.width}
-          ry={(2 * layout.height) / keyboardSize.height}
-          fill={fill}
-        />
+      return pathOrRect(
+        geometry.ref,
+        geometryPath(geometry),
+        { fill },
+        {
+          x: geometry.x,
+          y: geometry.y,
+          width: geometry.width,
+          height: geometry.height,
+          rx: (2 * layout.width) / keyboardSize.width,
+          ry: (2 * layout.height) / keyboardSize.height,
+          fill,
+        },
       );
     });
   }
@@ -319,23 +337,11 @@ export default function Preview({
     return layout.keys.map((geometry) => {
       const config = keyProperties.get(geometry.ref);
       const down = keyIsDown(geometry, config);
-      const legacyBorderEnabled = config?.borderEnabled ?? true;
       const borderEnabled =
-        geometry.type === "space"
-          ? true
-          : down
-            ? (config?.downBorderEnabled ?? legacyBorderEnabled)
-            : (config?.upBorderEnabled ?? legacyBorderEnabled);
-      const legacyWidth = (config as { borderWidth?: number } | undefined)
-        ?.borderWidth;
+        geometry.type === "space" ? true : resolveBorderEnabled(config, down);
       const borderWidth = Math.max(
         1,
-        Math.min(
-          4,
-          down
-            ? (config?.downBorderWidth ?? legacyWidth ?? 1)
-            : (config?.upBorderWidth ?? legacyWidth ?? 1),
-        ),
+        Math.min(4, resolveBorderWidth(config, down)),
       );
       const stroke = borderEnabled
         ? geometry.type === "space"
@@ -344,46 +350,28 @@ export default function Preview({
             ? (config?.downBorderColor ?? "#ffffff")
             : (config?.upBorderColor ?? DEFAULT_UP_BORDER_COLOR)
         : "none";
-      const path = geometryPath(geometry);
-
-      if (path) {
-        return (
-          <path
-            key={geometry.ref}
-            className="kbrd-key"
-            data-key={geometry.ref}
-            data-type={geometry.type}
-            d={path}
-            fill="#00000000"
-            stroke={stroke}
-            strokeWidth={borderWidth}
-            strokeDasharray={geometry.type === "space" ? "4 3" : undefined}
-            vectorEffect="non-scaling-stroke"
-          />
-        );
-      }
-
+      const dashed = geometry.type === "space" ? "4 3" : undefined;
+      const common = {
+        className: "kbrd-key",
+        "data-key": geometry.ref,
+        "data-type": geometry.type,
+        fill: "#00000000",
+        stroke,
+        strokeWidth: borderWidth,
+        strokeDasharray: dashed,
+        vectorEffect: "non-scaling-stroke" as const,
+      };
       const insetX = (borderWidth / 2) * (layout.width / keyboardSize.width);
       const insetY = (borderWidth / 2) * (layout.height / keyboardSize.height);
-      return (
-        <rect
-          key={geometry.ref}
-          className="kbrd-key"
-          data-key={geometry.ref}
-          data-type={geometry.type}
-          x={geometry.x + insetX}
-          y={geometry.y + insetY}
-          width={Math.max(0, geometry.width - insetX * 2)}
-          height={Math.max(0, geometry.height - insetY * 2)}
-          rx={(2 * layout.width) / keyboardSize.width}
-          ry={(2 * layout.height) / keyboardSize.height}
-          fill="#00000000"
-          stroke={stroke}
-          strokeWidth={borderWidth}
-          strokeDasharray={geometry.type === "space" ? "4 3" : undefined}
-          vectorEffect="non-scaling-stroke"
-        />
-      );
+      return pathOrRect(geometry.ref, geometryPath(geometry), common, {
+        ...common,
+        x: geometry.x + insetX,
+        y: geometry.y + insetY,
+        width: Math.max(0, geometry.width - insetX * 2),
+        height: Math.max(0, geometry.height - insetY * 2),
+        rx: (2 * layout.width) / keyboardSize.width,
+        ry: (2 * layout.height) / keyboardSize.height,
+      });
     });
   }
 
@@ -738,45 +726,32 @@ export default function Preview({
                     const insetY = keyboardSize
                       ? layout.height / keyboardSize.height
                       : 0;
-                    const selectedPath = geometryPath(selectedGeometry);
-                    if (selectedPath) {
-                      return (
-                        <path
-                          d={selectedPath}
-                          fill="none"
-                          stroke="#00ff00"
-                          strokeWidth={2}
-                          strokeDasharray={
-                            selectedGeometry.type === "space"
-                              ? "4 3"
-                              : undefined
-                          }
-                          vectorEffect="non-scaling-stroke"
-                          pointerEvents="none"
-                        />
-                      );
-                    }
-                    return (
-                      <rect
-                        x={selectedGeometry.x + insetX}
-                        y={selectedGeometry.y + insetY}
-                        width={Math.max(
+                    const selectionCommon = {
+                      fill: "none",
+                      stroke: "#00ff00",
+                      strokeWidth: 2,
+                      strokeDasharray:
+                        selectedGeometry.type === "space" ? "4 3" : undefined,
+                      vectorEffect: "non-scaling-stroke" as const,
+                      pointerEvents: "none" as const,
+                    };
+                    return pathOrRect(
+                      selectedGeometry.ref,
+                      geometryPath(selectedGeometry),
+                      selectionCommon,
+                      {
+                        ...selectionCommon,
+                        x: selectedGeometry.x + insetX,
+                        y: selectedGeometry.y + insetY,
+                        width: Math.max(
                           0,
                           selectedGeometry.width - insetX * 2,
-                        )}
-                        height={Math.max(
+                        ),
+                        height: Math.max(
                           0,
                           selectedGeometry.height - insetY * 2,
-                        )}
-                        fill="none"
-                        stroke="#00ff00"
-                        strokeWidth={2}
-                        strokeDasharray={
-                          selectedGeometry.type === "space" ? "4 3" : undefined
-                        }
-                        vectorEffect="non-scaling-stroke"
-                        pointerEvents="none"
-                      />
+                        ),
+                      },
                     );
                   })()}
                 </svg>
