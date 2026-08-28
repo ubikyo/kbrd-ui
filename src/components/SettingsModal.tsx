@@ -7,6 +7,10 @@ import { getDevice, type DeviceStatus } from "../api/device";
 const DEFAULT_UNIT_MM = 19.05;
 const DEVICE_POLL_INTERVAL_MS = 5000;
 const MM_PER_INCH = 25.4;
+// KBRD-DEV's reference panel (see kbrd_dev/config.py's calibration comment),
+// used only to seed the field before the user confirms the real numbers.
+const DEFAULT_PHYSICAL_WIDTH_MM = 216;
+const DEFAULT_PHYSICAL_HEIGHT_MM = 135;
 
 type FieldRowProps = {
   label: string;
@@ -49,13 +53,34 @@ export default function SettingsModal({ opened, onClose }: Props) {
   const [tab, setTab] = useState<string | null>("geometry");
   const [savedUnit, setSavedUnit] = useState<number>(DEFAULT_UNIT_MM);
   const [unit, setUnit] = useState<number>(DEFAULT_UNIT_MM);
+  // EDID doesn't report a physical size on every panel (KBRD-DEV's DSI
+  // touchscreen included — `modetest -c` shows it, but the DRM connector
+  // never surfaces it through the sysfs `edid` blob kbrd_dev.edid reads).
+  // Since DPI and the max key count both depend on it, these two are a
+  // mandatory manual fallback rather than something read from the device.
+  const [savedPhysicalWidthMm, setSavedPhysicalWidthMm] = useState<number>(
+    DEFAULT_PHYSICAL_WIDTH_MM,
+  );
+  const [physicalWidthMm, setPhysicalWidthMm] = useState<number>(
+    DEFAULT_PHYSICAL_WIDTH_MM,
+  );
+  const [savedPhysicalHeightMm, setSavedPhysicalHeightMm] = useState<number>(
+    DEFAULT_PHYSICAL_HEIGHT_MM,
+  );
+  const [physicalHeightMm, setPhysicalHeightMm] = useState<number>(
+    DEFAULT_PHYSICAL_HEIGHT_MM,
+  );
   const [device, setDevice] = useState<DeviceStatus>({ connected: false });
 
-  // Reset the draft to the last saved value whenever the modal opens back up.
+  // Reset the draft to the last saved values whenever the modal opens back up.
   const [wasOpened, setWasOpened] = useState(opened);
   if (opened !== wasOpened) {
     setWasOpened(opened);
-    if (opened) setUnit(savedUnit);
+    if (opened) {
+      setUnit(savedUnit);
+      setPhysicalWidthMm(savedPhysicalWidthMm);
+      setPhysicalHeightMm(savedPhysicalHeightMm);
+    }
   }
 
   useEffect(() => {
@@ -79,32 +104,32 @@ export default function SettingsModal({ opened, onClose }: Props) {
 
   function cancel() {
     setUnit(savedUnit);
+    setPhysicalWidthMm(savedPhysicalWidthMm);
+    setPhysicalHeightMm(savedPhysicalHeightMm);
     onClose();
   }
 
   function save() {
     setSavedUnit(unit);
+    setSavedPhysicalWidthMm(physicalWidthMm);
+    setSavedPhysicalHeightMm(physicalHeightMm);
     onClose();
   }
 
-  const hasPhysicalSize =
-    device.connected && device.width_mm !== null && device.height_mm !== null;
+  const hasValidPhysicalSize = physicalWidthMm > 0 && physicalHeightMm > 0;
 
   const resolutionValue = device.connected
     ? `${device.width} × ${device.height} px`
     : "—";
-  const physicalSizeValue = hasPhysicalSize
-    ? `${device.width_mm} × ${device.height_mm} mm`
-    : "—";
   const dpiValue =
-    hasPhysicalSize && device.connected
-      ? `${Math.round(device.width / (device.width_mm! / MM_PER_INCH))} × ${Math.round(
-          device.height / (device.height_mm! / MM_PER_INCH),
+    device.connected && hasValidPhysicalSize
+      ? `${Math.round(device.width / (physicalWidthMm / MM_PER_INCH))} × ${Math.round(
+          device.height / (physicalHeightMm / MM_PER_INCH),
         )} dpi`
       : "—";
   const maxKeysValue =
-    hasPhysicalSize && device.connected && unit > 0
-      ? `${Math.floor(device.width_mm! / unit)} × ${Math.floor(device.height_mm! / unit)}`
+    hasValidPhysicalSize && unit > 0
+      ? `${Math.floor(physicalWidthMm / unit)} × ${Math.floor(physicalHeightMm / unit)}`
       : "—";
 
   return (
@@ -167,10 +192,41 @@ export default function SettingsModal({ opened, onClose }: Props) {
                   }
                 />
               </FieldRow>
+              <FieldRow label="Physical width (mm)">
+                <NumberInput
+                  w="100%"
+                  aria-label="Physical width (mm)"
+                  suffix=" mm"
+                  min={1}
+                  step={1}
+                  required
+                  value={physicalWidthMm}
+                  error={physicalWidthMm > 0 ? undefined : "Required"}
+                  success={physicalWidthMm > 0}
+                  onChange={(value) =>
+                    setPhysicalWidthMm(typeof value === "number" ? value : 0)
+                  }
+                />
+              </FieldRow>
+              <FieldRow label="Physical height (mm)">
+                <NumberInput
+                  w="100%"
+                  aria-label="Physical height (mm)"
+                  suffix=" mm"
+                  min={1}
+                  step={1}
+                  required
+                  value={physicalHeightMm}
+                  error={physicalHeightMm > 0 ? undefined : "Required"}
+                  success={physicalHeightMm > 0}
+                  onChange={(value) =>
+                    setPhysicalHeightMm(typeof value === "number" ? value : 0)
+                  }
+                />
+              </FieldRow>
 
               <Title order={4} mt="md">Display</Title>
               <DisplayRow label="Resolution (px)" value={resolutionValue} />
-              <DisplayRow label="Physical size (mm)" value={physicalSizeValue} />
               <DisplayRow label="DPI (x / y)" value={dpiValue} />
               <DisplayRow label="Max keys (W × H)" value={maxKeysValue} />
             </Stack>
@@ -187,7 +243,7 @@ export default function SettingsModal({ opened, onClose }: Props) {
         }}
       >
         <Button color="gray" onClick={cancel}>Cancel</Button>
-        <Button onClick={save}>Save</Button>
+        <Button onClick={save} disabled={!hasValidPhysicalSize}>Save</Button>
       </Group>
     </Modal>
   );
