@@ -1,10 +1,10 @@
-export type GeometryPart = {
+export type LayoutPart = {
   width: number;
   height: number;
   align?: "left" | "center" | "right";
 };
 
-export type GeometryElement = {
+export type LayoutElement = {
   type?: "key" | "space";
   name?: string;
   ref?: string;
@@ -12,25 +12,25 @@ export type GeometryElement = {
   colspan?: number;
   size: number;
   quantity?: number;
-  parts?: GeometryPart[];
+  parts?: LayoutPart[];
 };
 
-export type GeometryGroup = {
+export type LayoutGroup = {
   name?: string;
   gap?: number;
-  elements: GeometryElement[][];
+  elements: LayoutElement[][];
 };
 
-export type GeometryData = {
+export type LayoutData = {
   id: number;
   name: string;
   description: string;
   author: string;
   unit: "px" | "mm";
-  geometry: GeometryGroup[];
+  geometry: LayoutGroup[];
   svg: string;
   created_at: string;
-  layout: GeometryLayout;
+  layout: KeyboardLayout;
 };
 
 export type KeyLayout = {
@@ -40,17 +40,17 @@ export type KeyLayout = {
   height: number;
   ref: string;
   name: string;
-  parts: GeometryPart[];
+  parts: LayoutPart[];
   type: "key" | "space";
 };
 
-export type GeometryLayout = {
+export type KeyboardLayout = {
   width: number;
   height: number;
   keys: KeyLayout[];
 };
 
-export type GeometryPayload = Pick<
-  GeometryData,
+export type LayoutPayload = Pick<
+  LayoutData,
   "name" | "description" | "author" | "unit" | "geometry"
 >;

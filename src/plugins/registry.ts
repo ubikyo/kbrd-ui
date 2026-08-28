@@ -18,8 +18,12 @@ export type PluginRendererProps = {
 
 type PluginModule = (typeof pluginModules)[number];
 
-export type PluginDefinition = Omit<PluginModule, "Editor" | "Renderer"> & {
-  Editor: ComponentType<PluginEditorProps>;
+export type PluginDefinition = Omit<
+  PluginModule,
+  "LayoutEditor" | "MappingEditor" | "Renderer"
+> & {
+  LayoutEditor: ComponentType<PluginEditorProps>;
+  MappingEditor: ComponentType<PluginEditorProps>;
   Renderer: ComponentType<PluginRendererProps>;
 };
 

@@ -5,16 +5,14 @@ import {
   Button,
   Group,
   Notification,
+  SegmentedControl,
   Splitter,
   Text,
-  UnstyledButton,
 } from "@mantine/core";
 
 import {
-  MdAdd,
   MdContentCopy,
   MdDriveFileMove,
-  MdRemove,
   MdSettings,
 } from "react-icons/md";
 
@@ -22,8 +20,8 @@ import { useCallback, useRef, useState } from "react";
 
 import kbrdLogo from "./assets/media/KBRD.svg";
 
-import Geometry from "./components/Geometry";
-import type { GeometryData } from "./types/geometry";
+import Layout from "./components/Layout";
+import type { LayoutData } from "./types/layout";
 
 import Factory from "./components/Factory";
 import Inspector from "./components/Inspector";
@@ -36,12 +34,8 @@ import type {
   WorkspaceData,
 } from "./types/workspace";
 
-const MIN_ZOOM = 25;
-const MAX_ZOOM = 200;
-const ZOOM_STEP = 10;
-
 export default function App() {
-  const [geometry, setGeometry] = useState<GeometryData | null>(null);
+  const [layout, setLayout] = useState<LayoutData | null>(null);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -49,7 +43,9 @@ export default function App() {
 
   const [settingsOpened, setSettingsOpened] = useState(false);
 
-  const [zoom, setZoom] = useState(100);
+  // Which form the Inspector's plugin editors show — see `mode` on
+  // `Inspector`'s props and each plugin's `LayoutEditor`/`MappingEditor`.
+  const [mode, setMode] = useState<"layout" | "mapping">("layout");
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
   // TODO(preview-rebuild): only the setters are used until <Factory> reads
   // these back to force-render a key/plugin's down state, as <Preview> did.
@@ -69,15 +65,14 @@ export default function App() {
     setKeyOperation(null);
   }
 
-  const changeGeometry = useCallback((value: GeometryData | null) => {
-    setGeometry(value);
+  const changeLayout = useCallback((value: LayoutData | null) => {
+    setLayout(value);
     setWorkspace(null);
     setSelectedKey(null);
     keyOperationRef.current = null;
     setKeyOperation(null);
     setPreviewDownPluginId(null);
     setPreviewDownTarget(null);
-    setZoom(100);
   }, []);
 
   const changeWorkspace = useCallback((value: WorkspaceData | null) => {
@@ -97,14 +92,6 @@ export default function App() {
     setWorkspace((value) =>
       value ? { ...value, key_properties: keyProperties } : null,
     );
-  }
-
-  function zoomOut() {
-    setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP));
-  }
-
-  function zoomIn() {
-    setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP));
   }
 
   // TODO(preview-rebuild): dropping a plugin onto a key and completing a
@@ -172,11 +159,11 @@ export default function App() {
             />
           </Box>
 
-          <Geometry onChange={changeGeometry} />
-          {geometry && (
+          <Layout onChange={changeLayout} />
+          {layout && (
             <Workspace
-              key={geometry.id}
-              geometryId={geometry.id}
+              key={layout.id}
+              geometryId={layout.id}
               onChange={changeWorkspace}
             />
           )}
@@ -222,59 +209,31 @@ export default function App() {
                   Preview while that component is redesigned from scratch. */}
               <Factory />
 
-              {/* Zoom */}
-              <Group
-                gap={4}
+              <SegmentedControl
+                value={mode}
+                onChange={(value) =>
+                  setMode(value === "mapping" ? "mapping" : "layout")
+                }
+                data={[
+                  { label: "Layout", value: "layout" },
+                  { label: "Mapping", value: "mapping" },
+                ]}
+                size="xs"
                 style={{
                   position: "absolute",
                   left: 20,
                   bottom: 20,
                   zIndex: 20,
-                  padding: 4,
-                  borderRadius: 4,
-                  backgroundColor: "var(--mantine-color-dark-6)",
                 }}
-              >
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  size="sm"
-                  onClick={zoomOut}
-                  disabled={zoom <= MIN_ZOOM}
-                  aria-label="Zoom out"
-                >
-                  <MdRemove size={15} />
-                </ActionIcon>
-
-                <UnstyledButton
-                  onClick={() => setZoom(100)}
-                  style={{
-                    minWidth: 44,
-                    textAlign: "center",
-                  }}
-                  title="Reset to 100%"
-                >
-                  <Text size="xs">{zoom}%</Text>
-                </UnstyledButton>
-
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  size="sm"
-                  onClick={zoomIn}
-                  disabled={zoom >= MAX_ZOOM}
-                  aria-label="Zoom in"
-                >
-                  <MdAdd size={15} />
-                </ActionIcon>
-              </Group>
+              />
             </Box>
           </Splitter.Pane>
           <Splitter.Pane defaultSize="550px" min="550px">
             <Inspector
               workspace={workspace}
               selectedKey={selectedKey}
-              layout={geometry?.layout ?? null}
+              layout={layout?.layout ?? null}
+              mode={mode}
               tab={inspectorTab}
               onTabChange={setInspectorTab}
               onChange={changePlugins}

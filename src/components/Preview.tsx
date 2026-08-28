@@ -9,7 +9,7 @@ import {
 
 import { pluginById, type PluginDefinition } from "../plugins/registry";
 import { downState, effectiveConfig, upConfig } from "../plugins/state";
-import type { GeometryLayout } from "../types/geometry";
+import type { KeyboardLayout } from "../types/layout";
 import type {
   KeyMode,
   KeyPropertyConfig,
@@ -21,7 +21,7 @@ type PreviewProps = {
   selectedKey: string | null;
   onSelectKey: (key: string | null) => void;
   zoom: number;
-  layout: GeometryLayout;
+  layout: KeyboardLayout;
   workspace: WorkspaceData | null;
   onDropPlugin: (key: string, pluginId: string) => void;
   previewDownPluginId: number | null;
@@ -50,7 +50,7 @@ function StatefulPluginRenderer({
   pressed: boolean;
   pressToken: number;
   forceDown: boolean;
-  geometry: GeometryLayout["keys"][number];
+  geometry: KeyboardLayout["keys"][number];
   clipId: string;
   canOverflow: boolean;
 }) {
@@ -122,7 +122,7 @@ function pathOrRect(
   );
 }
 
-function geometryPath(geometry: GeometryLayout["keys"][number]) {
+function geometryPath(geometry: KeyboardLayout["keys"][number]) {
   if (!geometry.parts.length) return null;
 
   const rectangles = geometry.parts.map((part, index) => {
@@ -294,7 +294,7 @@ export default function Preview({
   }, [layout.height, layout.width, viewport]);
 
   function keyIsDown(
-    geometry: GeometryLayout["keys"][number],
+    geometry: KeyboardLayout["keys"][number],
     config: KeyPropertyConfig | undefined,
   ) {
     return (

@@ -31,7 +31,7 @@ import {
 } from "../api/workspaces";
 import { pluginById, plugins } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
-import type { GeometryLayout } from "../types/geometry";
+import type { KeyboardLayout } from "../types/layout";
 import type {
   KeyPlugin,
   KeyProperty,
@@ -73,7 +73,11 @@ type Props = {
   tab: string | null;
   onTabChange: (tab: string | null) => void;
   onChange: (plugins: KeyPlugin[]) => void;
-  layout: GeometryLayout | null;
+  layout: KeyboardLayout | null;
+  // Which form each plugin instance below shows: its Layout (placement) or
+  // Mapping (everything else) editor — see `kbrd-plugins`' per-plugin
+  // `LayoutEditor`/`MappingEditor` exports.
+  mode: "layout" | "mapping";
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
   onPreviewDownTargetChange: (keyRef: string | null) => void;
@@ -221,6 +225,7 @@ export default function Inspector({
   onTabChange,
   onChange,
   layout,
+  mode,
   onKeyPropertiesChange,
   onPreviewDownPluginChange,
   onPreviewDownTargetChange,
@@ -710,7 +715,8 @@ export default function Inspector({
               {group.items.map((item) => {
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
-                const Editor = plugin.Editor;
+                const Editor =
+                  mode === "layout" ? plugin.LayoutEditor : plugin.MappingEditor;
                 const summary = pluginSummary(item);
                 const supportsDown =
                   targetType === "key" &&

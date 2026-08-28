@@ -4,7 +4,6 @@ import {
   Button,
   Group,
   Modal,
-  Select,
   Stack,
   Text,
   Textarea,
@@ -13,32 +12,20 @@ import {
 import { MdDelete } from "react-icons/md";
 
 import {
-  createGeometry,
-  deleteGeometry,
-  updateGeometry,
-} from "../api/geometries";
-import type {
-  GeometryData,
-  GeometryGroup,
-  GeometryPayload,
-} from "../types/geometry";
+  createLayout,
+  deleteLayout,
+  updateLayout,
+} from "../api/layouts";
+import type { LayoutData, LayoutPayload } from "../types/layout";
 
 type Props = {
-  editing: GeometryData | null;
+  editing: LayoutData | null;
   onClose: () => void;
   onSaved: (id: number) => void;
   onDeleted: () => void;
 };
 
-function isValidGeometry(value: string) {
-  try {
-    return Array.isArray(JSON.parse(value));
-  } catch {
-    return false;
-  }
-}
-
-export default function GeometryEditorModal({
+export default function LayoutEditorModal({
   editing,
   onClose,
   onSaved,
@@ -47,46 +34,29 @@ export default function GeometryEditorModal({
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [author, setAuthor] = useState(editing?.author ?? "");
-  const [unit, setUnit] = useState<"px" | "mm">(editing?.unit ?? "mm");
-  const [geometry, setGeometry] = useState(
-    JSON.stringify(editing?.geometry ?? [], null, 2),
-  );
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function save() {
-    let parsedGeometry: GeometryGroup[];
-    try {
-      parsedGeometry = JSON.parse(geometry) as GeometryGroup[];
-      if (!Array.isArray(parsedGeometry)) {
-        throw new Error("Geometry must be a JSON array.");
-      }
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "The geometry JSON is invalid.",
-      );
-      return;
-    }
-
-    const payload: GeometryPayload = {
+    const payload: LayoutPayload = {
       name: name.trim(),
       description: description.trim(),
       author: author.trim(),
-      unit,
-      geometry: parsedGeometry,
+      // Positioning now lives in Layout mode, not this form — keep
+      // whatever was already stored, or start empty for a brand-new layout.
+      unit: editing?.unit ?? "mm",
+      geometry: editing?.geometry ?? [],
     };
     if (!payload.name) return;
 
     try {
       const saved = editing
-        ? await updateGeometry(editing.id, payload)
-        : await createGeometry(payload);
+        ? await updateLayout(editing.id, payload)
+        : await createLayout(payload);
       onSaved(saved.id);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Unable to save geometry.",
+        cause instanceof Error ? cause.message : "Unable to save layout.",
       );
     }
   }
@@ -94,11 +64,11 @@ export default function GeometryEditorModal({
   async function remove() {
     if (!editing) return;
     try {
-      await deleteGeometry(editing.id);
+      await deleteLayout(editing.id);
       onDeleted();
     } catch (cause) {
       setConfirmDelete(false);
-      setError(cause instanceof Error ? cause.message : "Unable to delete geometry.");
+      setError(cause instanceof Error ? cause.message : "Unable to delete layout.");
     }
   }
 
@@ -107,7 +77,7 @@ export default function GeometryEditorModal({
       <Modal
         opened
         onClose={onClose}
-        title={<Text fw={700}>{editing ? "Edit" : "Add"} geometry</Text>}
+        title={<Text fw={700}>{editing ? "Edit" : "Add"} layout</Text>}
         centered
         size="lg"
         overlayProps={{ backgroundOpacity: 0.65, blur: 2 }}
@@ -115,7 +85,6 @@ export default function GeometryEditorModal({
           content: {
             display: "flex",
             flexDirection: "column",
-            height: "85vh",
             backgroundColor: "var(--kbrd-color-body)",
           },
           header: { backgroundColor: "var(--kbrd-color-body)" },
@@ -143,20 +112,6 @@ export default function GeometryEditorModal({
                 onChange={(event) => setAuthor(event.currentTarget.value)}
               />
             </Group>
-            <Select
-              variant="filled"
-              label="Unit"
-              data={[
-                { value: "mm", label: "Millimetres (mm)" },
-                { value: "px", label: "Pixels (px)" },
-              ]}
-              value={unit}
-              success
-              allowDeselect={false}
-              onChange={(value) => {
-                if (value === "mm" || value === "px") setUnit(value);
-              }}
-            />
             <Textarea
               variant="filled"
               label="Description"
@@ -167,21 +122,11 @@ export default function GeometryEditorModal({
               minRows={2}
               maxRows={4}
             />
-            <Textarea
-              variant="filled"
-              label="Geometry"
-              description="JSON definition of groups, rows and keys"
-              value={geometry}
-              onChange={(event) => {
-                setGeometry(event.currentTarget.value);
-                setError("");
-              }}
-              error={error}
-              success={!error && isValidGeometry(geometry)}
-              minRows={30}
-              resize="vertical"
-              styles={{ input: { fontFamily: "monospace", minHeight: 520 } }}
-            />
+            {error && (
+              <Text size="sm" c="red">
+                {error}
+              </Text>
+            )}
           </Stack>
         </Box>
         <Group
@@ -215,12 +160,12 @@ export default function GeometryEditorModal({
       <Modal
         opened={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        title={<Text fw={700}>Delete geometry</Text>}
+        title={<Text fw={700}>Delete layout</Text>}
         centered
         size="sm"
       >
         <Stack>
-          <Text>Delete geometry <Text component="span" fw={600}>{editing?.name}</Text>?</Text>
+          <Text>Delete layout <Text component="span" fw={600}>{editing?.name}</Text>?</Text>
           <Text size="sm" c="dimmed">This action cannot be undone.</Text>
           <Group justify="flex-end">
             <Button color="gray" onClick={() => setConfirmDelete(false)}>Cancel</Button>

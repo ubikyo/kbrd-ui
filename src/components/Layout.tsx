@@ -8,43 +8,43 @@ import {
   MdKeyboardAlt,
 } from "react-icons/md";
 
-import { listGeometries } from "../api/geometries";
-import type { GeometryData } from "../types/geometry";
-import { defaultGeometry } from "../utils/geometry";
-import GeometryEditorModal from "./GeometryEditorModal";
+import { listLayouts } from "../api/layouts";
+import type { LayoutData } from "../types/layout";
+import { defaultLayout } from "../utils/layout";
+import LayoutEditorModal from "./LayoutEditorModal";
 
 type Props = {
-  onChange: (geometry: GeometryData | null) => void;
+  onChange: (layout: LayoutData | null) => void;
 };
 
-export default function Geometry({ onChange }: Props) {
-  const [items, setItems] = useState<GeometryData[]>([]);
-  const [selected, setSelected] = useState<GeometryData | null>(null);
+export default function Layout({ onChange }: Props) {
+  const [items, setItems] = useState<LayoutData[]>([]);
+  const [selected, setSelected] = useState<LayoutData | null>(null);
   const [menuOpened, setMenuOpened] = useState(false);
   const [editorOpened, setEditorOpened] = useState(false);
-  const [editing, setEditing] = useState<GeometryData | null>(null);
+  const [editing, setEditing] = useState<LayoutData | null>(null);
 
-  function select(item: GeometryData | null) {
+  function select(item: LayoutData | null) {
     setSelected(item);
     onChange(item);
   }
 
   async function refresh(preferredId?: number) {
-    const data = await listGeometries();
+    const data = await listLayouts();
     setItems(data);
     select(
       data.find((item) => item.id === preferredId) ??
         data.find((item) => item.id === selected?.id) ??
-        defaultGeometry(data) ??
+        defaultLayout(data) ??
         null,
     );
   }
 
   useEffect(() => {
     let cancelled = false;
-    listGeometries().then((data) => {
+    listLayouts().then((data) => {
       if (cancelled) return;
-      const current = defaultGeometry(data) ?? null;
+      const current = defaultLayout(data) ?? null;
       setItems(data);
       setSelected(current);
       onChange(current);
@@ -54,7 +54,7 @@ export default function Geometry({ onChange }: Props) {
     };
   }, [onChange]);
 
-  function openEditor(item: GeometryData | null) {
+  function openEditor(item: LayoutData | null) {
     setEditing(item);
     setMenuOpened(false);
     setEditorOpened(true);
@@ -93,7 +93,7 @@ export default function Geometry({ onChange }: Props) {
                 <MdKeyboardAlt size={24} />
                 <Box>
                   <Text size="xs" c="dimmed">
-                    Geometry
+                    Layout
                   </Text>
                   <Text size="sm" fw={500}>
                     {selected?.name ?? "None"}
@@ -106,7 +106,7 @@ export default function Geometry({ onChange }: Props) {
         </Menu.Target>
 
         <Menu.Dropdown>
-          <Menu.Label>Geometries</Menu.Label>
+          <Menu.Label>Layouts</Menu.Label>
           {items.map((item) => (
             <Menu.Item
               key={item.id}
@@ -144,21 +144,21 @@ export default function Geometry({ onChange }: Props) {
             leftSection={<MdAdd size={18} />}
             onClick={() => openEditor(null)}
           >
-            Add geometry
+            Add layout
           </Menu.Item>
           {selected && (
             <Menu.Item
               leftSection={<MdEdit size={18} />}
               onClick={() => openEditor(selected)}
             >
-              Edit geometry
+              Edit layout
             </Menu.Item>
           )}
         </Menu.Dropdown>
       </Menu>
 
       {editorOpened && (
-        <GeometryEditorModal
+        <LayoutEditorModal
           editing={editing}
           onClose={() => setEditorOpened(false)}
           onSaved={(id) => {
