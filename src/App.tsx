@@ -25,17 +25,11 @@ import kbrdLogo from "./assets/media/KBRD.svg";
 import Geometry from "./components/Geometry";
 import type { GeometryData } from "./types/geometry";
 
-import Preview from "./components/Preview";
+import Factory from "./components/Factory";
 import Inspector from "./components/Inspector";
 import SettingsModal from "./components/SettingsModal";
 import Workspace from "./components/Workspace";
-import {
-  addKeyPlugin,
-  clearKey,
-  duplicateKeyPlugins,
-  moveKey,
-} from "./api/workspaces";
-import { pluginById } from "./plugins/registry";
+import { clearKey } from "./api/workspaces";
 import type {
   KeyPlugin,
   KeyProperty,
@@ -45,7 +39,6 @@ import type {
 const MIN_ZOOM = 25;
 const MAX_ZOOM = 200;
 const ZOOM_STEP = 10;
-const BACKGROUND_REF = "__background__";
 
 export default function App() {
   const [geometry, setGeometry] = useState<GeometryData | null>(null);
@@ -58,12 +51,10 @@ export default function App() {
 
   const [zoom, setZoom] = useState(100);
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
-  const [previewDownPluginId, setPreviewDownPluginId] = useState<number | null>(
-    null,
-  );
-  const [previewDownTarget, setPreviewDownTarget] = useState<string | null>(
-    null,
-  );
+  // TODO(preview-rebuild): only the setters are used until <Factory> reads
+  // these back to force-render a key/plugin's down state, as <Preview> did.
+  const [, setPreviewDownPluginId] = useState<number | null>(null);
+  const [, setPreviewDownTarget] = useState<string | null>(null);
   const [keyOperation, setKeyOperation] = useState<{
     direction: "from" | "to" | "move";
     key: string;
@@ -108,29 +99,6 @@ export default function App() {
     );
   }
 
-  async function dropPlugin(key: string, pluginId: string) {
-    if (!workspace) return;
-    const definition = pluginById(pluginId);
-    if (!definition) return;
-    const target = geometry?.layout.keys.find((item) => item.ref === key);
-    if (definition.capabilities.includes("action") && target?.type !== "key") {
-      return;
-    }
-    const config: Record<string, unknown> = structuredClone(
-      definition.defaultConfig,
-    );
-    if (key === BACKGROUND_REF) delete config.down;
-    const instance = await addKeyPlugin(
-      workspace.id,
-      key,
-      definition.id,
-      definition.version,
-      config,
-    );
-    changePlugins([...workspace.plugins, instance]);
-    setInspectorTab("properties");
-  }
-
   function zoomOut() {
     setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP));
   }
@@ -139,50 +107,10 @@ export default function App() {
     setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP));
   }
 
-  function selectKey(key: string | null) {
-    const operation = keyOperationRef.current;
-    const clickedKey = geometry?.layout.keys.find(
-      (item) => item.ref === key && item.type === "key",
-    );
-    if (operation && clickedKey && workspace) {
-      const source = operation.direction === "from" ? clickedKey.ref : operation.key;
-      const destination =
-        operation.direction === "from" ? operation.key : clickedKey.ref;
-      if (source === destination) return;
-      if (operation.direction === "move") {
-        keyOperationRef.current = null;
-        void moveKey(workspace.id, source, destination).then(
-          (value) => {
-            setWorkspace(value);
-            setSelectedKey(destination);
-            setKeyOperation(null);
-            setPreviewDownPluginId(null);
-            setPreviewDownTarget(null);
-          },
-          () => setKeyOperation(null),
-        );
-        return;
-      }
-      if (operation.direction === "from") keyOperationRef.current = null;
-      void duplicateKeyPlugins(workspace.id, destination, source).then(
-        (plugins) => {
-          changePlugins(plugins);
-          if (operation.direction === "from") setKeyOperation(null);
-        },
-        () => {
-          if (operation.direction === "from") setKeyOperation(null);
-        },
-      );
-      return;
-    }
-    if (operation) return;
-    if (key !== selectedKey) {
-      setPreviewDownPluginId(null);
-      setPreviewDownTarget(null);
-    }
-    setSelectedKey(key);
-    if (key) setInspectorTab("properties");
-  }
+  // TODO(preview-rebuild): dropping a plugin onto a key and completing a
+  // duplicate/move operation both used to happen by clicking a key in
+  // <Preview>. Restore that wiring (see git history / Preview.tsx) once
+  // <Factory> exposes clickable key/drop targets of its own.
 
   function startDuplicateFrom() {
     if (!selectedKey) return;
@@ -290,21 +218,9 @@ export default function App() {
         >
           <Splitter.Pane defaultSize={75} min={40}>
             <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
-              {geometry?.svg && (
-                <Preview
-                  key={`${geometry.id}-${workspace?.id ?? "none"}`}
-                  layout={geometry.layout}
-                  workspace={workspace}
-                  selectedKey={selectedKey}
-                  onSelectKey={selectKey}
-                  previewDownPluginId={previewDownPluginId}
-                  previewDownTarget={previewDownTarget}
-                  onDropPlugin={(key, pluginId) =>
-                    void dropPlugin(key, pluginId)
-                  }
-                  zoom={zoom}
-                />
-              )}
+              {/* TODO(preview-rebuild): Factory temporarily stands in for
+                  Preview while that component is redesigned from scratch. */}
+              <Factory />
 
               {/* Zoom */}
               <Group
