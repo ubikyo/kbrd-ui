@@ -99,12 +99,12 @@ export type RowSlot = {
  * Only cells that already exist in `cells` are placed, in column order;
  * the loop stops at the first column nothing has been dropped on yet, so
  * `1U, 1U, …` doesn't need every one of `itemsX` columns filled in one by
- * one. Whatever Unit budget is left over (`itemsX` minus the sum of
- * `colspan * unit` for every placed cell) becomes a single trailing filler
- * slot sized to that remainder, ready for the next drop — this is what
- * keeps every row at the same overall Unit budget regardless of how it's
- * actually split up (e.g. 9U as nine 1U keys, or as 2.75U + six 1U + a
- * 0.25U remainder).
+ * one. Whatever's left of the row's reference width — `itemsX` 1U cells
+ * with `gapMm` between them, the same total footprint `maxItems` fits in
+ * `physicalMm` — becomes a single trailing filler slot, ready for the next
+ * drop. Subtracting physical widths (not summing Unit counts) is what
+ * keeps this correct once cells are merged: two 1U cells and one 2U cell
+ * don't reserve the same footprint, since merging removes an internal gap.
  */
 export function layoutRow(
   row: number,
@@ -115,7 +115,6 @@ export function layoutRow(
   gapMm: number,
 ): RowSlot[] {
   const slots: RowSlot[] = [];
-  let usedUnits = 0;
   let x = 0;
   let nextCol = 0;
 
@@ -132,19 +131,21 @@ export function layoutRow(
     if (slots.length > 0) x += gapMm;
     slots.push({ index, isFiller: false, x, width });
     x += width;
-    usedUnits += cell.colspan * cell.unit;
     nextCol = col + 1;
   }
 
-  const remaining = itemsX - usedUnits;
-  if (remaining > 1e-9 && nextCol < itemsX) {
-    if (slots.length > 0) x += gapMm;
-    slots.push({
-      index: row * itemsX + nextCol,
-      isFiller: true,
-      x,
-      width: remaining * unitMm,
-    });
+  if (nextCol < itemsX) {
+    const reference = itemsX * unitMm + (itemsX - 1) * gapMm;
+    const leadGap = slots.length > 0 ? gapMm : 0;
+    const fillerWidth = reference - x - leadGap;
+    if (fillerWidth > 1e-9) {
+      slots.push({
+        index: row * itemsX + nextCol,
+        isFiller: true,
+        x: x + leadGap,
+        width: fillerWidth,
+      });
+    }
   }
 
   return slots;

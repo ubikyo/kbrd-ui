@@ -145,6 +145,17 @@ test("layoutRow renders an untouched row as one big filler", () => {
   expect(slots).toEqual([{ index: 0, isFiller: true, x: 0, width: 9 }]);
 });
 
+test("layoutRow's untouched-row filler includes the gaps it stands in for, not just the raw Units", () => {
+  // Regression: the filler used to be `remaining * unitMm` alone, ignoring
+  // the (itemsX - 1) gaps those `itemsX` slots would have had between them
+  // — visibly too narrow, stopping well short of the display's own edge.
+  const itemsX = maxItems(216, 19.05, 3); // 9
+  const slots = layoutRow(0, itemsX, {}, new Map(), 19.05, 3);
+  expect(slots).toEqual([
+    { index: 0, isFiller: true, x: 0, width: itemsX * 19.05 + (itemsX - 1) * 3 },
+  ]);
+});
+
 test("layoutRow starts the next key right after the previous one's real edge", () => {
   const cells: Record<number, GridCell> = {
     0: cellAt({ unit: 1.25 }),
