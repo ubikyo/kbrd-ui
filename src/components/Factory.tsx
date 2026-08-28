@@ -4,8 +4,17 @@ import type { DragEvent } from "react";
 
 import { getDevice, type DeviceStatus } from "../api/device";
 import { pluginById } from "../plugins/registry";
-import type { LayoutSettings } from "../types/layout";
-import { maxItems } from "../utils/layout";
+import {
+  defaultGridCell,
+  type GridCell,
+  type LayoutSettings,
+} from "../types/layout";
+import {
+  cellOriginMm,
+  cellSizeMm,
+  maxItems,
+  occupiedCells,
+} from "../utils/layout";
 import LayoutItem from "./LayoutItem";
 
 const PADDING = 60;
@@ -20,33 +29,36 @@ type Size = {
   height: number;
 };
 
-type CellAssignment = {
-  // Plugin id of the attached kbrd.layout-key / kbrd.layout-space instance.
-  typeId: string | null;
-  // Invoke/Display plugins attached in Mapping mode.
-  pluginIds: string[];
-};
-
 type Props = LayoutSettings & {
   mode: "layout" | "mapping";
+  cells: Record<number, GridCell>;
+  onCellsChange: (
+    update: (current: Record<number, GridCell>) => Record<number, GridCell>,
+  ) => void;
+  selectedCellIndex: number | null;
+  onSelectCell: (index: number | null) => void;
 };
 
 /**
  * Scaffold for the redesigned Preview: temporarily replaces `<Preview>`
- * while that component is rebuilt from scratch. For now it lays out the
- * "display" — a rectangle standing in for KBRD-DEV's physical screen,
- * sized to that screen's aspect ratio (fetched from KBRD-API, which
- * KBRD-DEV keeps up to date) and fit to the available surface — plus a
- * centered grid of `LayoutItem` cells sized from the Geometry settings
- * (Unit, physical size, Gap — see Settings › Geometry).
+ * while that component is rebuilt from scratch. It draws the "display" — a
+ * rectangle standing in for KBRD-DEV's physical screen, sized to that
+ * screen's aspect ratio (fetched from KBRD-API, which KBRD-DEV keeps up to
+ * date) and fit to the available surface — and, inside it, an SVG grid of
+ * cells sized from the Geometry settings (Unit, physical size, Gap — see
+ * Settings › Geometry). SVG (rather than a CSS grid) is what lets a cell's
+ * shape grow past a single grid slot via colspan/rowspan, which more
+ * complex keys (an ISO Enter) will eventually need.
  *
  * Each cell is a drop target for the plugins dragged from `<Inspector>`'s
  * Plugins tab: a Layout plugin (kbrd.layout-key / kbrd.layout-space) sets
- * the cell's kind while in Layout mode, and — once a cell is a Key — an
- * Invoke/Display plugin can be dropped onto it while in Mapping mode.
- * TODO(preview-rebuild): assignments only live in this component's state
- * for now; nothing is persisted to a workspace yet since these synthetic
- * cells have no `key_ref` of their own to save against.
+ * the cell's kind while in Layout mode — only one at a time — and, once a
+ * cell is a Key, an Invoke/Display plugin can be dropped onto it while in
+ * Mapping mode. Clicking a cell selects it for `<Inspector>`'s Properties
+ * tab (Unit/Colspan/Rowspan in Layout mode).
+ * TODO(preview-rebuild): assignments only live in `App`'s state for now;
+ * nothing is persisted to a workspace yet since these synthetic cells have
+ * no `key_ref` of their own to save against.
  */
 export default function Factory({
   unitMm,
@@ -54,11 +66,14 @@ export default function Factory({
   physicalHeightMm,
   gapMm,
   mode,
+  cells,
+  onCellsChange,
+  selectedCellIndex,
+  onSelectCell,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 });
   const [device, setDevice] = useState<DeviceStatus>({ connected: false });
-  const [cells, setCells] = useState<Record<number, CellAssignment>>({});
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -117,50 +132,31 @@ export default function Factory({
     return { width, height };
   })();
 
-  // Physical mm converted to display pixels — independent x/y scale since
-  // the resolution's aspect ratio and the physical size's aspect ratio
-  // aren't guaranteed to match exactly.
-  const grid = (() => {
-    if (!display || physicalWidthMm <= 0 || physicalHeightMm <= 0) return null;
+  const itemsX = maxItems(physicalWidthMm, unitMm, gapMm);
+  const itemsY = maxItems(physicalHeightMm, unitMm, gapMm);
+  const occupied =
+    itemsX > 0 && itemsY > 0 ? occupiedCells(cells, itemsX, itemsY) : null;
 
-    const itemsX = maxItems(physicalWidthMm, unitMm, gapMm);
-    const itemsY = maxItems(physicalHeightMm, unitMm, gapMm);
-    if (itemsX <= 0 || itemsY <= 0) return null;
-
-    const scaleX = display.width / physicalWidthMm;
-    const scaleY = display.height / physicalHeightMm;
-    return {
-      itemsX,
-      itemsY,
-      itemWidth: unitMm * scaleX,
-      itemHeight: unitMm * scaleY,
-      gapX: gapMm * scaleX,
-      gapY: gapMm * scaleY,
-    };
-  })();
-
-  function handleDragOver(index: number, event: DragEvent<HTMLDivElement>) {
+  function handleDragOver(index: number, event: DragEvent<SVGGElement>) {
     if (!event.dataTransfer.types.includes(PLUGIN_DRAG_TYPE)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     setDropTargetIndex(index);
   }
 
-  function handleDragLeave(index: number, event: DragEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      setDropTargetIndex((current) => (current === index ? null : current));
-    }
+  function handleDragLeave(index: number) {
+    setDropTargetIndex((current) => (current === index ? null : current));
   }
 
-  function handleDrop(index: number, event: DragEvent<HTMLDivElement>) {
+  function handleDrop(index: number, event: DragEvent<SVGGElement>) {
     const pluginId = event.dataTransfer.getData(PLUGIN_DRAG_TYPE);
     const plugin = pluginById(pluginId);
     if (!plugin) return;
     event.preventDefault();
     setDropTargetIndex(null);
 
-    setCells((current) => {
-      const cell = current[index] ?? { typeId: null, pluginIds: [] };
+    onCellsChange((current) => {
+      const cell = current[index] ?? defaultGridCell();
 
       if (mode === "layout") {
         if (plugin.category !== "Layout") return current;
@@ -168,10 +164,14 @@ export default function Factory({
         // Mapping-mode plugins were attached to its previous kind.
         return {
           ...current,
-          [index]: {
-            typeId: plugin.id,
-            pluginIds: cell.typeId === plugin.id ? cell.pluginIds : [],
-          },
+          [index]:
+            cell.typeId === plugin.id
+              ? cell
+              : {
+                  ...defaultGridCell(),
+                  typeId: plugin.id,
+                  typeConfig: { ...plugin.defaultConfig },
+                },
         };
       }
 
@@ -212,38 +212,41 @@ export default function Factory({
             flexShrink: 0,
             boxSizing: "border-box",
             border: "1px solid var(--kbrd-border-alt)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
           }}
         >
-          {grid && (
-            <Box
-              style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${grid.itemsX}, ${grid.itemWidth}px)`,
-                gridTemplateRows: `repeat(${grid.itemsY}, ${grid.itemHeight}px)`,
-                columnGap: grid.gapX,
-                rowGap: grid.gapY,
-              }}
+          {itemsX > 0 && itemsY > 0 && occupied && (
+            <svg
+              width="100%"
+              height="100%"
+              viewBox={`0 0 ${physicalWidthMm} ${physicalHeightMm}`}
             >
-              {Array.from({ length: grid.itemsX * grid.itemsY }, (_, index) => {
-                const cell = cells[index];
+              {Array.from({ length: itemsX * itemsY }, (_, index) => {
+                if (occupied.has(index)) return null;
+
+                const cell = cells[index] ?? defaultGridCell();
+                const { x, y } = cellOriginMm(index, itemsX, unitMm, gapMm);
+                const { width, height } = cellSizeMm(cell, unitMm, gapMm);
+
                 return (
                   <LayoutItem
                     key={index}
-                    width={grid.itemWidth}
-                    height={grid.itemHeight}
-                    typeId={cell?.typeId}
-                    pluginIds={cell?.pluginIds}
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    typeId={cell.typeId}
+                    pluginIds={cell.pluginIds}
                     isDropTarget={dropTargetIndex === index}
+                    onClick={() =>
+                      onSelectCell(selectedCellIndex === index ? null : index)
+                    }
                     onDragOver={(event) => handleDragOver(index, event)}
-                    onDragLeave={(event) => handleDragLeave(index, event)}
+                    onDragLeave={() => handleDragLeave(index)}
                     onDrop={(event) => handleDrop(index, event)}
                   />
                 );
               })}
-            </Box>
+            </svg>
           )}
         </Box>
       )}

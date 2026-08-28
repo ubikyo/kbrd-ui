@@ -21,13 +21,14 @@ import { useCallback, useRef, useState } from "react";
 import kbrdLogo from "./assets/media/KBRD.svg";
 
 import Layout from "./components/Layout";
-import type { LayoutData, LayoutSettings } from "./types/layout";
+import type { GridCell, LayoutData, LayoutSettings } from "./types/layout";
 
 import Factory from "./components/Factory";
 import Inspector from "./components/Inspector";
 import SettingsModal from "./components/SettingsModal";
 import Workspace from "./components/Workspace";
 import { clearKey } from "./api/workspaces";
+import { maxItems, rowColOf } from "./utils/layout";
 import type {
   KeyPlugin,
   KeyProperty,
@@ -59,6 +60,12 @@ export default function App() {
   // Which form the Inspector's plugin editors show — see `mode` on
   // `Inspector`'s props and each plugin's `LayoutEditor`/`MappingEditor`.
   const [mode, setMode] = useState<"layout" | "mapping">("layout");
+  // `<Factory>`'s grid — see the TODO on that component for why this is
+  // still local-only state rather than something persisted to a workspace.
+  const [cells, setCells] = useState<Record<number, GridCell>>({});
+  const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(
+    null,
+  );
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
   // TODO(preview-rebuild): only the setters are used until <Factory> reads
   // these back to force-render a key/plugin's down state, as <Preview> did.
@@ -141,6 +148,38 @@ export default function App() {
     setPreviewDownTarget(null);
   }
 
+  function changeCell(index: number, patch: Partial<GridCell>) {
+    setCells((current) => ({
+      ...current,
+      [index]: { ...current[index], ...patch },
+    }));
+  }
+
+  // Colspan/rowspan can't push a cell past the grid's last column/row.
+  const gridItemsX = maxItems(
+    layoutSettings.physicalWidthMm,
+    layoutSettings.unitMm,
+    layoutSettings.gapMm,
+  );
+  const gridItemsY = maxItems(
+    layoutSettings.physicalHeightMm,
+    layoutSettings.unitMm,
+    layoutSettings.gapMm,
+  );
+  const selectedCell =
+    selectedCellIndex !== null ? cells[selectedCellIndex] : undefined;
+  const layoutSelection =
+    selectedCellIndex !== null && selectedCell
+      ? {
+          index: selectedCellIndex,
+          cell: selectedCell,
+          maxColspan:
+            gridItemsX - rowColOf(selectedCellIndex, gridItemsX).col,
+          maxRowspan:
+            gridItemsY - rowColOf(selectedCellIndex, gridItemsX).row,
+        }
+      : null;
+
   return (
     <AppShell header={{ height: 64 }} padding={0}>
       <AppShell.Header
@@ -222,7 +261,14 @@ export default function App() {
             <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
               {/* TODO(preview-rebuild): Factory temporarily stands in for
                   Preview while that component is redesigned from scratch. */}
-              <Factory {...layoutSettings} mode={mode} />
+              <Factory
+                {...layoutSettings}
+                mode={mode}
+                cells={cells}
+                onCellsChange={setCells}
+                selectedCellIndex={selectedCellIndex}
+                onSelectCell={setSelectedCellIndex}
+              />
 
               <SegmentedControl
                 value={mode}
@@ -249,6 +295,8 @@ export default function App() {
               selectedKey={selectedKey}
               layout={layout?.layout ?? null}
               mode={mode}
+              layoutSelection={layoutSelection}
+              onLayoutCellChange={changeCell}
               tab={inspectorTab}
               onTabChange={setInspectorTab}
               onChange={changePlugins}

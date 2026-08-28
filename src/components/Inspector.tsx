@@ -30,7 +30,8 @@ import {
 } from "../api/workspaces";
 import { pluginById, plugins } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
-import type { KeyboardLayout } from "../types/layout";
+import type { GridCell, KeyboardLayout } from "../types/layout";
+import LayoutCellProperties from "./LayoutCellProperties";
 import type {
   KeyPlugin,
   KeyProperty,
@@ -77,6 +78,14 @@ type Props = {
   // Mapping (everything else) editor — see `kbrd-plugins`' per-plugin
   // `LayoutEditor`/`MappingEditor` exports.
   mode: "layout" | "mapping";
+  // The `<Factory>` grid cell currently selected, only set in Layout mode.
+  layoutSelection: {
+    index: number;
+    cell: GridCell;
+    maxColspan: number;
+    maxRowspan: number;
+  } | null;
+  onLayoutCellChange: (index: number, patch: Partial<GridCell>) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
   onPreviewDownTargetChange: (keyRef: string | null) => void;
@@ -225,6 +234,8 @@ export default function Inspector({
   onChange,
   layout,
   mode,
+  layoutSelection,
+  onLayoutCellChange,
   onKeyPropertiesChange,
   onPreviewDownPluginChange,
   onPreviewDownTargetChange,
@@ -490,7 +501,20 @@ export default function Inspector({
         </Tabs.Panel>
 
         <Tabs.Panel value="properties" pt="lg" pb="lg">
-          {!selectedKey ? (
+          {mode === "layout" ? (
+            !layoutSelection || !layoutSelection.cell.typeId ? (
+              <Text c="dimmed">No key selected</Text>
+            ) : (
+              <LayoutCellProperties
+                cell={layoutSelection.cell}
+                maxColspan={layoutSelection.maxColspan}
+                maxRowspan={layoutSelection.maxRowspan}
+                onChange={(patch) =>
+                  onLayoutCellChange(layoutSelection.index, patch)
+                }
+              />
+            )
+          ) : !selectedKey ? (
             <Text c="dimmed">No key selected</Text>
           ) : (
             <Stack gap={0}>
@@ -699,8 +723,9 @@ export default function Inspector({
               {group.items.map((item) => {
                 const plugin = pluginById(item.plugin_id);
                 if (!plugin) return null;
-                const Editor =
-                  mode === "layout" ? plugin.LayoutEditor : plugin.MappingEditor;
+                // This branch of the Properties tab only renders in Mapping
+                // mode — see the `mode === "layout"` split above.
+                const Editor = plugin.MappingEditor;
                 const summary = pluginSummary(item);
                 const supportsDown =
                   targetType === "key" &&
