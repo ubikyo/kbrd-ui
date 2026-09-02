@@ -1,52 +1,68 @@
 import { api } from "./client";
+import type { FactoryLayout } from "../types/layout";
 import type {
   KeyPlugin,
   KeyProperty,
   KeyPropertyConfig,
-  WorkspaceData,
-} from "../types/workspace";
+  LayerData,
+} from "../types/layer";
 
-export const listWorkspaces = (geometryId: number) =>
-  api<WorkspaceData[]>(`/api/geometry/${geometryId}/workspace`);
+// KBRD-API still calls this a "workspace" — its routes, and the
+// `workspace_id` field on `KeyPlugin`, are unrenamed on purpose so the
+// wire contract doesn't move; only kbrd-web's own naming became "Layer".
 
-export const createWorkspace = (
+export const listLayers = (geometryId: number) =>
+  api<LayerData[]>(`/api/geometry/${geometryId}/workspace`);
+
+export const createLayer = (
   geometryId: number,
   name: string,
   description = "",
 ) =>
-  api<WorkspaceData>(`/api/geometry/${geometryId}/workspace`, {
+  api<LayerData>(`/api/geometry/${geometryId}/workspace`, {
     method: "POST",
     body: JSON.stringify({ name, description }),
   });
 
-export const activateWorkspace = (id: number) =>
-  api<WorkspaceData>(`/api/workspace/${id}/activate`, { method: "PUT" });
+export const activateLayer = (id: number) =>
+  api<LayerData>(`/api/workspace/${id}/activate`, { method: "PUT" });
 
-export const deactivateWorkspace = () =>
+export const deactivateLayer = () =>
   api<{ ok: boolean }>("/api/workspace/active", { method: "DELETE" });
 
-export const updateWorkspace = (
+export const updateLayer = (
   id: number,
   name: string,
   description: string,
 ) =>
-  api<WorkspaceData>(`/api/workspace/${id}`, {
+  api<LayerData>(`/api/workspace/${id}`, {
     method: "PUT",
     body: JSON.stringify({ name, description }),
   });
 
-export const deleteWorkspace = (id: number) =>
+export const deleteLayer = (id: number) =>
   api<{ ok: boolean }>(`/api/workspace/${id}`, { method: "DELETE" });
 
+// Autosaves `<Factory>`'s disposition onto this layer — see the effect
+// in `App` — so it's reloaded whenever the user switches back to it.
+export const updateFactoryLayout = (
+  id: number,
+  factoryLayout: FactoryLayout | null,
+) =>
+  api<LayerData>(`/api/workspace/${id}/factory-layout`, {
+    method: "PUT",
+    body: JSON.stringify({ factory_layout: factoryLayout }),
+  });
+
 export const addKeyPlugin = (
-  workspaceId: number,
+  layerId: number,
   key: string,
   pluginId: string,
   pluginVersion: string,
   config: unknown,
 ) =>
   api<KeyPlugin>(
-    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}/plugins`,
+    `/api/workspace/${layerId}/keys/${encodeURIComponent(key)}/plugins`,
     {
       method: "POST",
       body: JSON.stringify({
@@ -58,31 +74,31 @@ export const addKeyPlugin = (
   );
 
 export const duplicateKeyPlugins = (
-  workspaceId: number,
+  layerId: number,
   key: string,
   sourceKey: string,
 ) =>
   api<KeyPlugin[]>(
-    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}/plugins/duplicate-from`,
+    `/api/workspace/${layerId}/keys/${encodeURIComponent(key)}/plugins/duplicate-from`,
     {
       method: "POST",
       body: JSON.stringify({ source_key_ref: sourceKey }),
     },
   );
 
-export const clearKey = (workspaceId: number, key: string) =>
-  api<WorkspaceData>(
-    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}`,
+export const clearKey = (layerId: number, key: string) =>
+  api<LayerData>(
+    `/api/workspace/${layerId}/keys/${encodeURIComponent(key)}`,
     { method: "DELETE" },
   );
 
 export const moveKey = (
-  workspaceId: number,
+  layerId: number,
   sourceKey: string,
   destinationKey: string,
 ) =>
-  api<WorkspaceData>(
-    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(sourceKey)}/move-to`,
+  api<LayerData>(
+    `/api/workspace/${layerId}/keys/${encodeURIComponent(sourceKey)}/move-to`,
     {
       method: "POST",
       body: JSON.stringify({ destination_key_ref: destinationKey }),
@@ -99,11 +115,11 @@ export const deleteKeyPlugin = (id: number) =>
   api<{ ok: boolean }>(`/api/key-plugin/${id}`, { method: "DELETE" });
 
 export const updateKeyProperties = (
-  workspaceId: number,
+  layerId: number,
   key: string,
   config: KeyPropertyConfig,
 ) =>
   api<KeyProperty>(
-    `/api/workspace/${workspaceId}/keys/${encodeURIComponent(key)}/properties`,
+    `/api/workspace/${layerId}/keys/${encodeURIComponent(key)}/properties`,
     { method: "PUT", body: JSON.stringify({ config }) },
   );

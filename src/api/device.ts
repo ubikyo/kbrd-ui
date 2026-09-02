@@ -2,6 +2,11 @@ import { api } from "./client";
 
 const DEVICE_URL = "/api/device";
 
+// Used while no screen is connected, or its resolution isn't reported yet
+// — see `Factory` and `SettingsModal`, both of which fall back to this.
+export const FALLBACK_WIDTH = 1280;
+export const FALLBACK_HEIGHT = 800;
+
 export type DeviceStatus =
   | { connected: false }
   | {

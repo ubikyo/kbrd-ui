@@ -13,8 +13,8 @@ import type { KeyboardLayout } from "../types/layout";
 import type {
   KeyMode,
   KeyPropertyConfig,
-  WorkspaceData,
-} from "../types/workspace";
+  LayerData,
+} from "../types/layer";
 import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
 
 type PreviewProps = {
@@ -22,7 +22,7 @@ type PreviewProps = {
   onSelectKey: (key: string | null) => void;
   zoom: number;
   layout: KeyboardLayout;
-  workspace: WorkspaceData | null;
+  layer: LayerData | null;
   onDropPlugin: (key: string, pluginId: string) => void;
   previewDownPluginId: number | null;
   previewDownTarget: string | null;
@@ -162,7 +162,7 @@ export default function Preview({
   onSelectKey,
   zoom,
   layout,
-  workspace,
+  layer,
   onDropPlugin,
   previewDownPluginId,
   previewDownTarget,
@@ -181,12 +181,12 @@ export default function Preview({
   const keyProperties = useMemo(
     () =>
       new Map(
-        (workspace?.key_properties ?? []).map((item) => [
+        (layer?.key_properties ?? []).map((item) => [
           item.key_ref,
           item.config,
         ]),
       ),
-    [workspace?.key_properties],
+    [layer?.key_properties],
   );
 
   const isKeyDown = useCallback(
@@ -424,7 +424,7 @@ export default function Preview({
 
   function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
     const key = keyFromEvent(event.target, event.clientX, event.clientY);
-    if (!workspace || !key) {
+    if (!layer || !key) {
       setDropTargetKey(null);
       return;
     }
@@ -440,7 +440,7 @@ export default function Preview({
   }
 
   function handleDrop(event: React.DragEvent<HTMLDivElement>) {
-    if (!workspace) return;
+    if (!layer) return;
     const key = keyFromEvent(event.target, event.clientX, event.clientY);
     const pluginId = event.dataTransfer.getData("application/kbrd-plugin");
     if (!key || !pluginId) return;
@@ -451,7 +451,7 @@ export default function Preview({
   }
 
   function renderPlugins(onBackground: boolean) {
-    return (workspace?.plugins ?? [])
+    return (layer?.plugins ?? [])
       .filter(
         (instance) =>
           instance.enabled &&

@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { Box, Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
 import { MdStraighten } from "react-icons/md";
 
-import { getDevice, type DeviceStatus } from "../api/device";
+import {
+  FALLBACK_HEIGHT,
+  FALLBACK_WIDTH,
+  getDevice,
+  type DeviceStatus,
+} from "../api/device";
 import type { LayoutSettings } from "../types/layout";
-import { maxItems, pitchMm } from "../utils/layout";
 
 const DEVICE_POLL_INTERVAL_MS = 5000;
 const MM_PER_INCH = 25.4;
@@ -101,24 +105,17 @@ export default function SettingsModal({
   const hasValidPhysicalSize =
     draft.physicalWidthMm > 0 && draft.physicalHeightMm > 0;
 
-  const resolutionValue = device.connected
-    ? `${device.width} × ${device.height} px`
+  // Falls back to the same 1280×800 KBRD-DEV uses while no screen is
+  // connected — see `Factory` — so Resolution/DPI stay populated instead
+  // of going blank.
+  const resolutionWidth = device.connected ? device.width : FALLBACK_WIDTH;
+  const resolutionHeight = device.connected ? device.height : FALLBACK_HEIGHT;
+  const resolutionValue = `${resolutionWidth} × ${resolutionHeight} px`;
+  const dpiValue = hasValidPhysicalSize
+    ? `${Math.round(resolutionWidth / (draft.physicalWidthMm / MM_PER_INCH))} × ${Math.round(
+        resolutionHeight / (draft.physicalHeightMm / MM_PER_INCH),
+      )} dpi`
     : "—";
-  const dpiValue =
-    device.connected && hasValidPhysicalSize
-      ? `${Math.round(device.width / (draft.physicalWidthMm / MM_PER_INCH))} × ${Math.round(
-          device.height / (draft.physicalHeightMm / MM_PER_INCH),
-        )} dpi`
-      : "—";
-  const pitch = pitchMm(draft.unitMm, draft.gapMm);
-  const maxItemsValue = hasValidPhysicalSize
-    ? `${maxItems(draft.physicalWidthMm, draft.unitMm, draft.gapMm)} × ${maxItems(
-        draft.physicalHeightMm,
-        draft.unitMm,
-        draft.gapMm,
-      )}`
-    : "—";
-  const pitchValue = pitch > 0 ? `${pitch.toFixed(2)} mm` : "—";
 
   return (
     <Modal
@@ -126,18 +123,27 @@ export default function SettingsModal({
       onClose={cancel}
       title={<Text fw={700}>Settings</Text>}
       centered
-      size="lg"
+      // "lg" (620px) + 50px.
+      size={670}
       overlayProps={{ backgroundOpacity: 0.65, blur: 2 }}
       styles={{
         content: {
           display: "flex",
           flexDirection: "column",
-          height: "70vh",
+          // +50px on top of the usual 70vh.
+          height: "calc(70vh + 50px)",
         },
         body: { display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: 0 },
       }}
     >
-      <Box style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <Box
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          padding: "24px 40px 40px",
+        }}
+      >
         <Tabs
           value={tab}
           onChange={setTab}
@@ -149,6 +155,11 @@ export default function SettingsModal({
               "--tab-border-color": "var(--kbrd-border-color)",
             } as React.CSSProperties
           }
+          styles={{
+            // Mantine centers a tab's label by default; this one reads
+            // left to right like the rest of the modal's labels.
+            tabLabel: { textAlign: "left" },
+          }}
         >
           <Tabs.List w={180} style={{ flexShrink: 0 }}>
             <Tabs.Tab value="geometry" leftSection={<MdStraighten size={16} />}>
@@ -158,28 +169,10 @@ export default function SettingsModal({
 
           <Tabs.Panel
             value="geometry"
-            px="lg"
-            pb="lg"
-            style={{ overflowY: "auto" }}
+            style={{ overflowY: "auto", padding: 0, paddingLeft: 40 }}
           >
             <Stack gap="md">
               <Title order={4}>Geometry</Title>
-              <FieldRow label="Unit (1U)">
-                <NumberInput
-                  w="100%"
-                  aria-label="Unit (1U)"
-                  suffix=" mm"
-                  min={0}
-                  step={0.05}
-                  decimalScale={2}
-                  fixedDecimalScale
-                  value={draft.unitMm}
-                  success
-                  onChange={(value) =>
-                    patch({ unitMm: typeof value === "number" ? value : 0 })
-                  }
-                />
-              </FieldRow>
               <FieldRow label="Physical width (mm)">
                 <NumberInput
                   w="100%"
@@ -216,27 +209,15 @@ export default function SettingsModal({
                   }
                 />
               </FieldRow>
-              <FieldRow label="Gap">
-                <NumberInput
-                  w="100%"
-                  aria-label="Gap"
-                  suffix=" mm"
-                  min={0}
-                  step={0.5}
-                  decimalScale={2}
-                  value={draft.gapMm}
-                  success
-                  onChange={(value) =>
-                    patch({ gapMm: typeof value === "number" ? value : 0 })
-                  }
-                />
-              </FieldRow>
 
               <Title order={4} mt="md">Display</Title>
+              <FieldRow label="State">
+                <Text size="sm" fw={700} c={device.connected ? "green" : "red"}>
+                  {device.connected ? "Connected" : "Disconnected"}
+                </Text>
+              </FieldRow>
               <DisplayRow label="Resolution (px)" value={resolutionValue} />
               <DisplayRow label="DPI (x / y)" value={dpiValue} />
-              <DisplayRow label="Max items" value={maxItemsValue} />
-              <DisplayRow label="Pitch" value={pitchValue} />
             </Stack>
           </Tabs.Panel>
         </Tabs>
@@ -251,7 +232,9 @@ export default function SettingsModal({
         }}
       >
         <Button color="gray" onClick={cancel}>Cancel</Button>
-        <Button onClick={save} disabled={!hasValidPhysicalSize}>Save</Button>
+        <Button color="green" onClick={save} disabled={!hasValidPhysicalSize}>
+          Save
+        </Button>
       </Group>
     </Modal>
   );

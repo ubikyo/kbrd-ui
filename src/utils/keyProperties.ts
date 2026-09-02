@@ -1,4 +1,4 @@
-import type { KeyPropertyConfig } from "../types/workspace";
+import type { KeyPropertyConfig } from "../types/layer";
 
 type LegacyKeyPropertyConfig = Partial<KeyPropertyConfig> & {
   borderEnabled?: boolean;
@@ -7,7 +7,7 @@ type LegacyKeyPropertyConfig = Partial<KeyPropertyConfig> & {
 
 /**
  * Résout le drapeau "bordure activée" pour un état (up/down) donné, avec
- * repli sur l'ancien champ unique `borderEnabled` pour les workspaces
+ * repli sur l'ancien champ unique `borderEnabled` pour les layers
  * enregistrés avant l'introduction des états up/down distincts.
  */
 export function resolveBorderEnabled(

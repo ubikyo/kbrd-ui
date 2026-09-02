@@ -1,14 +1,28 @@
 import { expect, test } from "vitest";
 import {
-  cellOriginMm,
+  addCellToRow,
+  addMerge,
+  canRemoveCell,
+  cellRect,
   cellSizeMm,
   defaultLayout,
+  gridRows,
   gridSizeMm,
+  groupOf,
+  groupsShareEdge,
+  insertCellAfter,
   layoutRow,
   maxItems,
-  occupiedCells,
+  maxUnitForCell,
+  mergedOutline,
+  nextCellId,
   pitchMm,
-  rowColOf,
+  primaryOf,
+  remainingUnitsInRow,
+  removeCellFromRow,
+  removeMerge,
+  rowOf,
+  shareEdge,
 } from "./layout";
 import { defaultGridCell, type GridCell, type LayoutData } from "../types/layout";
 
@@ -56,111 +70,311 @@ test("gridSizeMm is the footprint maxItems fits within physicalMm", () => {
   expect(gridSizeMm(0, 19.05, 3)).toBe(0);
 });
 
-test("rowColOf derives the row/column from a flat grid index", () => {
-  expect(rowColOf(0, 5)).toEqual({ row: 0, col: 0 });
-  expect(rowColOf(4, 5)).toEqual({ row: 0, col: 4 });
-  expect(rowColOf(5, 5)).toEqual({ row: 1, col: 0 });
-  expect(rowColOf(7, 5)).toEqual({ row: 1, col: 2 });
-});
-
-test("cellOriginMm places a cell on the uniform base-Unit grid", () => {
-  expect(cellOriginMm(0, 5, 10, 2)).toEqual({ x: 0, y: 0, row: 0, col: 0 });
-  expect(cellOriginMm(7, 5, 10, 2)).toEqual({ x: 24, y: 12, row: 1, col: 2 });
-});
-
-test("cellSizeMm folds a spanned cell's internal gaps into one shape", () => {
-  const cell = { ...defaultGridCell(), colspan: 2 };
-  expect(cellSizeMm(cell, 19.05, 3)).toEqual({
-    width: 2 * 19.05 + 3,
+test("cellSizeMm sizes a cell by pitches, not a raw unitMm scale", () => {
+  // unitMm is the keycap's own size, not its pitch (unitMm + gapMm) — a
+  // 1.5U cell is 1.5 pitches minus the one trailing gap it doesn't need:
+  // 1.5 * 13 - 3 = 16.5, not 1.5 * 10.
+  expect(cellSizeMm(cellAt({ unit: 1.5 }), 10, 3)).toEqual({
+    width: 16.5,
+    height: 10,
+  });
+  // A plain 1U cell always comes back out to exactly unitMm — the pitch
+  // it spans includes precisely the one gap being subtracted back out.
+  expect(cellSizeMm(defaultGridCell(1), 19.05, 3)).toEqual({
+    width: 19.05,
     height: 19.05,
   });
 });
 
-test("cellSizeMm scales width by the cell's own Unit, height by the base Unit", () => {
-  const cell = { ...defaultGridCell(), unit: 1.25 as const, rowspan: 2 };
-  expect(cellSizeMm(cell, 10, 2)).toEqual({
-    width: 1.25 * 10,
-    height: 2 * 10 + 2,
-  });
+test("cellSizeMm's width matches a 16mm cap / 3mm gap keyboard's real key sizes", () => {
+  // 1U = 16mm, 2U = 35mm, 6.25U = 115.75mm, 9U = 168mm — the pitch here
+  // is 16 + 3 = 19mm.
+  expect(cellSizeMm(cellAt({ unit: 1 }), 16, 3).width).toBe(16);
+  expect(cellSizeMm(cellAt({ unit: 2 }), 16, 3).width).toBe(35);
+  expect(cellSizeMm(cellAt({ unit: 6.25 }), 16, 3).width).toBeCloseTo(115.75);
+  expect(cellSizeMm(cellAt({ unit: 9 }), 16, 3).width).toBe(168);
 });
 
-test("occupiedCells marks every slot a colspan/rowspan covers besides its origin", () => {
-  const cells = { 0: { ...defaultGridCell(), colspan: 2, rowspan: 2 } };
-  const occupied = occupiedCells(cells, 5, 5);
-  expect([...occupied.entries()]).toEqual(
-    expect.arrayContaining([
-      [1, 0],
-      [5, 0],
-      [6, 0],
-    ]),
-  );
-  expect(occupied.has(0)).toBe(false);
+test("gridRows gives every row an empty cell list until told otherwise", () => {
+  expect(gridRows(3, {})).toEqual([[], [], []]);
+  expect(gridRows(2, { 1: [7, 8] })).toEqual([[], [7, 8]]);
 });
 
-test("occupiedCells ignores spans that would run off the grid", () => {
-  const cells = { 4: { ...defaultGridCell(), colspan: 3 } };
-  const occupied = occupiedCells(cells, 5, 1);
-  expect(occupied.size).toBe(0);
+test("rowOf finds which row holds a given cell id", () => {
+  const rows = gridRows(2, { 0: [1, 2], 1: [3] });
+  expect(rowOf(2, rows)).toBe(0);
+  expect(rowOf(3, rows)).toBe(1);
+  expect(rowOf(999, rows)).toBe(-1);
 });
 
-test("layoutRow defaults an untouched row to itemsX individual 1U slots", () => {
-  const slots = layoutRow(0, 9, {}, new Map(), 1, 0);
-  expect(slots).toHaveLength(9);
-  expect(slots.every((slot) => slot.width === 1)).toBe(true);
-  expect(slots[8].isRemainder).toBe(true);
-  expect(slots.slice(0, 8).every((slot) => !slot.isRemainder)).toBe(true);
-  expect(slots[8].x).toBe(8);
+test("nextCellId is one past the highest id already in use, across every row", () => {
+  expect(nextCellId(gridRows(2, { 0: [1, 2], 1: [50] }))).toBe(51);
+  expect(nextCellId(gridRows(2, {}))).toBe(0);
+  expect(nextCellId([])).toBe(0);
 });
 
-test("layoutRow's untouched-row slots reach the display's own edge, gaps included", () => {
-  // Regression: an empty row used to render as one filler sized
-  // `itemsX * unitMm` alone, ignoring the (itemsX - 1) gaps those itemsX
-  // slots have between them — visibly too narrow, stopping well short of
-  // the display's edge.
-  const itemsX = maxItems(216, 19.05, 3); // 9
-  const slots = layoutRow(0, itemsX, {}, new Map(), 19.05, 3);
-  const last = slots[slots.length - 1];
-  expect(last.x + last.width).toBeCloseTo(gridSizeMm(itemsX, 19.05, 3));
+test("addCellToRow appends a fresh id to the target row only, and returns it", () => {
+  const rows = gridRows(2, { 0: [1, 2] });
+  const result = addCellToRow(rows, 0);
+  expect(result.id).toBe(3);
+  expect(result.rows[0]).toEqual([1, 2, 3]);
+  expect(result.rows[1]).toEqual(rows[1]);
 });
 
-test("layoutRow: 1.25U, 1.25U, then plain 1U defaults leave a 0.5U remainder", () => {
+test("insertCellAfter puts a fresh id right after the given cell in its row, not at the end", () => {
+  const rows = gridRows(2, { 0: [1, 2, 3] });
+  const result = insertCellAfter(rows, 0, 1);
+  expect(result.id).toBe(4);
+  expect(result.rows[0]).toEqual([1, 4, 2, 3]);
+  expect(result.rows[1]).toEqual(rows[1]);
+});
+
+test("insertCellAfter appends to the end if the given cell isn't actually in the row", () => {
+  const rows = gridRows(1, { 0: [1, 2] });
+  const result = insertCellAfter(rows, 0, 999);
+  expect(result.rows[0]).toEqual([1, 2, result.id]);
+});
+
+test("canRemoveCell forbids removing a merged cell, but a row can go back to empty", () => {
+  const rows = gridRows(1, { 0: [1] });
+  expect(canRemoveCell(1, rows, [])).toBe(true); // the row's only cell — fine
+  expect(canRemoveCell(1, rows, [[1, 2]])).toBe(false); // merged — unmerge first
+  expect(canRemoveCell(99, rows, [])).toBe(false); // not in any row
+});
+
+test("removeCellFromRow removes only the given id, from only its own row", () => {
+  const rows = gridRows(2, { 0: [1, 2], 1: [3] });
+  const updated = removeCellFromRow(rows, 0, 1);
+  expect(updated[0]).toEqual([2]);
+  expect(updated[1]).toEqual(rows[1]);
+});
+
+test("layoutRow places cells left to right at their own configured Unit, flush at the row's own origin", () => {
   const cells: Record<number, GridCell> = {
-    0: cellAt({ unit: 1.25 }),
     1: cellAt({ unit: 1.25 }),
+    2: cellAt({ unit: 2 }),
   };
-  const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
-  expect(slots).toHaveLength(9);
-  const remainder = slots[8];
-  expect(remainder.isRemainder).toBe(true);
-  expect(remainder.index).toBe(8);
-  expect(remainder.width).toBeCloseTo(0.5);
+  const slots = layoutRow([1, 2], cells, 10, 3);
+  // The row starts right at x=0 — any margin comes from centering the
+  // whole grid as a block (`gridOffsetX` in `Factory`), not from here.
+  // Widths come from `cellSizeMm`'s pitch-based formula: pitch is 13
+  // here, so 1.25U is 1.25*13-3=13.25 and 2U is 2*13-3=23.
+  expect(slots[0]).toMatchObject({ id: 1, x: 0, width: 13.25 });
+  expect(slots[1]).toMatchObject({ id: 2, x: 16.25, width: 23 });
 });
 
-test("layoutRow: 2.75U then plain 1U defaults leave a 0.25U remainder one column early", () => {
-  const cells: Record<number, GridCell> = { 0: cellAt({ unit: 2.75 }) };
-  const slots = layoutRow(0, 9, cells, new Map(), 1, 0);
-  // The wider first key eats the budget faster, so the row runs out at
-  // column 7 — column 8 never gets laid out at all.
-  expect(slots).toHaveLength(8);
-  const remainder = slots[slots.length - 1];
-  expect(remainder.index).toBe(7);
-  expect(remainder.isRemainder).toBe(true);
-  expect(remainder.width).toBeCloseTo(0.25);
+test("layoutRow on an empty row returns no slots", () => {
+  expect(layoutRow([], {}, 10, 3)).toEqual([]);
 });
 
-test("layoutRow starts the next key right after the previous one's real edge", () => {
+test("maxUnitForCell caps a cell at the row's raw-width budget minus every other cell in its row", () => {
+  const rows = gridRows(1, { 0: [1, 2, 3] });
   const cells: Record<number, GridCell> = {
-    0: cellAt({ unit: 1.25 }),
-    1: cellAt(),
+    1: cellAt({ unit: 2 }),
+    2: cellAt({ unit: 3 }),
+    3: cellAt({ unit: 1 }),
   };
-  const slots = layoutRow(0, 9, cells, new Map(), 10, 3);
-  expect(slots[0]).toMatchObject({ x: 0, width: 12.5 });
-  expect(slots[1]).toMatchObject({ x: 12.5 + 3, width: 10 });
+  // A 90mm-wide screen at 10mm/Unit is a 9U budget; cells 1 and 2 already
+  // use 5U, leaving cell 3 at most 4U. Zero gap here isolates the raw
+  // budget math from the gap reservation covered separately below.
+  expect(maxUnitForCell(3, rows, cells, 90, 10, 0)).toBe(4);
 });
 
-test("layoutRow skips columns a rowspan from a previous row already covers", () => {
-  const occupied = new Map([[9, 0]]); // row 1, col 0 covered by row 0's cell
-  const cells: Record<number, GridCell> = { 10: cellAt() }; // row 1, col 1
-  const slots = layoutRow(1, 9, cells, occupied, 1, 0);
-  expect(slots[0]).toMatchObject({ index: 10, x: 0 });
+test("maxUnitForCell treats an empty row as having its full budget free", () => {
+  const rows = gridRows(1, { 0: [1] });
+  expect(maxUnitForCell(1, rows, {}, 90, 10, 0)).toBe(9); // no other cells yet
+});
+
+test("maxUnitForCell never goes negative even once the row is already over budget", () => {
+  const rows = gridRows(1, { 0: [1, 2, 3] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 5 }),
+    2: cellAt({ unit: 5 }),
+    3: cellAt({ unit: 1 }),
+  };
+  expect(maxUnitForCell(3, rows, cells, 90, 10, 0)).toBe(0);
+});
+
+test("maxUnitForCell's cap is a flat Unit budget, unaffected by how many cells or gaps share the row", () => {
+  const unitMm = 19.05;
+  const gapMm = 3;
+  const physicalWidthMm = 216; // maxItems(216, 19.05, 3) === 9
+
+  // A lone cell can use the full 9U — gaps don't eat into the budget.
+  const soloRow = gridRows(1, { 0: [1] });
+  expect(maxUnitForCell(1, soloRow, {}, physicalWidthMm, unitMm, gapMm)).toBe(9);
+
+  // The same flat 9U cap holds regardless of cell count: 8 other 0.5U
+  // cells (4U) leave a 9th cell exactly 5U, not some gap-shrunk number.
+  const manyCellsRow = gridRows(1, { 0: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+  const halfUnitCells: Record<number, GridCell> = Object.fromEntries(
+    [1, 2, 3, 4, 5, 6, 7, 8].map((id) => [id, cellAt({ unit: 0.5 })]),
+  );
+  expect(
+    maxUnitForCell(9, manyCellsRow, halfUnitCells, physicalWidthMm, unitMm, gapMm),
+  ).toBe(5);
+});
+
+test("a row's Unit budget can be split however many ways, as long as it sums to the flat cap", () => {
+  const unitMm = 19.05;
+  const gapMm = 3;
+  const physicalWidthMm = 216; // maxItems(216, 19.05, 3) === 9
+
+  const asCells = (units: number[]) => {
+    const ids = units.map((_, i) => i + 1);
+    const cells: Record<number, GridCell> = Object.fromEntries(
+      units.map((unit, i) => [ids[i], cellAt({ unit })]),
+    );
+    return { rows: gridRows(1, { 0: ids }), cells };
+  };
+
+  for (const units of [
+    [9],
+    Array(18).fill(0.5),
+    Array(36).fill(0.25),
+    [1, 2, 0.5, 2, 0.5, 3],
+  ]) {
+    const { rows, cells } = asCells(units);
+    expect(
+      remainingUnitsInRow(0, rows, cells, physicalWidthMm, unitMm, gapMm),
+    ).toBe(0);
+  }
+});
+
+test("remainingUnitsInRow is the row's budget minus whatever its cells already use", () => {
+  const rows = gridRows(1, { 0: [1, 2] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 2 }),
+    2: cellAt({ unit: 3 }),
+  };
+  expect(remainingUnitsInRow(0, rows, cells, 90, 10, 0)).toBe(4);
+});
+
+test("remainingUnitsInRow is the full budget for a row with no cells, and never negative", () => {
+  const rows = gridRows(1, {});
+  expect(remainingUnitsInRow(0, rows, {}, 90, 10, 0)).toBe(9);
+  const overBudget = gridRows(1, { 0: [1] });
+  expect(
+    remainingUnitsInRow(0, overBudget, { 1: cellAt({ unit: 20 }) }, 90, 10, 0),
+  ).toBe(0);
+});
+
+test("remainingUnitsInRow never runs out from gaps alone — only the raw Unit sum counts against the budget", () => {
+  const unitMm = 19.05;
+  const gapMm = 3;
+  const physicalWidthMm = 216; // the app's actual default screen width
+  const ids = Array.from({ length: 30 }, (_, i) => i + 1);
+  const cells: Record<number, GridCell> = Object.fromEntries(
+    ids.map((id) => [id, cellAt({ unit: 0.25 })]),
+  );
+  const rows = gridRows(1, { 0: ids });
+  // 30 * 0.25U = 7.5U raw, out of the row's flat 9U budget — 1.5U still
+  // free for a 31st cell, however many gaps those 30 cells already need.
+  expect(
+    remainingUnitsInRow(0, rows, cells, physicalWidthMm, unitMm, gapMm),
+  ).toBeCloseTo(1.5);
+});
+
+test("cellRect reads a cell's absolute rect off its own row's flow", () => {
+  const rows = gridRows(2, { 0: [1], 1: [2] });
+  const cells: Record<number, GridCell> = { 1: cellAt({ unit: 1.25 }) };
+  const rect = cellRect(1, rows, cells, 10, 3);
+  // x starts flush at the row's own origin — see `layoutRow`. Width is
+  // 1.25 pitches (13mm) minus the trailing gap: 1.25*13-3=13.25.
+  expect(rect).toEqual({ x: 0, y: 0, width: 13.25, height: 10 });
+  // Row 1's own cell, untouched — MIN_UNIT (0.25U) by default: 0.25*13-3.
+  const rowOneRect = cellRect(2, rows, cells, 10, 3);
+  expect(rowOneRect.y).toBe(13);
+  expect(rowOneRect.width).toBe(0.25);
+});
+
+test("groupOf returns a singleton for an unmerged cell", () => {
+  expect(groupOf(5, [])).toEqual([5]);
+  expect(groupOf(5, [[2, 3]])).toEqual([5]);
+});
+
+test("groupOf finds the group a merged cell belongs to", () => {
+  expect(groupOf(3, [[2, 3, 4]])).toEqual([2, 3, 4]);
+});
+
+test("primaryOf is always the group's smallest index", () => {
+  expect(primaryOf(5, [])).toBe(5);
+  expect(primaryOf(4, [[2, 3, 4]])).toBe(2);
+});
+
+test("addMerge joins two singletons into one group", () => {
+  expect(addMerge([], 2, 3)).toEqual([[2, 3]]);
+});
+
+test("addMerge extends an existing group and keeps unrelated groups untouched", () => {
+  const groups = addMerge([[10, 11]], 2, 3);
+  expect(addMerge(groups, 3, 4)).toEqual(
+    expect.arrayContaining([[10, 11], [2, 3, 4]]),
+  );
+});
+
+test("removeMerge splits a group back into standalone cells", () => {
+  expect(removeMerge([[2, 3, 4]], 3)).toEqual([]);
+  expect(removeMerge([[2, 3], [5, 6]], 3)).toEqual([[5, 6]]);
+});
+
+test("shareEdge is true for cells side by side on the same row", () => {
+  const a = { x: 0, y: 0, width: 10, height: 10 };
+  const b = { x: 13, y: 0, width: 10, height: 10 }; // 3mm gap
+  expect(shareEdge(a, b, 3)).toBe(true);
+  expect(shareEdge(b, a, 3)).toBe(true);
+});
+
+test("shareEdge is true for cells stacked across the row-to-row gap", () => {
+  const top = { x: 0, y: 0, width: 10, height: 10 };
+  const bottom = { x: 2, y: 13, width: 7, height: 10 }; // overlaps top's x-range
+  expect(shareEdge(top, bottom, 3)).toBe(true);
+});
+
+test("shareEdge is false for cells that don't actually touch", () => {
+  const a = { x: 0, y: 0, width: 10, height: 10 };
+  const farRight = { x: 50, y: 0, width: 10, height: 10 };
+  const nextRowNoOverlap = { x: 30, y: 13, width: 10, height: 10 };
+  expect(shareEdge(a, farRight, 3)).toBe(false);
+  expect(shareEdge(a, nextRowNoOverlap, 3)).toBe(false);
+});
+
+test("groupsShareEdge checks every pair of members across two groups", () => {
+  // Base Unit 10mm, gap 3mm: cells 1 and 2 are adjacent on row 0, cell 3
+  // is far enough right on the same row not to touch cell 1.
+  const rows = gridRows(1, { 0: [1, 2, 3] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 1 }),
+    2: cellAt({ unit: 1 }),
+    3: cellAt({ unit: 1 }),
+  };
+  expect(groupsShareEdge([1], [2], rows, cells, 10, 3)).toBe(true);
+  expect(groupsShareEdge([1], [3], rows, cells, 10, 3)).toBe(false);
+});
+
+test("mergedOutline of same-row cells is a plain rectangle spanning both", () => {
+  const rows = gridRows(1, { 0: [1, 2] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 1 }),
+    2: cellAt({ unit: 1 }),
+  };
+  const { path, bounds } = mergedOutline([1, 2], rows, cells, 10, 3);
+  expect(bounds).toEqual({ x: 0, y: 0, width: 23, height: 10 });
+  expect(path).toBe("M0,0 H23 V10 H0 Z");
+});
+
+test("mergedOutline of cells stacked across rows closes the gap and steps to each width", () => {
+  const rows = gridRows(2, { 0: [1], 1: [2] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 1 }),
+    2: cellAt({ unit: 0.75 }),
+  };
+  const { path, bounds } = mergedOutline([1, 2], rows, cells, 10, 3);
+  // Row 1's 0.75U cell is 0.75*13-3=6.75mm (pitch-based, see `cellSizeMm`).
+  // Row 0 is wider on the right (10 vs 6.75): the step lands on row 0's
+  // own true bottom (y=10), and row 1's right edge bridges the *entire*
+  // gap (10 to 13) to reach it — the gap is never split between the two,
+  // and the untouched column (6.75 to 10) keeps its full gap open.
+  expect(bounds).toEqual({ x: 0, y: 0, width: 10, height: 23 });
+  expect(path).toBe("M0,0 H10 V10 H6.75 V23 H0 V13 H0 V0 Z");
 });

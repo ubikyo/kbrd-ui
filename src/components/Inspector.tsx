@@ -27,7 +27,7 @@ import {
   deleteKeyPlugin,
   updateKeyPlugin,
   updateKeyProperties,
-} from "../api/workspaces";
+} from "../api/layers";
 import { pluginById, plugins } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
 import type { GridCell, KeyboardLayout } from "../types/layout";
@@ -36,8 +36,8 @@ import type {
   KeyPlugin,
   KeyProperty,
   KeyPropertyConfig,
-  WorkspaceData,
-} from "../types/workspace";
+  LayerData,
+} from "../types/layer";
 import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
 import { usePendingSaves } from "../utils/usePendingSaves";
 
@@ -68,7 +68,7 @@ const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
 };
 
 type Props = {
-  workspace: WorkspaceData | null;
+  layer: LayerData | null;
   selectedKey: string | null;
   tab: string | null;
   onTabChange: (tab: string | null) => void;
@@ -82,9 +82,6 @@ type Props = {
   layoutSelection: {
     index: number;
     cell: GridCell;
-    maxColspan: number;
-    maxRowspan: number;
-    isRemainder: boolean;
   } | null;
   onLayoutCellChange: (index: number, patch: Partial<GridCell>) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
@@ -228,7 +225,7 @@ function KeyStateFields({
 }
 
 export default function Inspector({
-  workspace,
+  layer,
   selectedKey,
   tab,
   onTabChange,
@@ -269,7 +266,10 @@ export default function Inspector({
       ? plugin.category === "Layout"
       : plugin.category !== "Layout",
   );
-  const allInstances = workspace?.plugins ?? [];
+  const pluginCategories = [
+    ...new Set(draggablePlugins.map((plugin) => plugin.category)),
+  ];
+  const allInstances = layer?.plugins ?? [];
   const instances = allInstances
     .filter((plugin) => plugin.key_ref === selectedKey)
     .sort((left, right) => left.position - right.position);
@@ -281,7 +281,7 @@ export default function Inspector({
       ),
     }))
     .filter((group) => group.items.length > 0);
-  const keyProperties = workspace?.key_properties ?? [];
+  const keyProperties = layer?.key_properties ?? [];
   const selectedProperty = keyProperties.find(
     (property) => property.key_ref === selectedKey,
   );
@@ -306,13 +306,13 @@ export default function Inspector({
       : storedTargetState;
   const systemPluginName =
     targetType === "background"
-      ? "Workspace"
+      ? "Layer"
       : targetType === "space"
         ? "Space"
         : "Key";
 
   function patchKeyProperty(data: Partial<KeyPropertyConfig>) {
-    if (!workspace || !selectedKey) return;
+    if (!layer || !selectedKey) return;
     const config = { ...propertyConfig, ...data };
     const property = { key_ref: selectedKey, config };
     onKeyPropertiesChange([
@@ -322,7 +322,7 @@ export default function Inspector({
     pendingPropertySaves.schedule(
       selectedKey,
       () => config,
-      (saved) => void updateKeyProperties(workspace.id, selectedKey, saved),
+      (saved) => void updateKeyProperties(layer.id, selectedKey, saved),
     );
   }
 
@@ -410,10 +410,10 @@ export default function Inspector({
   }
 
   async function startMoveTo() {
-    if (!workspace || !selectedKey) return;
+    if (!layer || !selectedKey) return;
     const saves: Promise<unknown>[] = [];
     if (pendingPropertySaves.take(selectedKey)) {
-      saves.push(updateKeyProperties(workspace.id, selectedKey, propertyConfig));
+      saves.push(updateKeyProperties(layer.id, selectedKey, propertyConfig));
     }
     for (const instance of instances) {
       const pending = pendingSaves.take(instance.id);
@@ -442,11 +442,15 @@ export default function Inspector({
         </Tabs.List>
 
         <Tabs.Panel value="plugins" pt="lg" pb="lg">
-          {!workspace ? (
-            <Text c="dimmed">Create a workspace to add plugins.</Text>
+          {!layer ? (
+            <Text c="dimmed">
+              {layout
+                ? "Create a layer to add plugins."
+                : "Create a layout to add plugins."}
+            </Text>
           ) : (
-            <Accordion multiple>
-              {[...new Set(draggablePlugins.map((plugin) => plugin.category))].map(
+            <Accordion multiple defaultValue={pluginCategories}>
+              {pluginCategories.map(
                 (category) => {
                   const categoryPlugins = draggablePlugins.filter(
                     (plugin) => plugin.category === category,
@@ -503,14 +507,11 @@ export default function Inspector({
 
         <Tabs.Panel value="properties" pt="lg" pb="lg">
           {mode === "layout" ? (
-            !layoutSelection || !layoutSelection.cell.typeId ? (
+            !layoutSelection ? (
               <Text c="dimmed">No key selected</Text>
             ) : (
               <LayoutCellProperties
                 cell={layoutSelection.cell}
-                maxColspan={layoutSelection.maxColspan}
-                maxRowspan={layoutSelection.maxRowspan}
-                isRemainder={layoutSelection.isRemainder}
                 onChange={(patch) =>
                   onLayoutCellChange(layoutSelection.index, patch)
                 }

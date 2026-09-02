@@ -5,38 +5,50 @@ import {
   Text,
   UnstyledButton,
 } from "@mantine/core";
+import { MdAdd, MdCheck, MdChevronRight, MdDashboard } from "react-icons/md";
 import {
-  MdAdd,
-  MdCheck,
-  MdChevronRight,
-  MdDashboard,
-  MdEdit,
-} from "react-icons/md";
-import { useCallback, useEffect, useState } from "react";
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 
 import {
-  activateWorkspace,
-  deactivateWorkspace,
-  listWorkspaces,
-} from "../api/workspaces";
-import type { WorkspaceData } from "../types/workspace";
-import WorkspaceEditorModal from "./WorkspaceEditorModal";
+  activateLayer,
+  deactivateLayer,
+  listLayers,
+} from "../api/layers";
+import type { LayerData } from "../types/layer";
 
 type Props = {
   geometryId: number;
-  onChange: (workspace: WorkspaceData | null) => void;
+  onChange: (layer: LayerData | null) => void;
+  // Edit/Delete live in Factory's own board Actions menu (select the
+  // physical screen), but Add stays reachable straight from this picker
+  // too — the "+" below the list, the quickest path to a new one.
+  onAdd: () => void;
 };
 
-export default function Workspace({ geometryId, onChange }: Props) {
-  const [items, setItems] = useState<WorkspaceData[]>([]);
-  const [selected, setSelected] = useState<WorkspaceData | null>(null);
+// Add/Edit/Delete now live in Factory's own board Actions menu (select the
+// physical screen), not here — this dropdown is just the picker. `App`
+// drives those through this handle so it can refresh the list and
+// re-select afterwards, the same way this component always has.
+export type LayerMenuHandle = {
+  refresh: (preferredId?: number) => Promise<void>;
+};
+
+const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
+  { geometryId, onChange, onAdd },
+  ref,
+) {
+  const [items, setItems] = useState<LayerData[]>([]);
+  const [selected, setSelected] = useState<LayerData | null>(null);
   const [menuOpened, setMenuOpened] = useState(false);
-  const [editorOpened, setEditorOpened] = useState(false);
-  const [editing, setEditing] = useState<WorkspaceData | null>(null);
 
   const select = useCallback(
-    async (item: WorkspaceData) => {
-      const value = await activateWorkspace(item.id);
+    async (item: LayerData) => {
+      const value = await activateLayer(item.id);
       setSelected(value);
       onChange(value);
       setMenuOpened(false);
@@ -46,13 +58,13 @@ export default function Workspace({ geometryId, onChange }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void listWorkspaces(geometryId).then(async (data) => {
+    void listLayers(geometryId).then(async (data) => {
       if (cancelled) return;
       setItems(data);
       const current = data.find((item) => item.active) ?? data[0];
       if (current) await select(current);
       else {
-        await deactivateWorkspace();
+        await deactivateLayer();
         if (cancelled) return;
         setSelected(null);
         onChange(null);
@@ -63,129 +75,111 @@ export default function Workspace({ geometryId, onChange }: Props) {
     };
   }, [geometryId, onChange, select]);
 
-  function openEditor(item: WorkspaceData | null) {
-    setEditing(item);
-    setMenuOpened(false);
-    setEditorOpened(true);
-  }
-
   async function refresh(preferredId?: number) {
-    const data = await listWorkspaces(geometryId);
+    const data = await listLayers(geometryId);
     setItems(data);
     const current = data.find((item) => item.id === preferredId) ?? data[0];
     if (current) await select(current);
     else {
-      await deactivateWorkspace();
+      await deactivateLayer();
       setSelected(null);
       onChange(null);
     }
   }
 
+  useImperativeHandle(ref, () => ({ refresh }));
+
   return (
-    <>
-      <Menu
-        opened={menuOpened}
-        onChange={setMenuOpened}
-        position="bottom-start"
-        width={250}
-        shadow="md"
-        offset={0}
-        styles={{
-          dropdown: {
-            borderRadius: "0 0 8px 8px",
-            borderTop: "none",
-          },
-        }}
-      >
-        <Menu.Target>
-          <UnstyledButton
-            h={64}
-            px="lg"
-            onClick={() => setMenuOpened((value) => !value)}
-            style={{
-              width: 250,
-              boxSizing: "border-box",
-              borderRight: "1px solid var(--kbrd-border-color)",
-            }}
-          >
-            <Group justify="space-between" wrap="nowrap">
-              <Group gap="sm" wrap="nowrap">
-                <MdDashboard size={24} />
-                <Box>
-                  <Text size="xs" c="dimmed">
-                    Workspace
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {selected?.name ?? "None"}
-                  </Text>
-                </Box>
-              </Group>
-              <MdChevronRight size={16} />
-            </Group>
-          </UnstyledButton>
-        </Menu.Target>
-        <Menu.Dropdown ml={-1} w={251}>
-          <Menu.Label>Workspaces</Menu.Label>
-          {items.map((item) => (
-            <Menu.Item
-              key={item.id}
-              onClick={() => void select(item)}
-              leftSection={<MdDashboard size={18} />}
-              rightSection={selected?.id === item.id && <MdCheck size={16} />}
-              style={(theme) => ({
-                backgroundColor:
-                  selected?.id === item.id ? theme.white : undefined,
-                color: selected?.id === item.id ? theme.black : undefined,
-                borderRadius:
-                  selected?.id === item.id ? theme.radius.xs : undefined,
-              })}
-            >
-              <Text size="sm" fw={500}>
-                {item.name}
-              </Text>
-              {item.description && (
-                <Text
-                  size="xs"
-                  c={selected?.id === item.id ? "black" : "dimmed"}
-                  lineClamp={1}
-                >
-                  {item.description}
+    <Menu
+      opened={menuOpened}
+      onChange={setMenuOpened}
+      position="bottom-start"
+      width={250}
+      shadow="md"
+      offset={0}
+      styles={{
+        dropdown: {
+          borderRadius: "0 0 8px 8px",
+          borderTop: "none",
+        },
+      }}
+    >
+      <Menu.Target>
+        <UnstyledButton
+          h={64}
+          px="lg"
+          onClick={() => setMenuOpened((value) => !value)}
+          style={{
+            width: 250,
+            boxSizing: "border-box",
+            borderRight: "1px solid var(--kbrd-border-color)",
+          }}
+        >
+          <Group justify="space-between" wrap="nowrap">
+            <Group gap="sm" wrap="nowrap">
+              <MdDashboard size={24} />
+              <Box>
+                <Text size="xs" c="dimmed">
+                  Layer
                 </Text>
-              )}
-            </Menu.Item>
-          ))}
-          <Menu.Divider />
+                <Text size="sm" fw={500}>
+                  {selected?.name ?? "None"}
+                </Text>
+              </Box>
+            </Group>
+            <MdChevronRight size={16} />
+          </Group>
+        </UnstyledButton>
+      </Menu.Target>
+      <Menu.Dropdown ml={-1} w={251}>
+        {items.map((item) => (
           <Menu.Item
-            leftSection={<MdAdd size={18} />}
-            onClick={() => openEditor(null)}
+            key={item.id}
+            onClick={() => void select(item)}
+            leftSection={<MdDashboard size={18} />}
+            rightSection={selected?.id === item.id && <MdCheck size={16} />}
+            style={(theme) => ({
+              backgroundColor:
+                selected?.id === item.id ? theme.white : undefined,
+              color: selected?.id === item.id ? theme.black : undefined,
+              borderRadius:
+                selected?.id === item.id ? theme.radius.xs : undefined,
+            })}
           >
-            Add workspace
+            <Text size="sm" fw={500}>
+              {item.name}
+            </Text>
+            {item.description && (
+              <Text
+                size="xs"
+                c={selected?.id === item.id ? "black" : "dimmed"}
+                lineClamp={1}
+              >
+                {item.description}
+              </Text>
+            )}
           </Menu.Item>
-          {selected && (
-            <Menu.Item
-              leftSection={<MdEdit size={18} />}
-              onClick={() => openEditor(selected)}
-            >
-              Edit workspace
-            </Menu.Item>
-          )}
-        </Menu.Dropdown>
-      </Menu>
-      {editorOpened && (
-        <WorkspaceEditorModal
-          geometryId={geometryId}
-          editing={editing}
-          onClose={() => setEditorOpened(false)}
-          onSaved={(id) => {
-            setEditorOpened(false);
-            void refresh(id);
+        ))}
+        <Menu.Divider />
+        <UnstyledButton
+          aria-label="Add layer"
+          onClick={() => {
+            setMenuOpened(false);
+            onAdd();
           }}
-          onDeleted={() => {
-            setEditorOpened(false);
-            void refresh();
+          style={{
+            width: "100%",
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
-      )}
-    </>
+        >
+          <MdAdd size={24} />
+        </UnstyledButton>
+      </Menu.Dropdown>
+    </Menu>
   );
-}
+});
+
+export default Layer;
