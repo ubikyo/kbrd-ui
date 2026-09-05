@@ -116,3 +116,11 @@ body {
   background-color: var(--mantine-color-blue-filled);
   color: var(--mantine-color-white);
 }
+
+/* The "+" (Add layout/layer) button at the bottom of the `Layout`/`Layer`
+   picker dropdowns — an `UnstyledButton` already sized to the dropdown's
+   full width/height, so a plain background-color hover fills it edge to
+   edge with no extra markup. */
+.picker-add-button:hover {
+  background-color: var(--menu-item-hover, var(--mantine-color-dark-4));
+}

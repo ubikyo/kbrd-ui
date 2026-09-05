@@ -30,12 +30,20 @@ const GRIP_DOT_PATHS = [
 const GRIP_BACKGROUND = "#FFFFFF";
 
 type Props = {
-  // Bounding box, used for the label and as the shape when `path` isn't
-  // given (a plain, unmerged cell, or a merge whose members are all on
-  // the same row — a simple rectangle either way).
+  // Bounding box, used as the shape when `path` isn't given (a plain,
+  // unmerged cell, or a merge whose members are all on the same row — a
+  // simple rectangle either way) — and as the label's anchor too, absent
+  // `labelBounds`.
   bounds: CellRect;
   // Outline of a merge spanning more than one row (a stepped/L shape).
   path?: string;
+  // Where to centre the size/type label — defaults to `bounds`, but a
+  // stepped or concave merge (see `mergedOutline`) wants its label
+  // anchored on one of its own actual spans instead: `bounds`' centre,
+  // the shape's plain bounding box, can fall in a notch the merge leaves
+  // empty (wrapped around a cell that wasn't merged in, or just the gap
+  // between two differently-sized stacked rows).
+  labelBounds?: CellRect;
   // Plugin id of the attached kbrd.layout-key / kbrd.layout-space instance,
   // or null when this cell hasn't been assigned a kind yet.
   typeId?: string | null;
@@ -65,6 +73,7 @@ type Props = {
 export default function LayoutItem({
   bounds,
   path,
+  labelBounds = bounds,
   typeId = null,
   pluginIds = [],
   unit,
@@ -89,6 +98,11 @@ export default function LayoutItem({
     : null;
   const shapeProps = {
     fill: "transparent",
+    // `mergedOutline` can trace a shape wrapped all the way around a cell
+    // that wasn't merged in, coming out as an outer subpath plus an inner
+    // one for the hole — `evenodd` is what tells a filled version of that
+    // shape to punch the hole rather than fill straight through it.
+    fillRule: "evenodd" as const,
     stroke,
     strokeWidth: 1,
     // Selected stays dashed for empty space — there's no real cell there
@@ -118,8 +132,12 @@ export default function LayoutItem({
       )}
       {sizeLabel && (
         <text
-          x={bounds.x + bounds.width / 2}
-          y={bounds.y + bounds.height / 2 - (typeLabel ? LABEL_FONT_SIZE_MM * 0.6 : 0)}
+          x={labelBounds.x + labelBounds.width / 2}
+          y={
+            labelBounds.y +
+            labelBounds.height / 2 -
+            (typeLabel ? LABEL_FONT_SIZE_MM * 0.6 : 0)
+          }
           textAnchor="middle"
           dominantBaseline="middle"
           fontSize={LABEL_FONT_SIZE_MM}
@@ -131,8 +149,12 @@ export default function LayoutItem({
       )}
       {typeLabel && (
         <text
-          x={bounds.x + bounds.width / 2}
-          y={bounds.y + bounds.height / 2 + (sizeLabel ? LABEL_FONT_SIZE_MM * 0.6 : 0)}
+          x={labelBounds.x + labelBounds.width / 2}
+          y={
+            labelBounds.y +
+            labelBounds.height / 2 +
+            (sizeLabel ? LABEL_FONT_SIZE_MM * 0.6 : 0)
+          }
           textAnchor="middle"
           dominantBaseline="middle"
           fontSize={LABEL_FONT_SIZE_MM}

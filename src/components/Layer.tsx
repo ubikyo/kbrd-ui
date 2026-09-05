@@ -142,8 +142,10 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
               backgroundColor:
                 selected?.id === item.id ? theme.white : undefined,
               color: selected?.id === item.id ? theme.black : undefined,
-              borderRadius:
-                selected?.id === item.id ? theme.radius.xs : undefined,
+              // Always set, not just when selected — otherwise the hover
+              // background (Mantine's own default) falls back to the
+              // dropdown's own square corners instead of matching this.
+              borderRadius: theme.radius.xs,
             })}
           >
             <Text size="sm" fw={500}>
@@ -163,6 +165,7 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
         <Menu.Divider />
         <UnstyledButton
           aria-label="Add layer"
+          className="picker-add-button"
           onClick={() => {
             setMenuOpened(false);
             onAdd();

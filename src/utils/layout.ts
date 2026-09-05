@@ -334,20 +334,194 @@ export function groupsShareEdge(
   return rectsA.some((a) => rectsB.some((b) => shareEdge(a, b, gapMm)));
 }
 
+/** A point in the mm-space `mergedOutline` traces its shape in. */
+type Point = { x: number; y: number };
+
+const OUTLINE_EPS = 1e-6;
+
+function near(a: number, b: number): boolean {
+  return Math.abs(a - b) < OUTLINE_EPS;
+}
+
+/** Collapses one row's cells into a rect per maximal run of *consecutive*
+ * group members — members with nothing, group or not, between them in the
+ * row's own left-to-right order. A run's rect bridges the real `gapMm`
+ * gaps *within* it, so a merge reads as one seamless keycap rather than
+ * several with slivers of board showing through — but a cell that's
+ * *not* in the group breaks the run right there: merging a row's outer
+ * cells without its middle one, say, leaves the gaps on either side of
+ * that untouched cell open rather than bridging across it.
+ */
+function rowSpans(
+  cellIds: number[],
+  group: Set<number>,
+  cells: Record<number, GridCell>,
+  unitMm: number,
+  gapMm: number,
+  y: number,
+  height: number,
+): CellRect[] {
+  const spans: CellRect[] = [];
+  let runStart: number | null = null;
+  let runEnd = 0;
+  for (const slot of layoutRow(cellIds, cells, unitMm, gapMm)) {
+    if (group.has(slot.id)) {
+      if (runStart === null) runStart = slot.x;
+      runEnd = slot.x + slot.width;
+    } else if (runStart !== null) {
+      spans.push({ x: runStart, y, width: runEnd - runStart, height });
+      runStart = null;
+    }
+  }
+  if (runStart !== null) spans.push({ x: runStart, y, width: runEnd - runStart, height });
+  return spans;
+}
+
+function boundingBox(rects: CellRect[]): CellRect {
+  const x = Math.min(...rects.map((r) => r.x));
+  const y = Math.min(...rects.map((r) => r.y));
+  const right = Math.max(...rects.map((r) => r.x + r.width));
+  const bottom = Math.max(...rects.map((r) => r.y + r.height));
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+/** The single largest of the group's own real row spans (before any
+ * vertical bridging) — the safest place to anchor a merged cell's label
+ * (see `mergedOutline`'s `labelBounds`), since it's guaranteed to be
+ * solid keycap area rather than the shape's bounding box, which a
+ * concave merge can leave empty at its exact centre (wrapped around a
+ * cell that wasn't merged in, or simply two differently-sized rows
+ * stacked so their shared centreline falls in the gap between them). */
+function largestSpan(rects: CellRect[]): CellRect {
+  return rects.reduce((largest, rect) =>
+    rect.width * rect.height > largest.width * largest.height ? rect : largest,
+  );
+}
+
+/**
+ * Traces the outline of the union of `rects` as one or more closed SVG
+ * subpaths, by rasterising the elementary cells their edges cut the plane
+ * into: an elementary cell counts as covered when some rect contains its
+ * centre, and a boundary edge survives wherever a covered cell borders an
+ * uncovered one (or the plane's edge). Walking each covered cell's
+ * surviving edges clockwise and chaining them end to end copes with
+ * whatever shape `rects` happens to form — a plain rectangle, a stepped
+ * ISO-Enter-style L, or a concave shape wrapped around a cell that wasn't
+ * merged in — rather than assuming one span per row the way tracing the
+ * rows directly would.
+ */
+function tracePolygon(rects: CellRect[]): string {
+  if (rects.length === 0) return "";
+
+  const xs = [...new Set(rects.flatMap((r) => [r.x, r.x + r.width]))].sort(
+    (a, b) => a - b,
+  );
+  const ys = [...new Set(rects.flatMap((r) => [r.y, r.y + r.height]))].sort(
+    (a, b) => a - b,
+  );
+  const cols = xs.length - 1;
+  const rowCount = ys.length - 1;
+
+  const covered = (midX: number, midY: number) =>
+    rects.some(
+      (r) => r.x < midX && midX < r.x + r.width && r.y < midY && midY < r.y + r.height,
+    );
+  const filled: boolean[][] = Array.from({ length: rowCount }, (_, j) =>
+    Array.from({ length: cols }, (_, i) =>
+      covered((xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2),
+    ),
+  );
+  const isFilled = (j: number, i: number) =>
+    j >= 0 && j < rowCount && i >= 0 && i < cols && filled[j][i];
+
+  const edges: [Point, Point][] = [];
+  for (let j = 0; j < rowCount; j++) {
+    for (let i = 0; i < cols; i++) {
+      if (!filled[j][i]) continue;
+      const [x0, x1, y0, y1] = [xs[i], xs[i + 1], ys[j], ys[j + 1]];
+      if (!isFilled(j - 1, i)) edges.push([{ x: x0, y: y0 }, { x: x1, y: y0 }]);
+      if (!isFilled(j, i + 1)) edges.push([{ x: x1, y: y0 }, { x: x1, y: y1 }]);
+      if (!isFilled(j + 1, i)) edges.push([{ x: x1, y: y1 }, { x: x0, y: y1 }]);
+      if (!isFilled(j, i - 1)) edges.push([{ x: x0, y: y1 }, { x: x0, y: y0 }]);
+    }
+  }
+
+  const key = (p: Point) => `${p.x},${p.y}`;
+  const byStart = new Map<string, [Point, Point][]>();
+  for (const edge of edges) {
+    const list = byStart.get(key(edge[0]));
+    if (list) list.push(edge);
+    else byStart.set(key(edge[0]), [edge]);
+  }
+
+  const used = new Set<[Point, Point]>();
+  const loops: Point[][] = [];
+  for (const start of edges) {
+    if (used.has(start)) continue;
+    const loop: Point[] = [];
+    let current = start;
+    for (;;) {
+      used.add(current);
+      loop.push(current[0]);
+      const next = (byStart.get(key(current[1])) ?? []).find((e) => !used.has(e));
+      if (!next) break;
+      current = next;
+    }
+    loops.push(loop);
+  }
+
+  // Holes (a fully-enclosed unmerged cell, say) come out wound the
+  // opposite way from the outer loop for free — nothing extra to do here,
+  // as long as the caller fills with the `evenodd` rule (see `LayoutItem`).
+  return loops.map(pathFromLoop).join(" ");
+}
+
+/** Drops every point along a closed `loop` that doesn't actually turn a
+ * corner (i.e. is collinear with its neighbours — the raster in
+ * `tracePolygon` walks one elementary cell at a time, so a straight run
+ * of several is chopped into that many collinear points), then emits the
+ * remaining corners as one SVG subpath — `H`/`V` throughout, since every
+ * kept edge is axis-aligned. */
+function pathFromLoop(loop: Point[]): string {
+  const n = loop.length;
+  const dir = (a: Point, b: Point) => (near(a.y, b.y) ? "H" : "V");
+  const corners = loop.filter((point, i) => {
+    const prev = loop[(i - 1 + n) % n];
+    const next = loop[(i + 1) % n];
+    return dir(prev, point) !== dir(point, next);
+  });
+
+  const [start, ...rest] = corners;
+  let prev = start;
+  const segments = rest.map((point) => {
+    const segment = near(prev.y, point.y) ? `H${point.x}` : `V${point.y}`;
+    prev = point;
+    return segment;
+  });
+  return `M${start.x},${start.y} ${segments.join(" ")} Z`;
+}
+
 /**
  * The outline of a merged group, as an SVG path — a plain rectangle when
  * every member sits on the same row, a stepped/L shape (an ISO Enter key)
- * when they're stacked across rows with a different width each. Members
- * on the same row are first collapsed into that row's own union rect
- * (their gap between them absorbed).
+ * when they're stacked across rows with a different width each, or any
+ * more irregular shape a less regular merge forms (see `tracePolygon`).
+ * Members on the same row are first collapsed into that row's own runs of
+ * *consecutive* members (`rowSpans`), each run's gaps absorbed so it reads
+ * as one seamless keycap; a non-member cell sitting between two members
+ * breaks the run rather than being bridged over.
  *
- * Adjacent rows are then closed up vertically on their own terms, not by
- * splitting the row-to-row gap in half: on each side (left/right), the
- * *narrower* row's edge bridges the entire gap to reach the *wider* row's
- * own, unextended edge — the step always lands on the wider row's true
- * boundary. Only the column range the two rows actually share is ever
- * bridged; a column only one of them occupies keeps its full gap open,
- * so the merge never bleeds into a neighbouring, unmerged cell's own gap.
+ * Two members stacked in physically adjacent rows meet the same way,
+ * across the board's own row-to-row gap: whatever column range their runs
+ * actually share is bridged, so the merge covers that strip too instead
+ * of leaving a slit — a column only one of them occupies keeps its full
+ * gap open, so the merge never bleeds into a neighbouring, unmerged
+ * cell's own row or gap.
+ *
+ * Also returns `labelBounds` — where `LayoutItem` centres the cell's size
+ * / type label, `largestSpan` of the group's own real spans rather than
+ * the shape's bounding box (`bounds`), which a stepped or concave merge
+ * can leave empty right at its centre.
  */
 export function mergedOutline(
   group: number[],
@@ -355,65 +529,42 @@ export function mergedOutline(
   cells: Record<number, GridCell>,
   unitMm: number,
   gapMm: number,
-): { path: string; bounds: CellRect } {
-  const byRow = new Map<number, CellRect[]>();
-  for (const id of group) {
-    const row = rowOf(id, rows);
-    const rect = cellRect(id, rows, cells, unitMm, gapMm);
-    const existing = byRow.get(row);
-    if (existing) existing.push(rect);
-    else byRow.set(row, [rect]);
+): { path: string; bounds: CellRect; labelBounds: CellRect } {
+  const groupSet = new Set(group);
+  const pitch = pitchMm(unitMm, gapMm);
+  const rowIndexes = [...new Set(group.map((id) => rowOf(id, rows)))].sort(
+    (a, b) => a - b,
+  );
+
+  const spansByRow = new Map<number, CellRect[]>(
+    rowIndexes.map((row) => [
+      row,
+      rowSpans(rows[row] ?? [], groupSet, cells, unitMm, gapMm, row * pitch, unitMm),
+    ]),
+  );
+  const spans = [...spansByRow.values()].flat();
+  const rects = [...spans];
+
+  for (let i = 0; i < rowIndexes.length - 1; i++) {
+    const rowA = rowIndexes[i];
+    const rowB = rowIndexes[i + 1];
+    if (rowB !== rowA + 1) continue; // not physically adjacent — nothing to bridge
+    const bridgeTop = rowA * pitch + unitMm;
+    const bridgeBottom = rowB * pitch;
+    for (const a of spansByRow.get(rowA) ?? []) {
+      for (const b of spansByRow.get(rowB) ?? []) {
+        const x = Math.max(a.x, b.x);
+        const right = Math.min(a.x + a.width, b.x + b.width);
+        if (right > x + OUTLINE_EPS) {
+          rects.push({ x, y: bridgeTop, width: right - x, height: bridgeBottom - bridgeTop });
+        }
+      }
+    }
   }
-
-  const sortedRows = [...byRow.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([, rects]) => ({
-      x: Math.min(...rects.map((r) => r.x)),
-      right: Math.max(...rects.map((r) => r.x + r.width)),
-      y: rects[0].y,
-      bottom: rects[0].y + rects[0].height,
-    }));
-
-  const bounds: CellRect = {
-    x: Math.min(...sortedRows.map((r) => r.x)),
-    y: sortedRows[0].y,
-    width:
-      Math.max(...sortedRows.map((r) => r.right)) -
-      Math.min(...sortedRows.map((r) => r.x)),
-    height: sortedRows[sortedRows.length - 1].bottom - sortedRows[0].y,
-  };
-
-  if (sortedRows.length === 1) {
-    const only = sortedRows[0];
-    return {
-      path: `M${only.x},${only.y} H${only.right} V${only.bottom} H${only.x} Z`,
-      bounds,
-    };
-  }
-
-  // Right side, top to bottom: whichever row reaches further right keeps
-  // its own unextended edge, and the other bridges the full gap to meet
-  // it there.
-  const right: string[] = [`H${sortedRows[0].right}`];
-  for (let i = 0; i < sortedRows.length - 1; i++) {
-    const a = sortedRows[i];
-    const b = sortedRows[i + 1];
-    right.push(a.right >= b.right ? `V${a.bottom}` : `V${b.y}`, `H${b.right}`);
-  }
-  right.push(`V${sortedRows[sortedRows.length - 1].bottom}`);
-
-  // Left side, bottom to top: same rule, mirrored — whichever row reaches
-  // further left keeps its own unextended edge.
-  const left: string[] = [`H${sortedRows[sortedRows.length - 1].x}`];
-  for (let i = sortedRows.length - 1; i > 0; i--) {
-    const a = sortedRows[i];
-    const b = sortedRows[i - 1];
-    left.push(a.x <= b.x ? `V${a.y}` : `V${b.bottom}`, `H${b.x}`);
-  }
-  left.push(`V${sortedRows[0].y}`);
 
   return {
-    path: `M${sortedRows[0].x},${sortedRows[0].y} ${right.join(" ")} ${left.join(" ")} Z`,
-    bounds,
+    path: tracePolygon(rects),
+    bounds: boundingBox(rects),
+    labelBounds: largestSpan(spans),
   };
 }

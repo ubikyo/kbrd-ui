@@ -573,6 +573,7 @@ export default function Factory({
                       key={primary}
                       bounds={bounds}
                       path={merged?.path}
+                      labelBounds={merged?.labelBounds}
                       typeId={cell?.typeId}
                       pluginIds={cell?.pluginIds}
                       unit={cell?.unit}

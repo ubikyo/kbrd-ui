@@ -33,6 +33,12 @@ const cellAt = (patch: Partial<GridCell> = {}) => ({
 
 const layout = (id: number, name: string) => ({ id, name }) as LayoutData;
 
+// The staple/bracket shape A-D-G-H-I-F traces around E (and B/C, both
+// left untouched above D and F): full height on the left (A/D/G's
+// column), the bottom row's full width, and F's column only from row 1
+// down — see the "doesn't bleed into a cell left out of the merge" test.
+const EXPECTED_STAPLE_PATH = "M0,0 H10 V26 H26 V13 H36 V36 H0 Z";
+
 test("selects the default layout regardless of its position", () => {
   const result = defaultLayout([
     layout(1, "ISO"),
@@ -358,9 +364,11 @@ test("mergedOutline of same-row cells is a plain rectangle spanning both", () =>
     1: cellAt({ unit: 1 }),
     2: cellAt({ unit: 1 }),
   };
-  const { path, bounds } = mergedOutline([1, 2], rows, cells, 10, 3);
+  const { path, bounds, labelBounds } = mergedOutline([1, 2], rows, cells, 10, 3);
   expect(bounds).toEqual({ x: 0, y: 0, width: 23, height: 10 });
   expect(path).toBe("M0,0 H23 V10 H0 Z");
+  // A single row is already one span, so its label sits at plain centre.
+  expect(labelBounds).toEqual(bounds);
 });
 
 test("mergedOutline of cells stacked across rows closes the gap and steps to each width", () => {
@@ -369,12 +377,56 @@ test("mergedOutline of cells stacked across rows closes the gap and steps to eac
     1: cellAt({ unit: 1 }),
     2: cellAt({ unit: 0.75 }),
   };
-  const { path, bounds } = mergedOutline([1, 2], rows, cells, 10, 3);
+  const { path, bounds, labelBounds } = mergedOutline([1, 2], rows, cells, 10, 3);
   // Row 1's 0.75U cell is 0.75*13-3=6.75mm (pitch-based, see `cellSizeMm`).
   // Row 0 is wider on the right (10 vs 6.75): the step lands on row 0's
   // own true bottom (y=10), and row 1's right edge bridges the *entire*
   // gap (10 to 13) to reach it — the gap is never split between the two,
   // and the untouched column (6.75 to 10) keeps its full gap open.
   expect(bounds).toEqual({ x: 0, y: 0, width: 10, height: 23 });
-  expect(path).toBe("M0,0 H10 V10 H6.75 V23 H0 V13 H0 V0 Z");
+  expect(path).toBe("M0,0 H10 V10 H6.75 V23 H0 Z");
+  // `bounds`' own centre (5, 11.5) sits in the thin row-to-row bridge
+  // strip, not on either cell's own real surface — the label instead
+  // anchors on row 0's cell, the bigger of the two real spans.
+  expect(labelBounds).toEqual({ x: 0, y: 0, width: 10, height: 10 });
+});
+
+test("mergedOutline doesn't bleed into a cell left out of the merge", () => {
+  // A 3x3 grid, merging every cell except the centre one (E):
+  //   A B C        A . .
+  //   D E F   ->   D . F
+  //   G H I        G H I
+  // B and C are untouched too, so the merge's own shape wraps around E on
+  // three sides but stays open on E's fourth (top) side, where B sits.
+  const rows = gridRows(3, {
+    0: [1, 2, 3], // A B C
+    1: [4, 5, 6], // D E F
+    2: [7, 8, 9], // G H I
+  });
+  const cells: Record<number, GridCell> = Object.fromEntries(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].map((id) => [id, cellAt({ unit: 1 })]),
+  );
+  const group = [1, 4, 6, 7, 8, 9]; // A D F G H I — E, B, C left out
+
+  const { path, bounds, labelBounds } = mergedOutline(group, rows, cells, 10, 3);
+
+  // The merge's bounding box still spans the full 3x3 footprint, and its
+  // centre (18, 18) is exactly E's own centre — the label instead anchors
+  // on the bottom row (G/H/I), the biggest of the merge's own real spans.
+  expect(bounds).toEqual({ x: 0, y: 0, width: 36, height: 36 });
+  expect(labelBounds).toEqual({ x: 0, y: 26, width: 36, height: 10 });
+  // ...but E's own rect (x13-23, y13-23) must stay outside the traced
+  // shape: none of its four corners are covered by the merge.
+  const outside = [
+    [13, 13],
+    [23, 13],
+    [13, 23],
+    [23, 23],
+  ];
+  for (const [x, y] of outside) {
+    expect(path).not.toContain(`${x},${y}`);
+  }
+  // The path traces one closed loop wrapping A/D/G/H/I/F around E and B/C
+  // without ever bridging over them.
+  expect(path).toBe(EXPECTED_STAPLE_PATH);
 });

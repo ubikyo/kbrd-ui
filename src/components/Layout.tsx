@@ -120,8 +120,10 @@ const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
               backgroundColor:
                 selected?.id === item.id ? theme.white : undefined,
               color: selected?.id === item.id ? theme.black : undefined,
-              borderRadius:
-                selected?.id === item.id ? theme.radius.xs : undefined,
+              // Always set, not just when selected — otherwise the hover
+              // background (Mantine's own default) falls back to the
+              // dropdown's own square corners instead of matching this.
+              borderRadius: theme.radius.xs,
             })}
           >
             <Text size="sm" fw={500}>
@@ -141,6 +143,7 @@ const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
         <Menu.Divider />
         <UnstyledButton
           aria-label="Add layout"
+          className="picker-add-button"
           onClick={() => {
             setMenuOpened(false);
             onAdd();
