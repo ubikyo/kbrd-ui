@@ -53,8 +53,8 @@ type Props = {
  * over `parentRect` with no gap between any of them
  * (`divisionCellRect`/`divisionOutline`), rather than going through
  * `layoutRow`'s ordinary same-row, `gapMm`-spaced flow. Pulled out of
- * `<Factory>` (as `renderDivisions`) since it's a self-contained rendering
- * pass — see `Factory`'s own comment on the resize grip for why the
+ * `<Display>` (as `renderDivisions`) since it's a self-contained rendering
+ * pass — see `Display`'s own comment on the resize grip for why the
  * border-dedup pass below needs a second, later pass of its own too.
  */
 export default function DivisionGrid({
@@ -92,7 +92,7 @@ export default function DivisionGrid({
       isSelected,
       isDropTarget: isDropTarget(primary),
       // Mapping mode only ever shows a division whose own Layout plugin
-      // opts into it (`mapping-visible`) — same rule as `Factory`'s own
+      // opts into it (`mapping-visible`) — same rule as `Display`'s own
       // top-level cells, just per-division.
       isVisible: mode === "layout" || isMappingVisible(divide.cells[primary]?.typeId),
     };
@@ -165,7 +165,7 @@ export default function DivisionGrid({
   // border-dedup above, that's now only ever a highlighted item next
   // to a baseline one it no longer draws anything towards anyway, but
   // this stays as a defensive ordering all the same, the same reason
-  // `Factory` already renders the resize grip in its own pass after
+  // `Display` already renders the resize grip in its own pass after
   // every cell.
   const items: { key: string; priority: boolean; element: ReactElement }[] = [];
   for (let subId = 0; subId < count; subId++) {

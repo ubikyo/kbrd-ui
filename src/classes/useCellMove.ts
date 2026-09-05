@@ -87,7 +87,7 @@ export function useCellMove(params: {
   } | null>(null);
   // Set right when a move actually happens, so the `click` browsers still
   // fire after a `pointerup` doesn't also re-select/toggle the cell that
-  // was just dragged — read and cleared by `Factory`'s own `handleClick`.
+  // was just dragged — read and cleared by `Display`'s own `handleClick`.
   const suppressClickRef = useRef(false);
 
   useEffect(() => {
@@ -174,7 +174,7 @@ export function useCellMove(params: {
     };
   }
 
-  // Shared with `Factory`'s own native-DnD drop-target clearing (see its
+  // Shared with `Display`'s own native-DnD drop-target clearing (see its
   // `dragend`/`drop` window listeners) — a drag ending any way at all
   // should never leave a stale insertion line on screen.
   function clearMoveDropTarget() {

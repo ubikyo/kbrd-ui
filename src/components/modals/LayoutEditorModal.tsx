@@ -104,7 +104,7 @@ export default function LayoutEditorModal({
 
   // How many 1U reference items actually fit, given the display's physical
   // size and this layout's own Caps/Gap size — the ceiling neither field
-  // below can exceed (see `maxColumns`/`gridItemsY` in `Factory`/`App`,
+  // below can exceed (see `maxColumns`/`gridItemsY` in `Display`/`App`,
   // which clamp to this same computation independently).
   const computedMaxColumns = display
     ? maxItems(display.physical_width_mm, capsMm, gapMm)

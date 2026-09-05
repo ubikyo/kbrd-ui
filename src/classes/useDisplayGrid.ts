@@ -29,7 +29,7 @@ import {
 } from "../utils/layout";
 
 /**
- * `<Factory>`'s own grid state — `cells`/`rowOverrides`/`mergeGroups` and
+ * `<Display>`'s own grid state — `cells`/`rowOverrides`/`mergeGroups` and
  * every currently-selected cell/division/row/display — plus every
  * operation that reads or writes them (merge/divide/delete/copy/paste,
  * moving or resizing a cell, selecting one thing or another). Selection
@@ -41,12 +41,12 @@ import {
  * instead of removing it.
  *
  * See `App`'s own comments (now moved here) for the reasoning behind each
- * piece; `App` itself just calls this once, feeds `<Factory>`/`<Inspector>`
+ * piece; `App` itself just calls this once, feeds `<Display>`/`<Inspector>`
  * off what it returns, and wires a few of its own concerns on top
  * (`changeLayout`/`changeLayer` call `loadFactoryLayout`, `useUndoHistory`
  * reads `cells`/`rowOverrides`/`mergeGroups`/`skipAutosaveRef` from here).
  */
-export function useFactoryGrid(params: {
+export function useDisplayGrid(params: {
   layoutSettings: LayoutSettings;
   // Already clamped to the current layout's own Max height (1U) override
   // and whatever the physical display actually fits — see `App`'s
@@ -72,8 +72,36 @@ export function useFactoryGrid(params: {
   const [displaySelected, setDisplaySelected] = useState(false);
   // The last cell copied from the Actions menu (or Cmd/Ctrl+C) — "Paste"
   // is disabled until this is set, and applies its type/config/pluginIds
-  // onto whichever cell is selected at the time.
-  const [copiedCell, setCopiedCell] = useState<GridCell | null>(null);
+  // onto whichever cell/division is selected at the time. `sourceId` is
+  // the cell it was copied *from* — see `pasteToEmptyRow`, which routes
+  // pasting back onto that exact cell differently (into its row's own
+  // remaining space) than onto any other cell (overwriting it in place).
+  const [copiedCell, setCopiedCell] = useState<
+    (Pick<GridCell, "typeId" | "typeConfig" | "pluginIds" | "unit"> & {
+      sourceId: number;
+    })
+    | null
+  >(null);
+  // A Paste, or dropping a Layout plugin (Key/Space), that would overwrite
+  // a cell/division that isn't blank waits here for confirmation (see
+  // `ConfirmationModal` in `Composer`) instead of applying right away —
+  // `pasteToEmptyRow`/`assignLayoutPlugin`/`assignLayoutPluginToDivision`
+  // set this instead of mutating whenever their target already has
+  // content that dropping the same kind again wouldn't (a no-op, see
+  // `assignLayoutPlugin`).
+  const [pendingOverwrite, setPendingOverwrite] = useState<
+    | {
+        source: "paste";
+        target: { kind: "cell"; id: number } | { kind: "division"; parentId: number; subId: number };
+      }
+    | {
+        source: "layout-plugin";
+        target: { kind: "cell"; id: number } | { kind: "division"; parentId: number; subId: number };
+        pluginId: string;
+        defaultConfig: Record<string, unknown>;
+      }
+    | null
+  >(null);
   // Sidesteps `useUndoHistory`'s own push effect, and the autosave-to-
   // server effect in `App`, for the run right after `loadFactoryLayout`
   // seeds this state from a layer's own saved `factory_layout` (or resets
@@ -198,6 +226,7 @@ export function useFactoryGrid(params: {
     setSelectedDivisionIndices([]);
     setSelectedEmptyRow(null);
     setDisplaySelected(false);
+    setPendingOverwrite(null);
     skipAutosaveRef.current = true;
   }
 
@@ -236,7 +265,7 @@ export function useFactoryGrid(params: {
   }
 
   // Drops a freshly-typed cell onto the end of `row`'s empty space — see
-  // `Factory`'s trailing drop target. Generates the new cell's id and
+  // `Display`'s trailing drop target. Generates the new cell's id and
   // selects it in the same stroke.
   function createCell(row: number, cell: GridCell) {
     const { rows: updatedRows, id } = addCellToRow(rows, row);
@@ -246,7 +275,7 @@ export function useFactoryGrid(params: {
     setSelectedEmptyRow(null);
   }
 
-  // Drags `id` (a plain, unmerged cell — `Factory` only ever lets one of
+  // Drags `id` (a plain, unmerged cell — `Display` only ever lets one of
   // those be dragged in the first place) out of its row and back in
   // right before `beforeId` (`null` for the row's own end) — the same
   // row, to reorder it, or a different one entirely. No-ops if it
@@ -355,7 +384,7 @@ export function useFactoryGrid(params: {
   // Which divisions of `selectedCellIndex`'s own divided cell (see
   // `GridCell.divide`) are the real focus, instead of that cell as a
   // whole — takes priority over `layoutSelection` wherever both could
-  // apply (the Properties tab, the context menu) since `Factory` only
+  // apply (the Properties tab, the context menu) since `Display` only
   // ever routes a click within a divided cell's own area to one of its
   // divisions (see `selectDivision`), never to the divided cell as a
   // whole. `null` unless exactly one division is selected — same
@@ -388,27 +417,56 @@ export function useFactoryGrid(params: {
     selectedDivisionIndices.length > 1 &&
     divisionsAreContiguous(selectedDivisionIndices, selectedCell.divide.cols);
 
+  // Which row a *fresh* pasted cell would land in: the selected empty
+  // row, or — so Copy then Paste round-trips straight onto the same
+  // cell's own row without an extra click to explicitly select its
+  // trailing space first — the selected cell's own row, but only if it's
+  // the exact cell just copied (see `copiedCell.sourceId`); pasting onto
+  // any *other* cell overwrites it directly instead (see `canPaste`
+  // below), rather than falling back to its row. `-1` means neither
+  // applies right now.
+  const pasteTargetRow =
+    selectedEmptyRow !== null
+      ? selectedEmptyRow
+      : selectedCellIndex !== null &&
+          selectedDivisionIndices.length === 0 &&
+          copiedCell !== null &&
+          selectedCellIndex === copiedCell.sourceId
+        ? rowOf(selectedCellIndex, rows)
+        : -1;
+  // Whether the copied cell still fits in `pasteTargetRow`'s remaining
+  // Unit budget.
+  const rowHasRoomForPaste =
+    pasteTargetRow !== -1 &&
+    copiedCell !== null &&
+    copiedCell.unit <=
+      remainingUnitsInRow(
+        pasteTargetRow,
+        rows,
+        cells,
+        layoutSettings.physicalWidthMm,
+        layoutSettings.unitMm,
+        layoutSettings.gapMm,
+      );
+
   const emptySelection =
     selectedEmptyRow !== null
-      ? {
-          row: selectedEmptyRow,
-          // Whether the copied cell (if any) still fits in this row's
-          // remaining Unit budget — see `pasteToEmptyRow`. Pasting is only
-          // ever offered onto empty space now, not next to an already
-          // filled cell.
-          canPaste:
-            copiedCell !== null &&
-            copiedCell.unit <=
-              remainingUnitsInRow(
-                selectedEmptyRow,
-                rows,
-                cells,
-                layoutSettings.physicalWidthMm,
-                layoutSettings.unitMm,
-                layoutSettings.gapMm,
-              ),
-        }
+      ? { row: selectedEmptyRow, canPaste: rowHasRoomForPaste }
       : null;
+
+  // Whether "Paste" would do anything at all right now — see
+  // `pasteToEmptyRow`. A division, or a cell *other* than the one just
+  // copied, always applies directly once something's been copied
+  // (filling it in if blank, or — see `pendingOverwrite` — asking
+  // first if it isn't); the row's own empty space, or the exact cell just
+  // copied, both need actual room in that row to fall back to instead.
+  const canPaste =
+    copiedCell !== null &&
+    (selectedDivisionId !== null ||
+      (selectedCellIndex !== null &&
+        selectedDivisionIndices.length === 0 &&
+        selectedCellIndex !== copiedCell.sourceId) ||
+      rowHasRoomForPaste);
 
   // Whether any division of the sole selected cell is the real focus
   // right now, as opposed to plain top-level cells — used by `App`'s
@@ -647,10 +705,11 @@ export function useFactoryGrid(params: {
   // — not its own id or position — the same "primary" convention a merge
   // already uses to pick which member represents a group. Cloned so a
   // later Paste's own further edits can't reach back into this cell's
-  // arrays/objects.
+  // arrays/objects. `sourceId` is that cell's own id — see `pasteToEmptyRow`.
   function copySelectedCell() {
     if (selectedCellIndices.length === 0) return;
-    const source = cells[Math.min(...selectedCellIndices)];
+    const sourceId = Math.min(...selectedCellIndices);
+    const source = cells[sourceId];
     if (!source) return;
     const { typeId, typeConfig, pluginIds, unit } = source;
     setCopiedCell({
@@ -658,30 +717,199 @@ export function useFactoryGrid(params: {
       typeConfig: { ...typeConfig },
       pluginIds: [...pluginIds],
       unit,
+      sourceId,
     });
   }
 
-  // Pastes the copied cell straight into the selected empty row/space —
-  // the same fresh-cell creation `createCell` does for a plugin dropped
-  // there, just fed from the clipboard instead of a drag.
+  function applyPasteOntoCell(id: number) {
+    if (!copiedCell) return;
+    changeCell(id, {
+      typeId: copiedCell.typeId,
+      typeConfig: { ...copiedCell.typeConfig },
+      pluginIds: [...copiedCell.pluginIds],
+    });
+  }
+
+  function applyPasteOntoDivision(parentId: number, subId: number) {
+    if (!copiedCell) return;
+    changeDivisionCell(parentId, subId, {
+      typeId: copiedCell.typeId,
+      typeConfig: { ...copiedCell.typeConfig },
+      pluginIds: [...copiedCell.pluginIds],
+    });
+  }
+
+  // Applies the copied cell to whatever's actually selected right now —
+  // see `canPaste` for when this can do anything at all:
+  //
+  // - A division is the real focus: applies directly onto it (divisions
+  //   have no separate "row" of their own to fall back to instead — see
+  //   `createDivideGrid`), confirming first (`pendingOverwrite`) if
+  //   it isn't already blank.
+  // - The row's own empty space is selected, or the selected cell is the
+  //   exact one just copied (see `copiedCell.sourceId`) and its row still
+  //   has room: lands a brand-new cell at that row's own trailing end —
+  //   never overwrites anything, so never needs to confirm.
+  // - Any other cell: applies directly onto it, confirming first if it
+  //   isn't already blank — same as a division above.
   function pasteToEmptyRow() {
-    if (!emptySelection || !copiedCell || !emptySelection.canPaste) return;
-    const { rows: updatedRows, id } = addCellToRow(rows, emptySelection.row);
-    setRowOverrides((current) => ({
-      ...current,
-      [emptySelection.row]: updatedRows[emptySelection.row],
-    }));
+    if (!copiedCell) return;
+
+    if (selectedCellIndex !== null && selectedDivisionId !== null) {
+      const parentId = selectedCellIndex;
+      const subId = selectedDivisionId;
+      if (cells[parentId]?.divide?.cells[subId]?.typeId) {
+        setPendingOverwrite({
+          source: "paste",
+          target: { kind: "division", parentId, subId },
+        });
+        return;
+      }
+      applyPasteOntoDivision(parentId, subId);
+      return;
+    }
+
+    if (pasteTargetRow !== -1) {
+      if (!rowHasRoomForPaste) return;
+      const { rows: updatedRows, id } = addCellToRow(rows, pasteTargetRow);
+      setRowOverrides((current) => ({
+        ...current,
+        [pasteTargetRow]: updatedRows[pasteTargetRow],
+      }));
+      setCells((current) => ({
+        ...current,
+        [id]: {
+          typeId: copiedCell.typeId,
+          typeConfig: { ...copiedCell.typeConfig },
+          pluginIds: [...copiedCell.pluginIds],
+          unit: copiedCell.unit,
+        },
+      }));
+      setSelectedCellIndices([id]);
+      setSelectedEmptyRow(null);
+      return;
+    }
+
+    if (
+      selectedCellIndex !== null &&
+      selectedDivisionIndices.length === 0 &&
+      selectedCellIndex !== copiedCell.sourceId
+    ) {
+      if (cells[selectedCellIndex]?.typeId) {
+        setPendingOverwrite({
+          source: "paste",
+          target: { kind: "cell", id: selectedCellIndex },
+        });
+        return;
+      }
+      applyPasteOntoCell(selectedCellIndex);
+    }
+  }
+
+  function applyLayoutPluginToCell(
+    id: number,
+    pluginId: string,
+    defaultConfig: Record<string, unknown>,
+  ) {
     setCells((current) => ({
       ...current,
       [id]: {
-        typeId: copiedCell.typeId,
-        typeConfig: { ...copiedCell.typeConfig },
-        pluginIds: [...copiedCell.pluginIds],
-        unit: copiedCell.unit,
+        ...defaultGridCell(current[id]?.unit),
+        typeId: pluginId,
+        typeConfig: { ...defaultConfig },
       },
     }));
-    setSelectedCellIndices([id]);
-    setSelectedEmptyRow(null);
+  }
+
+  function applyLayoutPluginToDivision(
+    parentId: number,
+    subId: number,
+    pluginId: string,
+    defaultConfig: Record<string, unknown>,
+  ) {
+    changeDivisionCell(parentId, subId, {
+      typeId: pluginId,
+      typeConfig: { ...defaultConfig },
+      pluginIds: [],
+    });
+  }
+
+  // Dropping a Layout plugin (Key/Space) onto `index` (or its merge's
+  // primary — see `Display`'s own `handleCellDrop`, which resolves that
+  // before calling this) sets its kind — same rule as `pasteToEmptyRow`:
+  // dropping the kind it already is is always a no-op (nothing to lose),
+  // but a *different* kind onto a cell that already has content (its own
+  // config, or Mapping-mode plugins a kind change would discard) asks
+  // first (`pendingOverwrite`) rather than silently overwriting it.
+  function assignLayoutPlugin(
+    index: number,
+    pluginId: string,
+    defaultConfig: Record<string, unknown>,
+  ) {
+    selectCell(index);
+    const cell = cells[index];
+    if (cell?.typeId === pluginId) return;
+    if (cell?.typeId) {
+      setPendingOverwrite({
+        source: "layout-plugin",
+        target: { kind: "cell", id: index },
+        pluginId,
+        defaultConfig,
+      });
+      return;
+    }
+    applyLayoutPluginToCell(index, pluginId, defaultConfig);
+  }
+
+  // Same idea as `assignLayoutPlugin`, for one division of a divided cell
+  // instead of a top-level one.
+  function assignLayoutPluginToDivision(
+    parentId: number,
+    subId: number,
+    pluginId: string,
+    defaultConfig: Record<string, unknown>,
+  ) {
+    selectDivision({ parentId, subId });
+    const divCell = cells[parentId]?.divide?.cells[subId];
+    if (divCell?.typeId === pluginId) return;
+    if (divCell?.typeId) {
+      setPendingOverwrite({
+        source: "layout-plugin",
+        target: { kind: "division", parentId, subId },
+        pluginId,
+        defaultConfig,
+      });
+      return;
+    }
+    applyLayoutPluginToDivision(parentId, subId, pluginId, defaultConfig);
+  }
+
+  // "Yes" on the confirmation a non-blank overwrite shows (`Composer`'s
+  // `ConfirmationModal`) — applies whichever of `pasteToEmptyRow`/
+  // `assignLayoutPlugin`/`assignLayoutPluginToDivision` set `pendingOverwrite`.
+  function confirmOverwrite() {
+    const pending = pendingOverwrite;
+    setPendingOverwrite(null);
+    if (!pending) return;
+    if (pending.source === "paste") {
+      if (pending.target.kind === "cell") applyPasteOntoCell(pending.target.id);
+      else applyPasteOntoDivision(pending.target.parentId, pending.target.subId);
+    } else {
+      if (pending.target.kind === "cell") {
+        applyLayoutPluginToCell(pending.target.id, pending.pluginId, pending.defaultConfig);
+      } else {
+        applyLayoutPluginToDivision(
+          pending.target.parentId,
+          pending.target.subId,
+          pending.pluginId,
+          pending.defaultConfig,
+        );
+      }
+    }
+  }
+
+  function cancelOverwrite() {
+    setPendingOverwrite(null);
   }
 
   return {
@@ -702,6 +930,7 @@ export function useFactoryGrid(params: {
     selectedDivisionIndices,
     displaySelected,
     copiedCell,
+    pendingOverwrite,
 
     // selection actions
     selectDisplay,
@@ -720,6 +949,7 @@ export function useFactoryGrid(params: {
     divisionSelection,
     isDivisionSelectionContiguous,
     emptySelection,
+    canPaste,
     hasDivisionSelection,
     hasCellSelection,
     canCopySelection,
@@ -739,7 +969,11 @@ export function useFactoryGrid(params: {
     divideSelectedCell,
     copySelectedCell,
     pasteToEmptyRow,
+    assignLayoutPlugin,
+    assignLayoutPluginToDivision,
+    confirmOverwrite,
+    cancelOverwrite,
   };
 }
 
-export type FactoryGridApi = ReturnType<typeof useFactoryGrid>;
+export type DisplayGridApi = ReturnType<typeof useDisplayGrid>;

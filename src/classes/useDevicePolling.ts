@@ -6,7 +6,7 @@ const POLL_INTERVAL_MS = 5000;
 
 /**
  * KBRD-DEV's own reported resolution/aspect ratio, polled rather than
- * pushed — `<Factory>` falls back to KBRD-DEV's reference panel size
+ * pushed — `<Display>` falls back to KBRD-DEV's reference panel size
  * (`FALLBACK_WIDTH`/`FALLBACK_HEIGHT`) while nothing's connected.
  */
 export function useDevicePolling() {

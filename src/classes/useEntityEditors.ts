@@ -9,7 +9,7 @@ import type { LayoutData } from "../types/layout";
 
 /**
  * Add/Edit/Delete for the current Layout and Layer — the modal-opening
- * and delete-confirmation plumbing behind `<Factory>`'s own display
+ * and delete-confirmation plumbing behind `<Display>`'s own display
  * Actions menu (see `App`'s context menu). Both entities share the same
  * shape of interaction (an editor modal, a shared delete-confirmation
  * dialog keyed by `kind`), so this owns both rather than duplicating the
@@ -99,3 +99,5 @@ export function useEntityEditors(params: {
     confirmDeleteNow,
   };
 }
+
+export type EntityEditorsApi = ReturnType<typeof useEntityEditors>;

@@ -8,9 +8,9 @@ import type { FactoryLayout, GridCell, MergeGroups } from "../types/layout";
 const MAX_UNDO_HISTORY = 100;
 
 /**
- * Cmd/Ctrl+Z's own undo history for `<Factory>`'s grid — every past
+ * Cmd/Ctrl+Z's own undo history for `<Display>`'s grid — every past
  * `FactoryLayout` (before whatever change just landed), pushed by an
- * effect that shares `useFactoryGrid`'s own "was this just a layer/layout
+ * effect that shares `useDisplayGrid`'s own "was this just a layer/layout
  * load, not a real edit" flag (`skipAutosaveRef`) so switching layer/
  * layout doesn't get recorded as an undo step. `previousFactoryLayoutRef`
  * is that effect's own memory of the last state it saw, so it always

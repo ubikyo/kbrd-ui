@@ -25,6 +25,11 @@ export function useLayoutShortcuts(params: {
   hasDivisionSelection: boolean;
   canCopySelection: boolean;
   emptySelection: { canPaste: boolean } | null;
+  // Whether Cmd/Ctrl+V has anywhere to land right now — the selected
+  // empty row, or the sole selected cell's own row (see `useDisplayGrid`'s
+  // `canPasteAfterSelection`), so Copy then Paste can round-trip onto the
+  // same cell's row without re-selecting its trailing space first.
+  canPaste: boolean;
   undo: () => void;
   deleteSelectedCells: () => void;
   deleteSelectedDivisions: () => void;
@@ -42,6 +47,7 @@ export function useLayoutShortcuts(params: {
     hasDivisionSelection,
     canCopySelection,
     emptySelection,
+    canPaste,
     undo,
     deleteSelectedCells,
     deleteSelectedDivisions,
@@ -90,6 +96,7 @@ export function useLayoutShortcuts(params: {
     hasDivisionSelection,
     canCopySelection,
     emptySelection,
+    canPaste,
     undo,
     deleteSelectedCells,
     deleteSelectedDivisions,
@@ -104,6 +111,7 @@ export function useLayoutShortcuts(params: {
       hasDivisionSelection,
       canCopySelection,
       emptySelection,
+      canPaste,
       undo,
       deleteSelectedCells,
       deleteSelectedDivisions,
@@ -121,6 +129,7 @@ export function useLayoutShortcuts(params: {
         hasDivisionSelection,
         canCopySelection,
         emptySelection,
+        canPaste,
         undo,
         deleteSelectedCells,
         deleteSelectedDivisions,
@@ -174,7 +183,7 @@ export function useLayoutShortcuts(params: {
         event.preventDefault();
         copySelectedCell();
       } else if (withModifier && event.key.toLowerCase() === "v") {
-        if (emptySelection?.canPaste) {
+        if (canPaste) {
           event.preventDefault();
           pasteToEmptyRow();
         }

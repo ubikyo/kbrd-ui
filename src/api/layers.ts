@@ -39,7 +39,7 @@ export const updateLayer = (
 export const deleteLayer = (id: number) =>
   api<{ ok: boolean }>(`/api/layer/${id}`, { method: "DELETE" });
 
-// Autosaves `<Factory>`'s disposition onto this layer — see the effect
+// Autosaves `<Display>`'s disposition onto this layer — see the effect
 // in `App` — so it's reloaded whenever the user switches back to it.
 export const updateFactoryLayout = (
   id: number,

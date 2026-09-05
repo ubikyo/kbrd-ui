@@ -167,7 +167,7 @@ test("layoutRow places cells left to right at their own configured Unit, flush a
   };
   const slots = layoutRow([1, 2], cells, 10, 3);
   // The row starts right at x=0 — any margin comes from centering the
-  // whole grid as a block (`gridOffsetX` in `Factory`), not from here.
+  // whole grid as a block (`gridOffsetX` in `Display`), not from here.
   // Widths come from `cellSizeMm`'s pitch-based formula: pitch is 13
   // here, so 1.25U is 1.25*13-3=13.25 and 2U is 2*13-3=23.
   expect(slots[0]).toMatchObject({ id: 1, x: 0, width: 13.25 });

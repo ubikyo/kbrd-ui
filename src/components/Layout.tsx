@@ -8,13 +8,13 @@ import { defaultLayout } from "../utils/layout";
 
 type Props = {
   onChange: (layout: LayoutData | null) => void;
-  // Edit/Delete/Resize live in Factory's own display Actions menu (select
+  // Edit/Delete/Resize live in Display's own display Actions menu (select
   // the physical screen), but Add stays reachable straight from this
   // picker too — the "+" below the list, the quickest path to a new one.
   onAdd: () => void;
 };
 
-// Add/Edit/Delete now live in Factory's own display Actions menu (select the
+// Add/Edit/Delete now live in Display's own display Actions menu (select the
 // physical screen), not here — this dropdown is just the picker. `App`
 // drives those through this handle so it can refresh the list and
 // re-select afterwards, the same way this component always has.

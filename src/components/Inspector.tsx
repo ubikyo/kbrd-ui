@@ -41,7 +41,7 @@ type Props = {
   // Mapping (everything else) editor — see `kbrd-plugins`' per-plugin
   // `LayoutEditor`/`MappingEditor` exports.
   mode: "layout" | "mapping";
-  // The `<Factory>` grid cell (or division of a divided one) currently
+  // The `<Display>` grid cell (or division of a divided one) currently
   // selected, only set in Layout mode — `cell` only needs to carry the
   // plugin-facing fields `LayoutCellProperties` actually reads, the same
   // for either kind of selection (see its own `PluginCell`).
@@ -63,7 +63,7 @@ type Props = {
 };
 
 /**
- * Layout-mode Properties tab content for a selected `<Factory>` cell, or
+ * Layout-mode Properties tab content for a selected `<Display>` cell, or
  * Mapping-mode's Plugins/Properties tabs for `selectedKey` — see
  * `useKeyInspector` for everything behind the latter (which plugins/
  * properties a key has, and every mutation on them).

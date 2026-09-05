@@ -9,7 +9,6 @@ import { useDevicePolling } from "../classes/useDevicePolling";
 import { useElementSize } from "../classes/useElementSize";
 import { isMappingTarget, isMappingVisible, pluginById } from "../plugins/registry";
 import {
-  defaultDivisionCell,
   defaultGridCell,
   MIN_UNIT,
   type DivideGrid,
@@ -71,6 +70,21 @@ type Props = LayoutSettings & {
   // Drops a freshly-typed cell onto the end of `row`'s empty space —
   // dropping a Layout plugin where there's no cell yet.
   onCreateCell: (row: number, cell: GridCell) => void;
+  // Dropping a Layout plugin (Key/Space) onto an *existing* cell/division
+  // instead — sets its kind, confirming first if it already has content
+  // a kind change would discard (see `useDisplayGrid`'s own
+  // `assignLayoutPlugin`/`assignLayoutPluginToDivision`).
+  onAssignLayoutPlugin: (
+    index: number,
+    pluginId: string,
+    defaultConfig: Record<string, unknown>,
+  ) => void;
+  onAssignLayoutPluginToDivision: (
+    parentId: number,
+    subId: number,
+    pluginId: string,
+    defaultConfig: Record<string, unknown>,
+  ) => void;
   // Drags a plain, unmerged cell to reposition it — same row (reorder)
   // or a different one entirely — right before `beforeId` (`null` for
   // the row's own end). No-ops in `App` if it doesn't actually fit
@@ -126,15 +140,16 @@ type Props = LayoutSettings & {
 };
 
 /**
- * Scaffold for the redesigned Preview: temporarily replaces `<Preview>`
- * while that component is rebuilt from scratch. The display — a rectangle
- * standing in for KBRD-DEV's physical screen, sized to that screen's
- * aspect ratio (fetched from KBRD-API, which KBRD-DEV keeps up to date)
- * and fit to the available surface — is drawn as part of the same SVG as
- * the key grid rather than a separate bordered box around it, so both
- * share one coordinate system and stay centered together. SVG (rather
- * than a CSS grid) is what lets a merged group's shape become a stepped
- * outline (an ISO Enter key) instead of a plain rectangle.
+ * The physical screen itself — a rectangle standing in for KBRD-DEV's
+ * physical screen, sized to that screen's aspect ratio (fetched from
+ * KBRD-API, which KBRD-DEV keeps up to date) and fit to the available
+ * surface — plus its whole cell grid, drawn as part of the same SVG
+ * rather than a separate bordered box around it, so both share one
+ * coordinate system and stay centered together. SVG (rather than a CSS
+ * grid) is what lets a merged group's shape become a stepped outline (an
+ * ISO Enter key) instead of a plain rectangle. Purely a controlled
+ * renderer: every mode-level chrome around it (the Layout/Mapping switch,
+ * Resize, the context menu, Divide) lives in `<Composer>`, one level up.
  *
  * Each row is laid out as an actual flow (`layoutRow`): a 1.25U key really
  * spans 1.25 pitches of row space (see `cellSizeMm`), everything after it
@@ -163,7 +178,7 @@ type Props = LayoutSettings & {
  * one opaque JSON blob rather than per-key rows: these synthetic cells
  * still have no real `key_ref` of their own to save the usual way.
  */
-export default function Factory({
+export default function Display({
   unitMm,
   physicalWidthMm,
   physicalHeightMm,
@@ -173,6 +188,8 @@ export default function Factory({
   cells,
   onCellsChange,
   onCreateCell,
+  onAssignLayoutPlugin,
+  onAssignLayoutPluginToDivision,
   onMoveCell,
   mergeGroups,
   selectedCellIndices,
@@ -344,24 +361,10 @@ export default function Factory({
 
     if (mode === "layout") {
       if (plugin.category !== "Layout") return;
-      onCellsChange((current) => {
-        const cell = current[primary];
-        // Changing (or confirming) the cell's kind clears whatever
-        // Mapping-mode plugins were attached to its previous kind, but
-        // keeps its Unit exactly as it was.
-        return {
-          ...current,
-          [primary]:
-            cell?.typeId === plugin.id
-              ? cell
-              : {
-                  ...defaultGridCell(cell?.unit),
-                  typeId: plugin.id,
-                  typeConfig: { ...plugin.defaultConfig },
-                },
-        };
-      });
-      onSelectCell(primary);
+      // Confirms first if this would discard an existing, different kind
+      // (its own config, or whatever Mapping-mode plugins were attached)
+      // — see `useDisplayGrid`'s own `assignLayoutPlugin`.
+      onAssignLayoutPlugin(primary, plugin.id, plugin.defaultConfig);
       return;
     }
 
@@ -472,32 +475,9 @@ export default function Factory({
 
     if (mode === "layout") {
       if (plugin.category !== "Layout") return;
-      onCellsChange((current) => {
-        const parent = current[parentId];
-        if (!parent?.divide) return current;
-        const divCell = parent.divide.cells[primary];
-        return {
-          ...current,
-          [parentId]: {
-            ...parent,
-            divide: {
-              ...parent.divide,
-              cells: {
-                ...parent.divide.cells,
-                [primary]:
-                  divCell?.typeId === plugin.id
-                    ? divCell
-                    : {
-                        ...defaultDivisionCell(),
-                        typeId: plugin.id,
-                        typeConfig: { ...plugin.defaultConfig },
-                      },
-              },
-            },
-          },
-        };
-      });
-      onSelectDivision({ parentId, subId: primary });
+      // Confirms first if this would discard an existing, different kind
+      // — see `useDisplayGrid`'s own `assignLayoutPluginToDivision`.
+      onAssignLayoutPluginToDivision(parentId, primary, plugin.id, plugin.defaultConfig);
       return;
     }
 

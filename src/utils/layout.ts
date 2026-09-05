@@ -30,7 +30,7 @@ export function maxItems(physicalMm: number, unitMm: number, gapMm: number) {
  * them — the same total width/height `maxItems` fits within `physicalMm`.
  * Used to center the display's rows within its own physical size, both
  * vertically (its row count) and horizontally (its column count) — see
- * `gridOffsetY`/`gridOffsetX` in `Factory`. */
+ * `gridOffsetY`/`gridOffsetX` in `Display`. */
 export function gridSizeMm(items: number, unitMm: number, gapMm: number) {
   return items > 0 ? items * unitMm + (items - 1) * gapMm : 0;
 }
@@ -155,9 +155,9 @@ export type RowSlot = {
  * cell sits right after its edge plus one more `gapMm`. Nothing is
  * rescaled or stretched to hit any particular total. Whatever margin the
  * row ends up with on screen comes from centering the whole grid as a
- * block (`gridOffsetX` in `Factory`), not from a margin baked in here. A
+ * block (`gridOffsetX` in `Display`), not from a margin baked in here. A
  * row with no cells (or fewer/smaller ones than its full Unit budget)
- * simply ends early; see `Factory`'s trailing drop target for the budget
+ * simply ends early; see `Display`'s trailing drop target for the budget
  * it has left (`maxUnitForCell`).
  */
 export function layoutRow(
@@ -222,7 +222,7 @@ export function maxUnitForCell(
 }
 
 /** How much Unit budget a row has left for a brand new cell — the width
- * of `Factory`'s trailing "drop a plugin here" zone — see
+ * of `Display`'s trailing "drop a plugin here" zone — see
  * `rowUnitCapacity`. */
 export function remainingUnitsInRow(
   row: number,

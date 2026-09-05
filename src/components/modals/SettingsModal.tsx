@@ -106,7 +106,7 @@ export default function SettingsModal({
     draft.physicalWidthMm > 0 && draft.physicalHeightMm > 0;
 
   // Falls back to the same 1280×800 KBRD-DEV uses while no screen is
-  // connected — see `Factory` — so Resolution/DPI stay populated instead
+  // connected — see `Display` — so Resolution/DPI stay populated instead
   // of going blank.
   const resolutionWidth = device.connected ? device.width : FALLBACK_WIDTH;
   const resolutionHeight = device.connected ? device.height : FALLBACK_HEIGHT;

@@ -8,7 +8,7 @@ const SELECTED_STROKE = "#00ff00";
 // A fixed screen size regardless of the grid's own scale (Caps size, zoom,
 // how many rows fit…) — unlike the rest of a cell, which is drawn directly
 // in the SVG's mm-space and so naturally scales with it, the grip is
-// converted from these via `pxPerMm` (see `Factory`) so it always reads
+// converted from these via `pxPerMm` (see `Display`) so it always reads
 // the same size on screen.
 const GRIP_WIDTH_PX = 6;
 const GRIP_HEIGHT_PX = 30;
@@ -61,7 +61,7 @@ type Props = {
   // solid, since there's nothing there yet.
   isEmpty?: boolean;
   isDropTarget?: boolean;
-  // False for a division whose border `Factory` is instead drawing as
+  // False for a division whose border `Display` is instead drawing as
   // part of its own deduplicated pass over the whole division grid (see
   // `renderDivisions`) — two adjacent, both-dashed divisions each
   // stroking their own full outline would draw the exact same shared
@@ -72,7 +72,7 @@ type Props = {
   showBorder?: boolean;
   // Hides the size/type label text — Mapping mode's own look, where the
   // cell shape stays but the Layout-only "1U · Key" caption underneath it
-  // doesn't (see `Factory`'s own `mode` prop).
+  // doesn't (see `Display`'s own `mode` prop).
   showText?: boolean;
   onClick?: (event: MouseEvent<SVGGElement>) => void;
   // Right-click — opens this cell's own context menu (see `App`'s
@@ -82,7 +82,7 @@ type Props = {
   onDragLeave?: (event: DragEvent<SVGGElement>) => void;
   onDrop?: (event: DragEvent<SVGGElement>) => void;
   // Starts dragging this cell itself to move it elsewhere on the display
-  // (see `Factory`'s own pointer-based `handleCellPointerDown`/
+  // (see `Display`'s own pointer-based `handleCellPointerDown`/
   // `onMoveCell` — plain pointer events rather than native HTML5
   // drag-and-drop, which SVG elements support too inconsistently across
   // browsers to rely on). Only ever set for a plain, unmerged cell (a
@@ -92,7 +92,7 @@ type Props = {
   onPointerDown?: (event: PointerEvent<SVGGElement>) => void;
 };
 
-/** One SVG cell (or merged group of cells) in the grid `<Factory>` lays
+/** One SVG cell (or merged group of cells) in the grid `<Display>` lays
  * out over the display, and a drop target for the plugins dragged from
  * `<Inspector>`'s Plugins tab. */
 export default function LayoutItem({
@@ -202,14 +202,14 @@ export default function LayoutItem({
 type ResizeGripProps = {
   // The cell being resized — the grip sits centred on its right edge.
   bounds: CellRect;
-  // The SVG's own scale (real screen pixels per mm — see `Factory`), used
+  // The SVG's own scale (real screen pixels per mm — see `Display`), used
   // to size the grip in fixed pixels regardless of the grid's own scale.
   pxPerMm: number;
   onResizeStart: (event: PointerEvent<SVGGElement>) => void;
 };
 
 /**
- * A cell's drag-resize handle — rendered by `Factory` as its own pass
+ * A cell's drag-resize handle — rendered by `Display` as its own pass
  * *after* every cell in every row, so it always paints on top of them
  * (plain SVG document order otherwise puts a narrow-gap neighbour's own
  * border in front of a grip that overlaps it, since that neighbour is

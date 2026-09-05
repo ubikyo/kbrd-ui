@@ -41,7 +41,7 @@ export type LayoutData = {
   // How many 1U reference items this layout uses, in each direction —
   // `null` means "as many as Caps size / Gap size / the display's own
   // physical size allow" (see `maxItems`); otherwise a ceiling *below*
-  // that, never above it (see `Factory`'s `maxColumns` and `App`'s
+  // that, never above it (see `Display`'s `maxColumns` and `App`'s
   // `gridItemsY`, both of which still clamp to the computed max in case
   // Caps/Gap/the display changed since this was set).
   max_columns: number | null;
@@ -88,7 +88,7 @@ export type DisplayData = {
 };
 
 /** Physical grid settings edited across Settings (physical width/height)
- * and the Layout editor (Caps size / Gap size), shared with `Factory` (the
+ * and the Layout editor (Caps size / Gap size), shared with `Display` (the
  * preview grid) as one bag of numbers regardless of where each one is
  * actually edited or persisted — the camelCase, form-friendly shape of
  * `LayoutData`/`DisplayData`'s own `*_mm` fields. */
@@ -118,8 +118,8 @@ export const MIN_UNIT = 0.25;
 export const UNIT_STEP = 0.25;
 
 /**
- * One cell in `<Factory>`'s grid: a plugin dropped on the display. Synthetic
- * and local for now — see the TODO on `Factory` — identified by its own
+ * One cell in `<Display>`'s grid: a plugin dropped on the display. Synthetic
+ * and local for now — see the TODO on `Display` — identified by its own
  * stable id (see `nextCellId`), not by a real geometry `key_ref`. There
  * is no "default" cell: a row starts with none at all, and one only
  * exists once a Layout plugin (kbrd.layout-key / kbrd.layout-space) is
@@ -223,7 +223,7 @@ function cloneDivisionCell(cell: DivisionCell): DivisionCell {
 export type MergeGroups = number[][];
 
 /**
- * `<Factory>`'s full grid disposition, as saved onto the current
+ * `<Display>`'s full grid disposition, as saved onto the current
  * `LayerData` (see `factory_layout`) — each layer keeps its own,
  * loaded back whenever the user switches to it. Everything `App` otherwise
  * keeps as local-only state: which cell ids populate each row

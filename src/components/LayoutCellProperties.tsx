@@ -15,11 +15,11 @@ type Props = {
 };
 
 /**
- * Layout-mode Properties tab content for a selected `<Factory>` cell (or
+ * Layout-mode Properties tab content for a selected `<Display>` cell (or
  * division of a divided one): whatever its own Layout plugin
  * (kbrd.layout-key / kbrd.layout-space) exposes — its Unit is set by
- * dragging the cell's own resize handle in `<Factory>` instead, and
- * Merge/Unmerge/Divide/Remove now live in Factory's own top-right
+ * dragging the cell's own resize handle in `<Display>` instead, and
+ * Merge/Unmerge/Divide/Remove now live in Display's own top-right
  * Actions menu (see `App`) rather than here.
  */
 export default function LayoutCellProperties({ cell, onChange }: Props) {

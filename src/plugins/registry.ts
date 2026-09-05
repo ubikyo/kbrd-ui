@@ -34,7 +34,7 @@ export const pluginById = (id: string) =>
 
 // A Layout plugin's own `capabilities` (`kbrd.layout-key`/`kbrd.layout-space`,
 // see their own `plugin.json`) drive how a cell behaves in Mapping mode —
-// see `Factory`/`DivisionGrid`. `mapping-visible` is whether it still shows
+// see `Display`/`DivisionGrid`. `mapping-visible` is whether it still shows
 // at all there (Key does, Space doesn't: hidden entirely, though its own
 // row/grid space stays reserved); `mapping-target` is whether an
 // Invoke/Display plugin can be dropped onto it. Both default to `false`

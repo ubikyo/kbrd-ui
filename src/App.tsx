@@ -4,28 +4,14 @@ import {
   Box,
   Button,
   Group,
-  Menu,
   Modal,
   Notification,
-  SegmentedControl,
   Splitter,
   Stack,
-  Switch,
   Text,
 } from "@mantine/core";
 
-import {
-  MdAdd,
-  MdCallMerge,
-  MdCallSplit,
-  MdContentCopy,
-  MdContentPaste,
-  MdDelete,
-  MdDriveFileMove,
-  MdEdit,
-  MdGridOn,
-  MdSettings,
-} from "react-icons/md";
+import { MdContentCopy, MdDelete, MdDriveFileMove, MdSettings } from "react-icons/md";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -33,14 +19,9 @@ import kbrdLogo from "./assets/media/KBRD.svg";
 
 import Layout from "./components/Layout";
 import LayoutEditorModal from "./components/modals/LayoutEditorModal";
-import DivideModal from "./components/modals/DivideModal";
-import type {
-  FactoryLayout,
-  LayoutData,
-} from "./types/layout";
+import type { FactoryLayout, LayoutData } from "./types/layout";
 
-import Factory from "./components/Factory";
-import type { ContextMenuTarget } from "./components/Factory";
+import Composer from "./components/Composer";
 import Inspector from "./components/Inspector";
 import SettingsModal from "./components/modals/SettingsModal";
 import Layer from "./components/Layer";
@@ -48,31 +29,14 @@ import LayerEditorModal from "./components/modals/LayerEditorModal";
 import { updateFactoryLayout } from "./api/layers";
 import { maxItems } from "./utils/layout";
 import type { LayerData } from "./types/layer";
+import { useDisplayGrid } from "./classes/useDisplayGrid";
 import { useDisplaySettings } from "./classes/useDisplaySettings";
 import { useEntityEditors } from "./classes/useEntityEditors";
-import { useFactoryGrid } from "./classes/useFactoryGrid";
 import { useKeyOperations } from "./classes/useKeyOperations";
-import { useLayoutShortcuts } from "./classes/useLayoutShortcuts";
-import { useUndoHistory } from "./classes/useUndoHistory";
 
-// How long `<Factory>`'s grid sits idle before its disposition is
+// How long `<Display>`'s grid sits idle before its disposition is
 // autosaved onto the current layout — see the effect below.
 const FACTORY_LAYOUT_AUTOSAVE_MS = 600;
-
-// The Actions menu's own shortcuts are shown next to their label in
-// whichever form this platform actually uses — ⌘ on macOS, Ctrl+
-// elsewhere (both are accepted either way, see `useLayoutShortcuts`).
-const IS_MAC =
-  typeof navigator !== "undefined" && /Mac|iPhone|iPod|iPad/.test(navigator.userAgent);
-const MOD_KEY_LABEL = IS_MAC ? "⌘" : "Ctrl+";
-
-function ShortcutHint({ children }: { children: React.ReactNode }) {
-  return (
-    <Text size="xs" c="dimmed">
-      {children}
-    </Text>
-  );
-}
 
 export default function App() {
   const [layout, setLayout] = useState<LayoutData | null>(null);
@@ -89,21 +53,8 @@ export default function App() {
   // `Inspector`'s props and each plugin's `LayoutEditor`/`MappingEditor`.
   const [mode, setMode] = useState<"layout" | "mapping">("layout");
 
-  const [divideModalOpened, setDivideModalOpened] = useState(false);
-  // The display's own right-click context menu — replaces the old floating
-  // "Actions" button. `Factory` reports where the cursor was and what it
-  // landed on (already selected the same way a left click would by the
-  // time this fires); only the position and which content to show
-  // (`kind`) need to live here, since `useFactoryGrid`'s own selection
-  // state is already the source of truth for *which* cell, division, row
-  // or the display itself is the real target.
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    kind: ContextMenuTarget["kind"];
-  } | null>(null);
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
-  // TODO(preview-rebuild): only the setters are used until <Factory> reads
+  // TODO(preview-rebuild): only the setters are used until <Display> reads
   // these back to force-render a key/plugin's down state, as <Preview> did.
   const [, setPreviewDownPluginId] = useState<number | null>(null);
   const [, setPreviewDownTarget] = useState<string | null>(null);
@@ -129,21 +80,12 @@ export default function App() {
       ? Math.min(layout.max_rows, computedGridItemsY)
       : computedGridItemsY;
 
-  // `<Factory>`'s whole grid — cells, rows, merges, and every selection
+  // `<Display>`'s whole grid — cells, rows, merges, and every selection
   // (cell/division/row/display) — plus every operation that reads or
-  // writes them; see its own comment for why selection lives there too.
-  const grid = useFactoryGrid({ layoutSettings, gridItemsY });
-
-  const { undo } = useUndoHistory({
-    cells: grid.cells,
-    rowOverrides: grid.rowOverrides,
-    mergeGroups: grid.mergeGroups,
-    skipAutosaveRef: grid.skipAutosaveRef,
-    setCells: grid.setCells,
-    setRowOverrides: grid.setRowOverrides,
-    setMergeGroups: grid.setMergeGroups,
-    clearCellSelection: grid.clearCellSelection,
-  });
+  // writes them. Read directly by `Inspector` (the Properties tab) as
+  // well as `<Composer>` (the display's own chrome/shortcuts/undo), so it
+  // stays lifted here rather than inside either one.
+  const grid = useDisplayGrid({ layoutSettings, gridItemsY });
 
   const keyOps = useKeyOperations({
     layer,
@@ -154,24 +96,6 @@ export default function App() {
   });
 
   const entityEditors = useEntityEditors({ layout, layer });
-
-  const { resizeEnabled, setResizeEnabled } = useLayoutShortcuts({
-    mode,
-    settingsOpened,
-    layoutEditorOpened: entityEditors.layoutEditorOpened,
-    layerEditorOpened: entityEditors.layerEditorOpened,
-    confirmDeleteOpen: Boolean(entityEditors.confirmDelete),
-    divideModalOpened,
-    hasCellSelection: grid.hasCellSelection,
-    hasDivisionSelection: grid.hasDivisionSelection,
-    canCopySelection: grid.canCopySelection,
-    emptySelection: grid.emptySelection,
-    undo,
-    deleteSelectedCells: grid.deleteSelectedCells,
-    deleteSelectedDivisions: grid.deleteSelectedDivisions,
-    copySelectedCell: grid.copySelectedCell,
-    pasteToEmptyRow: grid.pasteToEmptyRow,
-  });
 
   const changeLayout = useCallback(
     (value: LayoutData | null) => {
@@ -221,7 +145,7 @@ export default function App() {
       keyOps.stopKeyOperation();
       setPreviewDownPluginId(null);
       setPreviewDownTarget(null);
-      // Each layer keeps its own `<Factory>` disposition — load it back
+      // Each layer keeps its own `<Display>` disposition — load it back
       // in now that we've switched to it.
       grid.loadFactoryLayout(value?.factory_layout ?? null);
     },
@@ -229,21 +153,11 @@ export default function App() {
     [],
   );
 
-  // `Factory`'s `onContextMenu` — a right-click anywhere on the display.
-  // `Factory` has already made whatever selection this right-click
-  // implies by the time this fires (preserving a multi-selection the
-  // clicked cell/division was already part of, rather than always
-  // collapsing it to just that one — see its own context-menu handlers),
-  // so this only needs to open the menu itself, at the click.
-  function handleContextMenu(x: number, y: number, target: ContextMenuTarget) {
-    setContextMenu({ x, y, kind: target.kind });
-  }
-
   // The browser's own right-click context menu is never wanted anywhere
-  // in the app — `Factory` already shows its own (see `contextMenu`
-  // above) for a cell/division/row/display in Layout mode, but this covers
-  // every other case too (Mapping mode, the header, the Inspector panel,
-  // Settings…), where nothing else calls `preventDefault()` on it.
+  // in the app — `<Composer>` already shows its own for a cell/division/
+  // row/display in Layout mode, but this covers every other case too
+  // (Mapping mode, the header, the Inspector panel, Settings…), where
+  // nothing else calls `preventDefault()` on it.
   useEffect(() => {
     function handleContextMenu(event: MouseEvent) {
       event.preventDefault();
@@ -265,9 +179,9 @@ export default function App() {
   // TODO(preview-rebuild): dropping a plugin onto a key and completing a
   // duplicate/move operation both used to happen by clicking a key in
   // <Preview>. Restore that wiring (see git history / Preview.tsx) once
-  // <Factory> exposes clickable key/drop targets of its own.
+  // <Display> exposes clickable key/drop targets of its own.
 
-  // Autosaves `<Factory>`'s disposition onto the current layer's own
+  // Autosaves `<Display>`'s disposition onto the current layer's own
   // `factory_layout` — debounced so a drag-resize or a run of clicks
   // doesn't fire one PUT per change. Skipped for the run right after
   // `changeLayer` seeds this same state from what's already saved (see
@@ -379,307 +293,16 @@ export default function App() {
           }}
         >
           <Splitter.Pane defaultSize={75} min={40}>
-            <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
-              {/* TODO(preview-rebuild): Factory temporarily stands in for
-                  Preview while that component is redesigned from scratch. */}
-              <Factory
-                {...layoutSettings}
-                mode={mode}
-                rows={grid.rows}
-                cells={grid.cells}
-                onCellsChange={grid.setCells}
-                onCreateCell={grid.createCell}
-                onMoveCell={grid.moveCell}
-                mergeGroups={grid.mergeGroups}
-                selectedCellIndices={grid.selectedCellIndices}
-                onSelectCell={grid.selectCell}
-                onToggleCell={grid.toggleCellSelection}
-                selectedEmptyRow={grid.selectedEmptyRow}
-                onSelectEmpty={grid.selectEmptyRow}
-                selectedDivisionIndices={grid.selectedDivisionIndices}
-                onSelectDivision={grid.selectDivision}
-                onToggleDivision={grid.toggleDivisionSelection}
-                isDisplaySelected={grid.displaySelected}
-                onSelectDisplay={grid.selectDisplay}
-                onContextMenu={handleContextMenu}
-                resizeEnabled={resizeEnabled}
-                maxColumns={layout?.max_columns ?? null}
-              />
-
-              <SegmentedControl
-                value={mode}
-                onChange={(value) =>
-                  setMode(value === "mapping" ? "mapping" : "layout")
-                }
-                data={[
-                  { label: "Layout", value: "layout" },
-                  { label: "Mapping", value: "mapping" },
-                ]}
-                color="green"
-                size="xs"
-                style={{
-                  position: "absolute",
-                  left: 20,
-                  bottom: 20,
-                  zIndex: 20,
-                }}
-              />
-
-              {/* Moved out of the display's own Actions menu — resizing is a
-                  view option, not a per-layout action, so it lives here as
-                  a persistent switch, aligned right at the same level as
-                  the Layout/Mapping switch on the left. Also toggled by
-                  Tab (see `useLayoutShortcuts`) — Layout mode only: Mapping
-                  mode has no row/cell structure to resize in the first
-                  place, so the switch (and whatever it was left at) is
-                  hidden rather than just disabled. */}
-              {mode === "layout" && (
-                <Switch
-                  label="Resize"
-                  size="xs"
-                  color="green"
-                  checked={resizeEnabled}
-                  onChange={(event) =>
-                    setResizeEnabled(event.currentTarget.checked)
-                  }
-                  style={{
-                    position: "absolute",
-                    right: 20,
-                    bottom: 20,
-                    zIndex: 20,
-                  }}
-                />
-              )}
-
-              {/* One shared right-click context menu (see `Factory`'s
-                  `onContextMenu` and `handleContextMenu` above) — its
-                  content switches on `contextMenu.kind`, reading whichever
-                  selection `useFactoryGrid` already made for it the same
-                  way each used to feed its own floating "Actions" button.
-                  Anchored to an invisible, zero-size target positioned at
-                  the click itself instead of a fixed on-screen spot, so it
-                  opens right where the cursor was. */}
-              {contextMenu && (
-                <Menu
-                  opened
-                  onChange={(opened) => {
-                    if (!opened) setContextMenu(null);
-                  }}
-                  position="bottom-start"
-                  offset={0}
-                  width={200}
-                  styles={{ item: { padding: "4px var(--mantine-spacing-sm)" } }}
-                >
-                  <Menu.Target>
-                    <div
-                      style={{
-                        position: "fixed",
-                        left: contextMenu.x,
-                        top: contextMenu.y,
-                        width: 0,
-                        height: 0,
-                      }}
-                    />
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    {contextMenu.kind === "cell" &&
-                      mode === "layout" &&
-                      grid.selectedCellIndices.length > 0 && (
-                        <>
-                          {grid.selectedCellIndices.length === 1 &&
-                            grid.layoutSelection && (
-                              <>
-                                {grid.layoutSelection.isMerged && (
-                                  <Menu.Item leftSection={<MdCallSplit />} onClick={grid.unmerge}>
-                                    Unmerge
-                                  </Menu.Item>
-                                )}
-                                {!grid.layoutSelection.isMerged &&
-                                  !grid.layoutSelection.cell.divide && (
-                                    <Menu.Item
-                                      leftSection={<MdGridOn />}
-                                      onClick={() => setDivideModalOpened(true)}
-                                    >
-                                      Divide
-                                    </Menu.Item>
-                                  )}
-                                <Menu.Divider />
-                                <Menu.Item
-                                  leftSection={<MdContentCopy />}
-                                  rightSection={<ShortcutHint>{MOD_KEY_LABEL}C</ShortcutHint>}
-                                  onClick={grid.copySelectedCell}
-                                >
-                                  Copy
-                                </Menu.Item>
-                                {grid.layoutSelection.canRemove && (
-                                  <Menu.Item
-                                    color="red"
-                                    leftSection={<MdDelete />}
-                                    rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                                    onClick={() => grid.removeCell(grid.layoutSelection!.index)}
-                                  >
-                                    Delete
-                                  </Menu.Item>
-                                )}
-                              </>
-                            )}
-                          {grid.selectedCellIndices.length > 1 &&
-                            grid.isCellSelectionContiguous && (
-                              <>
-                                <Menu.Item
-                                  leftSection={<MdCallMerge />}
-                                  onClick={grid.mergeSelectedCells}
-                                >
-                                  Merge
-                                </Menu.Item>
-                                <Menu.Item
-                                  color="red"
-                                  leftSection={<MdDelete />}
-                                  rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                                  onClick={grid.deleteSelectedCells}
-                                >
-                                  Delete
-                                </Menu.Item>
-                              </>
-                            )}
-                          {grid.selectedCellIndices.length > 1 &&
-                            !grid.isCellSelectionContiguous && (
-                              <Menu.Item
-                                color="red"
-                                leftSection={<MdDelete />}
-                                rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                                onClick={grid.deleteSelectedCells}
-                              >
-                                Delete
-                              </Menu.Item>
-                            )}
-                        </>
-                      )}
-
-                    {contextMenu.kind === "division" &&
-                      mode === "layout" &&
-                      grid.selectedDivisionIndices.length > 0 && (
-                        <>
-                          {grid.selectedDivisionIndices.length === 1 &&
-                            grid.divisionSelection && (
-                              <>
-                                {grid.divisionSelection.isMerged && (
-                                  <Menu.Item
-                                    leftSection={<MdCallSplit />}
-                                    onClick={grid.unmergeDivision}
-                                  >
-                                    Unmerge
-                                  </Menu.Item>
-                                )}
-                                {grid.divisionSelection.cell.typeId && (
-                                  <Menu.Item
-                                    color="red"
-                                    leftSection={<MdDelete />}
-                                    rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                                    onClick={grid.deleteSelectedDivisions}
-                                  >
-                                    Delete
-                                  </Menu.Item>
-                                )}
-                              </>
-                            )}
-                          {grid.selectedDivisionIndices.length > 1 &&
-                            grid.isDivisionSelectionContiguous && (
-                              <>
-                                <Menu.Item
-                                  leftSection={<MdCallMerge />}
-                                  onClick={grid.mergeSelectedDivisions}
-                                >
-                                  Merge
-                                </Menu.Item>
-                                <Menu.Item
-                                  color="red"
-                                  leftSection={<MdDelete />}
-                                  rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                                  onClick={grid.deleteSelectedDivisions}
-                                >
-                                  Delete
-                                </Menu.Item>
-                              </>
-                            )}
-                          {grid.selectedDivisionIndices.length > 1 &&
-                            !grid.isDivisionSelectionContiguous && (
-                              <Menu.Item
-                                color="red"
-                                leftSection={<MdDelete />}
-                                rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                                onClick={grid.deleteSelectedDivisions}
-                              >
-                                Delete
-                              </Menu.Item>
-                            )}
-                        </>
-                      )}
-
-                    {contextMenu.kind === "row" &&
-                      mode === "layout" &&
-                      grid.emptySelection && (
-                        <Menu.Item
-                          leftSection={<MdContentPaste />}
-                          rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
-                          disabled={!grid.emptySelection.canPaste}
-                          onClick={grid.pasteToEmptyRow}
-                        >
-                          Paste
-                        </Menu.Item>
-                      )}
-
-                    {contextMenu.kind === "display" && (
-                      <>
-                        <Menu.Label>Layout</Menu.Label>
-                        <Menu.Item leftSection={<MdAdd />} onClick={entityEditors.openAddLayout}>
-                          Add
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<MdEdit />}
-                          disabled={!layout}
-                          onClick={entityEditors.openEditLayout}
-                        >
-                          Edit
-                        </Menu.Item>
-                        <Menu.Item
-                          color="red"
-                          leftSection={<MdDelete />}
-                          disabled={!layout}
-                          onClick={entityEditors.requestDeleteLayout}
-                        >
-                          Delete
-                        </Menu.Item>
-                        <Menu.Divider />
-                        <Menu.Label>Layer</Menu.Label>
-                        <Menu.Item
-                          leftSection={<MdAdd />}
-                          disabled={!layout}
-                          onClick={entityEditors.openAddLayer}
-                        >
-                          Add
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<MdEdit />}
-                          disabled={!layer}
-                          onClick={entityEditors.openEditLayer}
-                        >
-                          Edit
-                        </Menu.Item>
-                        <Menu.Item
-                          color="red"
-                          leftSection={<MdDelete />}
-                          disabled={!layer}
-                          onClick={entityEditors.requestDeleteLayer}
-                        >
-                          Delete
-                        </Menu.Item>
-                      </>
-                    )}
-                  </Menu.Dropdown>
-                </Menu>
-              )}
-            </Box>
+            <Composer
+              layoutSettings={layoutSettings}
+              mode={mode}
+              onModeChange={setMode}
+              layout={layout}
+              layer={layer}
+              grid={grid}
+              entityEditors={entityEditors}
+              settingsOpened={settingsOpened}
+            />
           </Splitter.Pane>
           <Splitter.Pane defaultSize="550px" min="550px">
             <Inspector
@@ -750,15 +373,6 @@ export default function App() {
             </Button>
           </Group>
         </Notification>
-      )}
-      {divideModalOpened && grid.layoutSelection && (
-        <DivideModal
-          onClose={() => setDivideModalOpened(false)}
-          onDivide={(cols, rows) => {
-            grid.divideSelectedCell(cols, rows);
-            setDivideModalOpened(false);
-          }}
-        />
       )}
       {entityEditors.layoutEditorOpened && (
         <LayoutEditorModal
