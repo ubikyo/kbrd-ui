@@ -70,6 +70,10 @@ type Props = {
   // strokes can land out of sync and visually fill each other's gaps in,
   // reading as one solid line where neither one actually is.
   showBorder?: boolean;
+  // Hides the size/type label text — Mapping mode's own look, where the
+  // cell shape stays but the Layout-only "1U · Key" caption underneath it
+  // doesn't (see `Factory`'s own `mode` prop).
+  showText?: boolean;
   onClick?: (event: MouseEvent<SVGGElement>) => void;
   // Right-click — opens this cell's own context menu (see `App`'s
   // `contextMenu`), after selecting it the same way a left click does.
@@ -102,6 +106,7 @@ export default function LayoutItem({
   isEmpty = false,
   isDropTarget = false,
   showBorder = true,
+  showText = true,
   onClick,
   onContextMenu,
   onDragOver,
@@ -156,7 +161,7 @@ export default function LayoutItem({
           {...shapeProps}
         />
       )}
-      {sizeLabel && (
+      {showText && sizeLabel && (
         <text
           x={labelBounds.x + labelBounds.width / 2}
           y={
@@ -173,7 +178,7 @@ export default function LayoutItem({
           {sizeLabel}
         </text>
       )}
-      {typeLabel && (
+      {showText && typeLabel && (
         <text
           x={labelBounds.x + labelBounds.width / 2}
           y={

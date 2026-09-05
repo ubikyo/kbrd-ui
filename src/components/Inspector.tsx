@@ -3,7 +3,6 @@ import {
   ActionIcon,
   Box,
   Button,
-  ColorInput,
   Group,
   Menu,
   Modal,
@@ -20,52 +19,16 @@ import {
   MdDriveFileMove,
   MdMoreVert,
 } from "react-icons/md";
-import { useState } from "react";
 import { PropertyRow } from "@kbrd/plugins/web";
 
-import {
-  deleteKeyPlugin,
-  updateKeyPlugin,
-  updateKeyProperties,
-} from "../api/layers";
-import { pluginById, plugins } from "../plugins/registry";
+import { pluginSummary, setDragSymbol } from "../classes/inspectorHelpers";
+import { useKeyInspector } from "../classes/useKeyInspector";
+import { pluginById } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
 import type { GridCell, KeyboardLayout } from "../types/layout";
+import KeyStateFields from "./KeyStateFields";
 import LayoutCellProperties from "./LayoutCellProperties";
-import type {
-  KeyPlugin,
-  KeyProperty,
-  KeyPropertyConfig,
-  LayerData,
-} from "../types/layer";
-import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
-import { usePendingSaves } from "../utils/usePendingSaves";
-
-const BACKGROUND_REF = "__background__";
-const COLOR_SWATCHES = [
-  "#ffffff",
-  "#adb5bd",
-  "#ff6b6b",
-  "#ffd43b",
-  "#51cf66",
-  "#339af0",
-  "#845ef7",
-  "#000000",
-];
-const isHexColor = (value: string, alpha = false) =>
-  new RegExp(alpha ? "^#[0-9a-f]{8}$" : "^#[0-9a-f]{6}$", "i").test(value);
-const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
-  keyMode: "momentary",
-  downEnabled: false,
-  upBorderEnabled: true,
-  downBorderEnabled: true,
-  upBorderColor: "#808080",
-  downBorderColor: "#ffffff",
-  upBorderWidth: 1,
-  downBorderWidth: 1,
-  upBackgroundColor: "#00000000",
-  downBackgroundColor: "#00000000",
-};
+import type { KeyPlugin, KeyProperty, LayerData } from "../types/layer";
 
 type Props = {
   layer: LayerData | null;
@@ -99,137 +62,12 @@ type Props = {
   onClearAll: () => Promise<void>;
 };
 
-function pluginSummary(item: KeyPlugin) {
-  if (
-    item.plugin_id === "kbrd.render-label" ||
-    item.plugin_id === "kbrd.render-key-symbol"
-  ) {
-    const text = item.config.text;
-    return typeof text === "string" && text.trim()
-      ? truncate(text.trim())
-      : null;
-  }
-  if (
-    item.plugin_id === "kbrd.render-image" ||
-    item.plugin_id === "kbrd.render-video"
-  ) {
-    const name = item.config.name ?? item.config.media;
-    return typeof name === "string" && name.trim()
-      ? truncate(name.trim())
-      : null;
-  }
-  return null;
-}
-
-function truncate(value: string) {
-  return value.length > 15 ? `${value.slice(0, 15)}…` : value;
-}
-
-function setDragSymbol(event: React.DragEvent, symbol = "⠿") {
-  const dragImage = document.createElement("div");
-  dragImage.textContent = symbol;
-  Object.assign(dragImage.style, {
-    position: "fixed",
-    top: "-100px",
-    left: "-100px",
-    padding: "4px 8px",
-    border: "1px solid white",
-    borderRadius: "4px",
-    background: "#222120",
-    color: "white",
-    fontSize: "20px",
-    lineHeight: "1",
-  });
-  document.body.appendChild(dragImage);
-  event.dataTransfer.setDragImage(dragImage, 12, 12);
-  requestAnimationFrame(() => dragImage.remove());
-}
-
-type KeyStateFieldsProps = {
-  backgroundColor: string;
-  borderEnabled: boolean;
-  borderColor: string;
-  borderWidth: number;
-  onBackgroundColorChange: (value: string) => void;
-  onBorderEnabledChange: (value: boolean) => void;
-  onBorderColorChange: (value: string) => void;
-  onBorderWidthChange: (value: number) => void;
-};
-
 /**
- * Champs "Background color / Border / Border color / Border size" partagés
- * entre les onglets "Up" et "Down" des propriétés système d'une touche.
+ * Layout-mode Properties tab content for a selected `<Factory>` cell, or
+ * Mapping-mode's Plugins/Properties tabs for `selectedKey` — see
+ * `useKeyInspector` for everything behind the latter (which plugins/
+ * properties a key has, and every mutation on them).
  */
-function KeyStateFields({
-  backgroundColor,
-  borderEnabled,
-  borderColor,
-  borderWidth,
-  onBackgroundColorChange,
-  onBorderEnabledChange,
-  onBorderColorChange,
-  onBorderWidthChange,
-}: KeyStateFieldsProps) {
-  return (
-    <Stack gap="sm">
-      <PropertyRow label="Background color">
-        <ColorInput
-          w="100%"
-          aria-label="Background color"
-          size="xs"
-          format="hexa"
-          value={backgroundColor}
-          swatches={COLOR_SWATCHES}
-          error={isHexColor(backgroundColor, true) ? undefined : "Invalid color"}
-          success={isHexColor(backgroundColor, true)}
-          onChange={onBackgroundColorChange}
-        />
-      </PropertyRow>
-      <PropertyRow label="Border" align="center" compactControl>
-        <Switch
-          aria-label="Border"
-          size="sm"
-          checked={borderEnabled}
-          onChange={(event) =>
-            onBorderEnabledChange(event.currentTarget.checked)
-          }
-        />
-      </PropertyRow>
-      <PropertyRow label="Border color">
-        <ColorInput
-          w="100%"
-          aria-label="Border color"
-          size="xs"
-          format="hex"
-          value={borderColor}
-          disabled={!borderEnabled}
-          swatches={COLOR_SWATCHES}
-          error={isHexColor(borderColor) ? undefined : "Invalid color"}
-          success={isHexColor(borderColor)}
-          onChange={onBorderColorChange}
-        />
-      </PropertyRow>
-      <PropertyRow label="Border size">
-        <NumberInput
-          w="100%"
-          aria-label="Border size"
-          size="xs"
-          min={1}
-          max={4}
-          allowDecimal={false}
-          clampBehavior="strict"
-          value={borderWidth}
-          disabled={!borderEnabled}
-          success
-          onChange={(value) =>
-            onBorderWidthChange(typeof value === "number" ? value : 1)
-          }
-        />
-      </PropertyRow>
-    </Stack>
-  );
-}
-
 export default function Inspector({
   layer,
   selectedKey,
@@ -248,186 +86,45 @@ export default function Inspector({
   onMoveTo,
   onClearAll,
 }: Props) {
-  const [propertyStates, setPropertyStates] = useState<
-    Record<number, "main" | "up" | "down">
-  >({});
-  const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
-  const [clearing, setClearing] = useState(false);
-  const [targetStates, setTargetStates] = useState<
-    Record<string, "option" | "up" | "down">
-  >({});
-  const [dropIndicator, setDropIndicator] = useState<{
-    id: number;
-    edge: "before" | "after";
-  } | null>(null);
-  const [draggedPropertyId, setDraggedPropertyId] = useState<number | null>(
-    null,
-  );
-  const pendingSaves = usePendingSaves<number, Partial<KeyPlugin>>();
-  const pendingPropertySaves = usePendingSaves<string, KeyPropertyConfig>();
-  // Layout plugins (positioning/kind) are only draggable in Layout mode;
-  // Invoke/Display plugins (behaviour/content) only in Mapping mode.
-  const draggablePlugins = plugins.filter((plugin) =>
-    mode === "layout"
-      ? plugin.category === "Layout"
-      : plugin.category !== "Layout",
-  );
-  const pluginCategories = [
-    ...new Set(draggablePlugins.map((plugin) => plugin.category)),
-  ];
-  const allInstances = layer?.plugins ?? [];
-  const instances = allInstances
-    .filter((plugin) => plugin.key_ref === selectedKey)
-    .sort((left, right) => left.position - right.position);
-  const propertyGroups = [...new Set(plugins.map((plugin) => plugin.category))]
-    .map((category) => ({
-      category,
-      items: instances.filter(
-        (item) => pluginById(item.plugin_id)?.category === category,
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
-  const keyProperties = layer?.key_properties ?? [];
-  const selectedProperty = keyProperties.find(
-    (property) => property.key_ref === selectedKey,
-  );
-  const propertyConfig: KeyPropertyConfig = {
-    ...DEFAULT_KEY_PROPERTIES,
-    ...selectedProperty?.config,
-    upBorderWidth: resolveBorderWidth(selectedProperty?.config, false),
-    downBorderWidth: resolveBorderWidth(selectedProperty?.config, true),
-    upBorderEnabled: resolveBorderEnabled(selectedProperty?.config, false),
-    downBorderEnabled: resolveBorderEnabled(selectedProperty?.config, true),
-  };
-  const targetType =
-    selectedKey === BACKGROUND_REF
-      ? "background"
-      : (layout?.keys.find((key) => key.ref === selectedKey)?.type ?? "key");
-  const storedTargetState = selectedKey
-    ? (targetStates[selectedKey] ?? "option")
-    : "option";
-  const targetState =
-    targetType !== "key" && storedTargetState === "down"
-      ? "up"
-      : storedTargetState;
-  const systemPluginName =
-    targetType === "background"
-      ? "Layer"
-      : targetType === "space"
-        ? "Space"
-        : "Key";
-
-  function patchKeyProperty(data: Partial<KeyPropertyConfig>) {
-    if (!layer || !selectedKey) return;
-    const config = { ...propertyConfig, ...data };
-    const property = { key_ref: selectedKey, config };
-    onKeyPropertiesChange([
-      ...keyProperties.filter((item) => item.key_ref !== selectedKey),
-      property,
-    ]);
-    pendingPropertySaves.schedule(
-      selectedKey,
-      () => config,
-      (saved) => void updateKeyProperties(layer.id, selectedKey, saved),
-    );
-  }
-
-  function patch(item: KeyPlugin, data: Partial<KeyPlugin>) {
-    const value = { ...item, ...data };
-    onChange(
-      allInstances.map((plugin) => (plugin.id === value.id ? value : plugin)),
-    );
-
-    pendingSaves.schedule(
-      item.id,
-      (previous) => ({ ...previous, ...data }),
-      (merged) => void updateKeyPlugin(item.id, merged),
-    );
-  }
-
-  async function reorder(
-    draggedId: number,
-    targetId: number,
-    edge: "before" | "after",
-  ) {
-    const draggedItem = instances.find((item) => item.id === draggedId);
-    const targetItem = instances.find((item) => item.id === targetId);
-    if (!draggedItem || !targetItem || draggedId === targetId) return;
-    const category = pluginById(draggedItem.plugin_id)?.category;
-    if (!category || pluginById(targetItem.plugin_id)?.category !== category) {
-      return;
-    }
-
-    const categoryInstances = instances.filter(
-      (item) => pluginById(item.plugin_id)?.category === category,
-    );
-    const from = categoryInstances.findIndex((item) => item.id === draggedId);
-
-    const positions = categoryInstances.map((item) => item.position);
-    const reordered = [...categoryInstances];
-    const [dragged] = reordered.splice(from, 1);
-    const targetIndex = reordered.findIndex((item) => item.id === targetId);
-    if (targetIndex === -1) return;
-    reordered.splice(targetIndex + (edge === "after" ? 1 : 0), 0, dragged);
-    if (
-      reordered.every(
-        (item, index) => item.id === categoryInstances[index].id,
-      )
-    ) {
-      return;
-    }
-    const positioned = reordered.map((item, index) => ({
-      ...item,
-      position: positions[index],
-    }));
-
-    const reorderedById = new Map(positioned.map((item) => [item.id, item]));
-    onChange(allInstances.map((item) => reorderedById.get(item.id) ?? item));
-    await Promise.all(
-      positioned
-        .filter(
-          (item) =>
-            categoryInstances.find((instance) => instance.id === item.id)
-              ?.position !== item.position,
-        )
-        .map((item) => updateKeyPlugin(item.id, { position: item.position })),
-    );
-  }
-
-  async function remove(item: KeyPlugin) {
-    const pending = pendingSaves.take(item.id);
-    onChange(allInstances.filter((plugin) => plugin.id !== item.id));
-    if (pending) await updateKeyPlugin(item.id, pending);
-    await deleteKeyPlugin(item.id);
-    onPreviewDownPluginChange(null);
-    setDeleting(null);
-  }
-
-  async function clearAll() {
-    if (!selectedKey) return;
-    pendingPropertySaves.take(selectedKey);
-    for (const instance of instances) {
-      pendingSaves.take(instance.id);
-    }
-    await onClearAll();
-    onPreviewDownPluginChange(null);
-    onPreviewDownTargetChange(null);
-    setClearing(false);
-  }
-
-  async function startMoveTo() {
-    if (!layer || !selectedKey) return;
-    const saves: Promise<unknown>[] = [];
-    if (pendingPropertySaves.take(selectedKey)) {
-      saves.push(updateKeyProperties(layer.id, selectedKey, propertyConfig));
-    }
-    for (const instance of instances) {
-      const pending = pendingSaves.take(instance.id);
-      if (pending) saves.push(updateKeyPlugin(instance.id, pending));
-    }
-    await Promise.all(saves);
-    onMoveTo();
-  }
+  const inspector = useKeyInspector({
+    layer,
+    selectedKey,
+    layout,
+    mode,
+    onChange,
+    onKeyPropertiesChange,
+    onPreviewDownPluginChange,
+    onPreviewDownTargetChange,
+    onMoveTo,
+    onClearAll,
+  });
+  const {
+    propertyStates,
+    setPropertyStates,
+    deleting,
+    setDeleting,
+    clearing,
+    setClearing,
+    setTargetStates,
+    dropIndicator,
+    setDropIndicator,
+    draggedPropertyId,
+    setDraggedPropertyId,
+    draggablePlugins,
+    pluginCategories,
+    instances,
+    propertyGroups,
+    propertyConfig,
+    targetType,
+    targetState,
+    systemPluginName,
+    patchKeyProperty,
+    patch,
+    reorder,
+    remove,
+    clearAll,
+    startMoveTo,
+  } = inspector;
 
   return (
     <Box
