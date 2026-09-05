@@ -23,7 +23,7 @@ import {
   MdDelete,
   MdDriveFileMove,
   MdEdit,
-  MdMoreVert,
+  MdGridOn,
   MdSettings,
 } from "react-icons/md";
 
@@ -33,9 +33,16 @@ import kbrdLogo from "./assets/media/KBRD.svg";
 
 import Layout from "./components/Layout";
 import type { LayoutMenuHandle } from "./components/Layout";
-import LayoutEditorModal from "./components/LayoutEditorModal";
-import { defaultGridCell, DEFAULT_LAYOUT_SETTINGS, MIN_UNIT } from "./types/layout";
+import LayoutEditorModal from "./components/modals/LayoutEditorModal";
+import DivideModal from "./components/modals/DivideModal";
+import {
+  createDivideGrid,
+  defaultDivisionCell,
+  defaultGridCell,
+  DEFAULT_LAYOUT_SETTINGS,
+} from "./types/layout";
 import type {
+  DivisionCell,
   FactoryLayout,
   GridCell,
   LayoutData,
@@ -44,22 +51,26 @@ import type {
 } from "./types/layout";
 
 import Factory from "./components/Factory";
+import type { ContextMenuTarget } from "./components/Factory";
 import Inspector from "./components/Inspector";
-import SettingsModal from "./components/SettingsModal";
+import SettingsModal from "./components/modals/SettingsModal";
 import Layer from "./components/Layer";
 import type { LayerMenuHandle } from "./components/Layer";
-import LayerEditorModal from "./components/LayerEditorModal";
-import { getBoard, updateBoard } from "./api/board";
+import LayerEditorModal from "./components/modals/LayerEditorModal";
+import { getDisplay, updateDisplay } from "./api/display";
 import { deleteLayout } from "./api/layouts";
 import { clearKey, deleteLayer, updateFactoryLayout } from "./api/layers";
 import {
   addCellToRow,
   addMerge,
   canRemoveCell,
+  cellRect,
+  cellsAreContiguous,
+  divisionsAreContiguous,
   gridRows,
   groupOf,
-  insertCellAfter,
   maxItems,
+  maxUnitForCell,
   remainingUnitsInRow,
   removeCellFromRow,
   removeMerge,
@@ -74,6 +85,11 @@ import type {
 // How long `<Factory>`'s grid sits idle before its disposition is
 // autosaved onto the current layout — see the effect below.
 const FACTORY_LAYOUT_AUTOSAVE_MS = 600;
+
+// How many past `FactoryLayout` snapshots Cmd/Ctrl+Z can step back
+// through — see `undoStackRef`. Capped so a long editing session's own
+// history doesn't grow unbounded.
+const MAX_UNDO_HISTORY = 100;
 
 // The Actions menu's own shortcuts are shown next to their label in
 // whichever form this platform actually uses — ⌘ on macOS, Ctrl+
@@ -115,12 +131,16 @@ export default function App() {
     {},
   );
   const [mergeGroups, setMergeGroups] = useState<MergeGroups>([]);
-  const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(
-    null,
-  );
+  // Every currently-selected top-level cell's own primary id — a plain
+  // click replaces this with a singleton (or clears it, toggling the
+  // sole member off); Cmd/Ctrl+click toggles one id in or out instead
+  // (see `selectCell`/`toggleCellSelection`). What the context menu
+  // offers depends on how many are selected and whether they're all
+  // mutually adjacent — see `isCellSelectionContiguous` below.
+  const [selectedCellIndices, setSelectedCellIndices] = useState<number[]>([]);
   // A row's trailing empty space (or a fully empty row), selected instead
-  // of a real cell — mutually exclusive with `selectedCellIndex`/
-  // `boardSelected`, the same way those already are with each other. Lets
+  // of a real cell — mutually exclusive with `selectedCellIndices`/
+  // `displaySelected`, the same way those already are with each other. Lets
   // a copied plugin be pasted straight onto space nothing has claimed yet.
   const [selectedEmptyRow, setSelectedEmptyRow] = useState<number | null>(
     null,
@@ -130,10 +150,10 @@ export default function App() {
   // to reach.
   const [resizeEnabled, setResizeEnabled] = useState(false);
   // The physical screen (the white outline in `Factory`) selected as its
-  // own target, mutually exclusive with a cell — see `selectBoard`/
+  // own target, mutually exclusive with a cell — see `selectDisplay`/
   // `selectCell` below and the Actions menu it shows (Add/Edit/Delete
   // Layout/Layer).
-  const [boardSelected, setBoardSelected] = useState(false);
+  const [displaySelected, setDisplaySelected] = useState(false);
   const layoutMenuRef = useRef<LayoutMenuHandle>(null);
   const layerMenuRef = useRef<LayerMenuHandle>(null);
   const [layoutEditorOpened, setLayoutEditorOpened] = useState(false);
@@ -145,11 +165,32 @@ export default function App() {
     id: number;
     name: string;
   } | null>(null);
-  // The cell "Merge" was invoked from, while waiting for a neighbour to
-  // complete it — see the Notification/STOP below and `onStartMerge`.
-  const [mergeSourceIndex, setMergeSourceIndex] = useState<number | null>(
-    null,
-  );
+  // Which divisions of `selectedCellIndices`' sole cell (once divided —
+  // see `GridCell.divide`) are the real focus, instead of the cell as a
+  // whole — meaningless unless exactly one cell is selected and it's
+  // divided; set only via `selectDivision`/`toggleDivisionSelection`, and
+  // cleared by every other selection helper below so it never survives
+  // selecting something else. Same plain-click-replaces /
+  // Cmd-click-toggles rule, and the same contiguity check
+  // (`isDivisionSelectionContiguous`), just scoped to this one cell's own
+  // divisions instead of the display's top-level cells.
+  const [selectedDivisionIndices, setSelectedDivisionIndices] = useState<
+    number[]
+  >([]);
+  const [divideModalOpened, setDivideModalOpened] = useState(false);
+  // The display's own right-click context menu — replaces the old floating
+  // "Actions" button. `Factory` reports where the cursor was and what it
+  // landed on (already selected the same way a left click would by the
+  // time this fires); only the position and which content to show
+  // (`kind`) need to live here, since the selection state it reads
+  // (`layoutSelection`/`divisionSelection`/`emptySelection`/
+  // `displaySelected`) is already the source of truth for *which* cell,
+  // division, row or the display itself is the real target.
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    kind: ContextMenuTarget["kind"];
+  } | null>(null);
   // The last cell copied from the Actions menu (or Cmd/Ctrl+C) — "Paste"
   // is disabled until this is set, and applies its type/config/pluginIds
   // onto whichever cell is selected at the time.
@@ -179,6 +220,19 @@ export default function App() {
   // seeds `cells`/`rowOverrides`/`mergeGroups` from a layer's own saved
   // `factory_layout` — that change is a load, not an edit to write back.
   const skipFactoryAutosaveRef = useRef(true);
+  // Cmd/Ctrl+Z's own undo history — every past `FactoryLayout` (before
+  // whatever change just landed), pushed by the effect right below the
+  // autosave one, which shares its own "was this just a layer load, not
+  // a real edit" flag (`skipFactoryAutosaveRef`) so switching layer/layout
+  // doesn't get recorded as an undo step. `previousFactoryLayoutRef` is
+  // that effect's own memory of the last state it saw, so it always
+  // pushes the state a change is *leaving*, not the one it's arriving
+  // at. `isUndoingRef` marks a change `undo` itself just made, so that
+  // pass doesn't turn around and push the very state undo just popped
+  // back onto the stack.
+  const undoStackRef = useRef<FactoryLayout[]>([]);
+  const previousFactoryLayoutRef = useRef<FactoryLayout | null>(null);
+  const isUndoingRef = useRef(false);
 
   function stopKeyOperation() {
     keyOperationRef.current = null;
@@ -190,7 +244,7 @@ export default function App() {
     // (e.g. a changed Max width/height, Caps size…) by re-fetching it, not
     // by switching to a different one — `Layout.refresh(id)` calls this
     // with a freshly-fetched object that still carries the same `id`. The
-    // active layer and everything on the board must survive that; only an
+    // active layer and everything on the display must survive that; only an
     // actual switch (a different id, or none at all) should wipe them.
     const isSameLayout =
       layoutRef.current !== null &&
@@ -201,7 +255,7 @@ export default function App() {
     // Each layout keeps its own Caps size / Gap size — load them back in
     // now that we've switched to it, or reset to the reference panel once
     // there's no layout left to show them for. The physical screen's
-    // width/height are *not* touched here — see the board-settings effect
+    // width/height are *not* touched here — see the display-settings effect
     // below: they're the same for every layout, not per-layout.
     setLayoutSettings((current) => ({
       ...current,
@@ -222,10 +276,10 @@ export default function App() {
     setCells({});
     setRowOverrides({});
     setMergeGroups([]);
-    setSelectedCellIndex(null);
+    setSelectedCellIndices([]);
+    setSelectedDivisionIndices([]);
     setSelectedEmptyRow(null);
-    setBoardSelected(false);
-    setMergeSourceIndex(null);
+    setDisplaySelected(false);
     skipFactoryAutosaveRef.current = true;
   }, []);
 
@@ -242,38 +296,104 @@ export default function App() {
     setCells(value?.factory_layout?.cells ?? {});
     setRowOverrides(value?.factory_layout?.rowOverrides ?? {});
     setMergeGroups(value?.factory_layout?.mergeGroups ?? []);
-    setSelectedCellIndex(null);
+    setSelectedCellIndices([]);
+    setSelectedDivisionIndices([]);
     setSelectedEmptyRow(null);
-    setBoardSelected(false);
-    setMergeSourceIndex(null);
+    setDisplaySelected(false);
     skipFactoryAutosaveRef.current = true;
   }, []);
 
-  // The board (the physical screen) and a grid cell are mutually
-  // exclusive selections — each shows its own Actions menu. While a merge
-  // is in progress, a click that misses every cell (e.g. the background,
-  // or an adjacent cell that turns out not to share an edge) must not
-  // cancel it — only the STOP button or Escape does (see the Escape
-  // effect near `stopMerge`).
-  function selectBoard() {
-    if (mergeSourceIndex !== null) return;
-    setBoardSelected(true);
-    setSelectedCellIndex(null);
+  // The display (the physical screen) and a grid cell are mutually
+  // exclusive selections — each shows its own context menu.
+  function selectDisplay() {
+    setDisplaySelected(true);
+    setSelectedCellIndices([]);
+    setSelectedDivisionIndices([]);
     setSelectedEmptyRow(null);
   }
 
+  // A plain click on a cell — replaces the whole selection with just
+  // this one, or clears it if this was already the sole selection (a
+  // toggle-off, same as before multi-select existed). Cmd/Ctrl+click
+  // (`toggleCellSelection`) is the only way to select more than one.
   function selectCell(index: number | null) {
-    setSelectedCellIndex(index);
+    setSelectedCellIndices((current) =>
+      index === null ? [] : current.length === 1 && current[0] === index ? [] : [index],
+    );
+    setSelectedDivisionIndices([]);
     setSelectedEmptyRow(null);
-    setBoardSelected(false);
+    setDisplaySelected(false);
+  }
+
+  // Cmd/Ctrl+click on a cell — toggles `index` in or out of the current
+  // multi-selection, unless the previous selection was of a different
+  // kind entirely (a division, empty space, the display), in which case it
+  // just starts a fresh one-cell selection instead, the same as a plain
+  // click would.
+  function toggleCellSelection(index: number) {
+    const inCellSelectionMode =
+      !displaySelected && selectedEmptyRow === null && selectedDivisionIndices.length === 0;
+    setSelectedCellIndices((current) => {
+      if (!inCellSelectionMode) return [index];
+      return current.includes(index)
+        ? current.filter((id) => id !== index)
+        : [...current, index];
+    });
+    setSelectedDivisionIndices([]);
+    setSelectedEmptyRow(null);
+    setDisplaySelected(false);
+  }
+
+  // A division of `parentId`'s own divided cell — see `GridCell.divide`
+  // — selected instead of the divided cell as a whole; mutually exclusive
+  // with every other selection, same as `selectCell`. A plain click on a
+  // division always focuses its parent as the sole cell selection (there
+  // being no sense in which the parent, as a whole, is "also" selected
+  // once you're looking at one specific division of it).
+  function selectDivision(ref: { parentId: number; subId: number }) {
+    setSelectedCellIndices([ref.parentId]);
+    setSelectedDivisionIndices((current) =>
+      current.length === 1 && current[0] === ref.subId ? [] : [ref.subId],
+    );
+    setSelectedEmptyRow(null);
+    setDisplaySelected(false);
+  }
+
+  // Cmd/Ctrl+click on a division — toggles `ref.subId` in or out of the
+  // current division multi-selection, as long as it's still the same
+  // parent already focused; a different parent (or no division focus at
+  // all yet) just starts fresh, same as a plain click would.
+  function toggleDivisionSelection(ref: { parentId: number; subId: number }) {
+    const sameParentFocused =
+      selectedCellIndices.length === 1 && selectedCellIndices[0] === ref.parentId;
+    setSelectedCellIndices([ref.parentId]);
+    setSelectedDivisionIndices((current) => {
+      if (!sameParentFocused) return [ref.subId];
+      return current.includes(ref.subId)
+        ? current.filter((id) => id !== ref.subId)
+        : [...current, ref.subId];
+    });
+    setSelectedEmptyRow(null);
+    setDisplaySelected(false);
   }
 
   // A row's empty space, selected (instead of a cell) so a copied plugin
   // can be pasted straight onto it — see `emptySelection`/`pasteToEmptyRow`.
   function selectEmptyRow(row: number) {
     setSelectedEmptyRow(row);
-    setSelectedCellIndex(null);
-    setBoardSelected(false);
+    setSelectedCellIndices([]);
+    setSelectedDivisionIndices([]);
+    setDisplaySelected(false);
+  }
+
+  // `Factory`'s `onContextMenu` — a right-click anywhere on the display.
+  // `Factory` has already made whatever selection this right-click
+  // implies by the time this fires (preserving a multi-selection the
+  // clicked cell/division was already part of, rather than always
+  // collapsing it to just that one — see its own context-menu handlers),
+  // so this only needs to open the menu itself, at the click.
+  function handleContextMenu(x: number, y: number, target: ContextMenuTarget) {
+    setContextMenu({ x, y, kind: target.kind });
   }
 
   function openAddLayout() {
@@ -322,13 +442,13 @@ export default function App() {
     }
   }
 
-  // The physical screen's width/height (`board`, see KBRD-API) — one row
+  // The physical screen's width/height (`display`, see KBRD-API) — one row
   // for the whole device, loaded once here rather than re-seeded on every
   // `changeLayout` the way Caps size / Gap size are: switching layouts
-  // must never resize the physical screen out from under the board.
+  // must never resize the physical screen out from under the display.
   useEffect(() => {
     let cancelled = false;
-    void getBoard().then((data) => {
+    void getDisplay().then((data) => {
       if (cancelled) return;
       setLayoutSettings((current) => ({
         ...current,
@@ -341,9 +461,9 @@ export default function App() {
     };
   }, []);
 
-  async function saveBoardSettings(settings: LayoutSettings) {
+  async function saveDisplaySettings(settings: LayoutSettings) {
     setLayoutSettings(settings);
-    const updated = await updateBoard({
+    const updated = await updateDisplay({
       physical_width_mm: settings.physicalWidthMm,
       physical_height_mm: settings.physicalHeightMm,
     });
@@ -405,25 +525,220 @@ export default function App() {
     }));
   }
 
-  function startMerge() {
-    if (selectedCellIndex === null) return;
-    setMergeSourceIndex(selectedCellIndex);
+  // Same idea as `changeCell`, for one division of a divided cell (see
+  // `GridCell.divide`) instead of a top-level one.
+  function changeDivisionCell(
+    parentId: number,
+    subId: number,
+    patch: Partial<DivisionCell>,
+  ) {
+    setCells((current) => {
+      const parent = current[parentId];
+      if (!parent?.divide) return current;
+      const existing = parent.divide.cells[subId] ?? defaultDivisionCell();
+      return {
+        ...current,
+        [parentId]: {
+          ...parent,
+          divide: {
+            ...parent.divide,
+            cells: { ...parent.divide.cells, [subId]: { ...existing, ...patch } },
+          },
+        },
+      };
+    });
   }
 
-  function stopMerge() {
-    setMergeSourceIndex(null);
+  // "Merge" on multiple selected, mutually-contiguous top-level cells —
+  // folds them all into one `mergeGroups` entry in one stroke instead of
+  // growing a merge one adjacent click at a time (the old
+  // notification/STOP-driven flow this replaces — see
+  // `isCellSelectionContiguous`, which gates whether the menu even offers
+  // this).
+  function mergeSelectedCells() {
+    if (!isCellSelectionContiguous) return;
+    const [first, ...rest] = selectedCellIndices;
+    setMergeGroups((current) => rest.reduce((groups, id) => addMerge(groups, first, id), current));
+    setSelectedCellIndices([Math.min(...selectedCellIndices)]);
   }
 
-  // Merge only ever stops two ways: the notification's own STOP button, or
-  // Escape — no click-away, no closing the notification some other way.
-  useEffect(() => {
-    if (mergeSourceIndex === null) return;
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") stopMerge();
+  function unmerge() {
+    if (selectedCellIndices.length !== 1) return;
+    setMergeGroups((current) => removeMerge(current, selectedCellIndices[0]));
+  }
+
+  // "Delete" on however many top-level cells are currently selected
+  // (contiguous or not) — removes every one that's actually removable
+  // (`canRemoveCell`) in a single pass. Deliberately not a loop of
+  // `removeCell` calls: that function reads `rows` from this render's own
+  // closure rather than a functional update, so calling it more than once
+  // in the same stroke would have each call overwrite the last's result
+  // instead of compounding.
+  function deleteSelectedCells() {
+    const removable = new Set(
+      selectedCellIndices.filter((id) => canRemoveCell(id, rows, mergeGroups)),
+    );
+    if (removable.size === 0) return;
+    setRowOverrides((current) => {
+      const next = { ...current };
+      rows.forEach((cellIds, row) => {
+        if (cellIds.some((id) => removable.has(id))) {
+          next[row] = cellIds.filter((id) => !removable.has(id));
+        }
+      });
+      return next;
+    });
+    setCells((current) => {
+      const rest = { ...current };
+      for (const id of removable) delete rest[id];
+      return rest;
+    });
+    setSelectedCellIndices([]);
+  }
+
+  // Same idea as `mergeSelectedCells`, scoped to one cell's own divisions
+  // (`divide.mergeGroups`) instead of the display's top-level `mergeGroups`.
+  function mergeSelectedDivisions() {
+    if (selectedCellIndices.length !== 1 || !isDivisionSelectionContiguous) return;
+    const parentId = selectedCellIndices[0];
+    const parent = cells[parentId];
+    if (!parent?.divide) return;
+
+    const [first, ...rest] = selectedDivisionIndices;
+    const mergeGroups = rest.reduce(
+      (groups, id) => addMerge(groups, first, id),
+      parent.divide.mergeGroups,
+    );
+    const group = groupOf(first, mergeGroups);
+    const primary = Math.min(...group);
+    // The merged shape only ever renders/edits its primary's own
+    // `DivisionCell` — divisions start blank (unlike a top-level cell,
+    // always typed the moment it exists), so if whichever one already
+    // has a plugin on it isn't the new primary, carry it over rather
+    // than letting it silently vanish from view behind a blank one.
+    const divisionCells = { ...parent.divide.cells };
+    if (!divisionCells[primary]?.typeId) {
+      const withContent = group.find((id) => divisionCells[id]?.typeId);
+      if (withContent !== undefined) divisionCells[primary] = divisionCells[withContent];
     }
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [mergeSourceIndex]);
+
+    // Every division just ended up in one group — there's nothing left
+    // to divide into more than one piece, so this collapses back to the
+    // plain, undivided cell it would be if Divide had never happened,
+    // carrying over whatever content survived the merge above. If
+    // nothing did (every division was blank), that plain cell would
+    // itself be blank — rather than leave that sitting in the row, drop
+    // it entirely, the same as merging two blank top-level cells would
+    // have nothing left worth keeping either.
+    if (group.length === parent.divide.cols * parent.divide.rows) {
+      const survivor = divisionCells[primary] ?? defaultDivisionCell();
+      if (!survivor.typeId) {
+        removeCell(parentId);
+        return;
+      }
+      setCells((current) => {
+        const currentParent = current[parentId];
+        if (!currentParent?.divide) return current;
+        return {
+          ...current,
+          [parentId]: {
+            ...currentParent,
+            typeId: survivor.typeId,
+            typeConfig: survivor.typeConfig,
+            pluginIds: survivor.pluginIds,
+            divide: undefined,
+          },
+        };
+      });
+      selectCell(parentId);
+      return;
+    }
+
+    setCells((current) => {
+      const currentParent = current[parentId];
+      if (!currentParent?.divide) return current;
+      return {
+        ...current,
+        [parentId]: {
+          ...currentParent,
+          divide: { ...currentParent.divide, mergeGroups, cells: divisionCells },
+        },
+      };
+    });
+    setSelectedDivisionIndices([primary]);
+  }
+
+  function unmergeDivision() {
+    if (selectedCellIndices.length !== 1 || selectedDivisionIndices.length !== 1) return;
+    const parentId = selectedCellIndices[0];
+    const subId = selectedDivisionIndices[0];
+    setCells((current) => {
+      const parent = current[parentId];
+      if (!parent?.divide) return current;
+      return {
+        ...current,
+        [parentId]: {
+          ...parent,
+          divide: {
+            ...parent.divide,
+            mergeGroups: removeMerge(parent.divide.mergeGroups, subId),
+          },
+        },
+      };
+    });
+  }
+
+  // "Delete" on however many divisions are currently selected — unlike a
+  // top-level cell's Delete (`removeCell`, which drops it from its row
+  // entirely), a division can't be removed on its own: the grid's
+  // `cols`/`rows` count is fixed at Divide time (see `createDivideGrid`).
+  // This just clears each selected one's plugin back to blank, the same
+  // state every division but the first starts in — the divisions
+  // themselves, and the rest of the grid, stay exactly as they were.
+  function deleteSelectedDivisions() {
+    if (selectedCellIndices.length !== 1 || selectedDivisionIndices.length === 0) return;
+    const parentId = selectedCellIndices[0];
+    const targets = new Set(selectedDivisionIndices);
+    setCells((current) => {
+      const parent = current[parentId];
+      if (!parent?.divide) return current;
+      const divisionCells = { ...parent.divide.cells };
+      for (const id of targets) {
+        if (divisionCells[id]?.typeId) divisionCells[id] = defaultDivisionCell();
+      }
+      return {
+        ...current,
+        [parentId]: { ...parent, divide: { ...parent.divide, cells: divisionCells } },
+      };
+    });
+  }
+
+  // "Divide" in the Actions menu — only reachable for a plain, unmerged,
+  // not-yet-divided cell (see the menu item itself). Division 0 keeps the
+  // cell's own plugin/config, so dividing doesn't discard it — every
+  // other division starts blank instead, to be assigned by dropping a
+  // plugin onto it, same as any brand-new cell (see `createDivideGrid`).
+  function divideSelectedCell(cols: number, rows: number) {
+    if (
+      !layoutSelection ||
+      layoutSelection.isMerged ||
+      layoutSelection.cell.divide ||
+      cols * rows <= 1 // see `DivideModal`'s own `isNoOp` guard
+    ) {
+      return;
+    }
+    const index = layoutSelection.index;
+    const { typeId, typeConfig, pluginIds } = layoutSelection.cell;
+    setCells((current) => ({
+      ...current,
+      [index]: {
+        ...current[index],
+        divide: createDivideGrid(cols, rows, { typeId, typeConfig, pluginIds }),
+      },
+    }));
+    setDivideModalOpened(false);
+    selectDivision({ parentId: index, subId: 0 });
+  }
 
   // Tab toggles Resize — a global shortcut, independent of mode/selection —
   // except while a modal has its own fields to tab through normally, or
@@ -450,62 +765,69 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleTab);
   }, [settingsOpened, layoutEditorOpened, layerEditorOpened, confirmDelete]);
 
-  function mergeWith(target: number) {
-    if (mergeSourceIndex === null) return;
-    const newPrimary = Math.min(
-      ...groupOf(mergeSourceIndex, mergeGroups),
-      ...groupOf(target, mergeGroups),
-    );
-    setMergeGroups((current) => addMerge(current, mergeSourceIndex, target));
-    setSelectedCellIndex(newPrimary);
-    // Merging one cell in doesn't end merge mode — it keeps going, now
-    // from the grown group, so the next adjacent cell clicked keeps
-    // merging into it. Only STOP/Escape (`stopMerge`) ends it.
-    setMergeSourceIndex(newPrimary);
-  }
+  // The browser's own right-click context menu is never wanted anywhere
+  // in the app — `Factory` already shows its own (see `contextMenu`
+  // above) for a cell/division/row/display in Layout mode, but this covers
+  // every other case too (Mapping mode, the header, the Inspector panel,
+  // Settings…), where nothing else calls `preventDefault()` on it.
+  useEffect(() => {
+    function handleContextMenu(event: MouseEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener("contextmenu", handleContextMenu);
+    return () => window.removeEventListener("contextmenu", handleContextMenu);
+  }, []);
 
-  // Growing a merge into `row`'s still-empty space instead of an existing
-  // cell — `Factory` has already checked it's actually adjacent to the
-  // merge's group before calling this. The new cell is a plain,
-  // plugin-less `defaultGridCell`: it never renders or is edited on its
-  // own once merged (only the group's primary is — see `primaryOf`), so it
-  // needs no `typeId` of its own, unlike one created by dropping a plugin.
-  function mergeWithEmpty(row: number) {
-    if (mergeSourceIndex === null) return;
-    const remaining = remainingUnitsInRow(
-      row,
-      rows,
-      cells,
-      layoutSettings.physicalWidthMm,
-      layoutSettings.unitMm,
-      layoutSettings.gapMm,
-    );
-    if (remaining < MIN_UNIT) return;
-    const { rows: updatedRows, id } = addCellToRow(rows, row);
-    const newPrimary = Math.min(...groupOf(mergeSourceIndex, mergeGroups), id);
-    setRowOverrides((current) => ({ ...current, [row]: updatedRows[row] }));
-    setCells((current) => ({
-      ...current,
-      [id]: defaultGridCell(Math.min(1, remaining)),
-    }));
-    setMergeGroups((current) => addMerge(current, mergeSourceIndex, id));
-    setSelectedCellIndex(newPrimary);
-    // Same continuation as `mergeWith` — merging doesn't end merge mode.
-    setMergeSourceIndex(newPrimary);
-  }
-
-  function unmerge() {
-    if (selectedCellIndex === null) return;
-    setMergeGroups((current) => removeMerge(current, selectedCellIndex));
-  }
-
-  // Copy a cell's type, config and Mapping plugins — not its own id or
-  // position. Cloned so a later Paste's own further edits can't reach
-  // back into this cell's arrays/objects.
+  // Copy the smallest-id selected cell's type, config and Mapping plugins
+  // — not its own id or position — the same "primary" convention a merge
+  // already uses to pick which member represents a group. Cloned so a
+  // later Paste's own further edits can't reach back into this cell's
+  // arrays/objects.
   function copySelectedCell() {
-    if (!layoutSelection) return;
-    const { typeId, typeConfig, pluginIds, unit } = layoutSelection.cell;
+    if (selectedCellIndices.length === 0) return;
+    const source = cells[Math.min(...selectedCellIndices)];
+    if (!source) return;
+    const { typeId, typeConfig, pluginIds, unit } = source;
     setCopiedCell({ typeId, typeConfig: { ...typeConfig }, pluginIds: [...pluginIds], unit });
+  }
+
+  // Records undo history — must run before the autosave effect below (so
+  // it reads `skipFactoryAutosaveRef` while it's still whatever
+  // `changeLayer`/`changeLayout` last set it to, before that effect's own
+  // check resets it back to `false`): every actual edit to the display
+  // pushes the disposition it's leaving onto `undoStackRef`, capped at
+  // `MAX_UNDO_HISTORY`. Skipped for a layer/layout load (not a real edit
+  // — same flag the autosave effect itself is skipped by) and for the
+  // change `undo` itself just made (`isUndoingRef` — otherwise this would
+  // immediately push the very state undo just popped right back on top).
+  useEffect(() => {
+    const next: FactoryLayout = { rowOverrides, cells, mergeGroups };
+    const previous = previousFactoryLayoutRef.current;
+    if (previous && !skipFactoryAutosaveRef.current && !isUndoingRef.current) {
+      undoStackRef.current.push(previous);
+      if (undoStackRef.current.length > MAX_UNDO_HISTORY) undoStackRef.current.shift();
+    }
+    isUndoingRef.current = false;
+    previousFactoryLayoutRef.current = next;
+  }, [cells, rowOverrides, mergeGroups]);
+
+  // Cmd/Ctrl+Z — steps the display back to whatever `FactoryLayout` it had
+  // right before its most recent edit. Scoped to the display's own data
+  // (`cells`/`rowOverrides`/`mergeGroups`) only — not Layout/Layer
+  // creation or Settings, both server round-tripped rather than plain
+  // local state. Clears the current selection rather than trying to
+  // carry it forward onto a disposition it may no longer make sense for
+  // (a selected cell the undone edit removed, say).
+  function undo() {
+    const previous = undoStackRef.current.pop();
+    if (!previous) return;
+    isUndoingRef.current = true;
+    setRowOverrides(previous.rowOverrides);
+    setCells(previous.cells);
+    setMergeGroups(previous.mergeGroups);
+    setSelectedCellIndices([]);
+    setSelectedDivisionIndices([]);
+    setSelectedEmptyRow(null);
   }
 
   // Autosaves `<Factory>`'s disposition onto the current layer's own
@@ -539,12 +861,12 @@ export default function App() {
   );
   // The current layout's own Max height (1U) override — see the Layout
   // editor's Geometry tab — clamped to what actually still fits in case
-  // Caps size/Gap size/the board's own size changed since it was set.
+  // Caps size/Gap size/the display's own size changed since it was set.
   const gridItemsY =
     layout?.max_rows != null
       ? Math.min(layout.max_rows, computedGridItemsY)
       : computedGridItemsY;
-  // The board's full grid — see `gridRows`: a row starts with no cells at
+  // The display's full grid — see `gridRows`: a row starts with no cells at
   // all, and only gets any once a plugin is dropped on it.
   const rows = gridRows(gridItemsY, rowOverrides);
 
@@ -555,8 +877,51 @@ export default function App() {
     const { rows: updatedRows, id } = addCellToRow(rows, row);
     setRowOverrides((current) => ({ ...current, [row]: updatedRows[row] }));
     setCells((current) => ({ ...current, [id]: cell }));
-    setSelectedCellIndex(id);
+    setSelectedCellIndices([id]);
     setSelectedEmptyRow(null);
+  }
+
+  // Drags `id` (a plain, unmerged cell — `Factory` only ever lets one of
+  // those be dragged in the first place) out of its row and back in
+  // right before `beforeId` (`null` for the row's own end) — the same
+  // row, to reorder it, or a different one entirely. No-ops if it
+  // doesn't actually fit there: built the row it would land in as if the
+  // move had already happened, then reused `maxUnitForCell`'s own
+  // budget math (the same check a resize already goes through) against
+  // that, rather than a fresh one of its own.
+  function moveCell(id: number, targetRow: number, beforeId: number | null) {
+    const sourceRow = rowOf(id, rows);
+    const cell = cells[id];
+    if (sourceRow === -1 || !cell || groupOf(id, mergeGroups).length > 1) return;
+
+    const withoutSource = rows.map((cellIds, row) =>
+      row === sourceRow ? cellIds.filter((cellId) => cellId !== id) : cellIds,
+    );
+    const targetCellIds = withoutSource[targetRow] ?? [];
+    const insertAt = beforeId !== null ? targetCellIds.indexOf(beforeId) : -1;
+    const nextTargetCellIds =
+      insertAt === -1
+        ? [...targetCellIds, id]
+        : [...targetCellIds.slice(0, insertAt), id, ...targetCellIds.slice(insertAt)];
+    const nextRows = withoutSource.map((cellIds, row) =>
+      row === targetRow ? nextTargetCellIds : cellIds,
+    );
+
+    const cap = maxUnitForCell(
+      id,
+      nextRows,
+      cells,
+      layoutSettings.physicalWidthMm,
+      layoutSettings.unitMm,
+      layoutSettings.gapMm,
+    );
+    if (cell.unit > cap) return;
+
+    setRowOverrides((current) => ({
+      ...current,
+      [sourceRow]: nextRows[sourceRow],
+      [targetRow]: nextRows[targetRow],
+    }));
   }
 
   // Removes `index` from its row entirely — "Remove cell" in the Actions
@@ -575,9 +940,16 @@ export default function App() {
       delete rest[index];
       return rest;
     });
-    setSelectedCellIndex((current) => (current === index ? null : current));
+    setSelectedCellIndices((current) => current.filter((id) => id !== index));
   }
 
+  // The single selected top-level cell — `null`, not just for an empty
+  // selection, but also whenever more than one is selected: there's no
+  // single "the" cell for Properties/Divide to act on then (see the
+  // context menu instead, keyed off `selectedCellIndices` directly for
+  // its own multi-select branches).
+  const selectedCellIndex =
+    selectedCellIndices.length === 1 ? selectedCellIndices[0] : null;
   const selectedCell =
     selectedCellIndex !== null ? cells[selectedCellIndex] : undefined;
   const layoutSelection =
@@ -587,54 +959,62 @@ export default function App() {
           cell: selectedCell,
           isMerged: groupOf(selectedCellIndex, mergeGroups).length > 1,
           canRemove: canRemoveCell(selectedCellIndex, rows, mergeGroups),
-          // Whether the copied cell (if any) still fits in this row's
-          // Unit budget, next to the selected cell — see
-          // `pasteToSelectedCell`.
-          canPaste:
-            copiedCell !== null &&
-            copiedCell.unit <=
-              remainingUnitsInRow(
-                rowOf(selectedCellIndex, rows),
-                rows,
-                cells,
-                layoutSettings.physicalWidthMm,
-                layoutSettings.unitMm,
-                layoutSettings.gapMm,
-              ),
         }
       : null;
 
-  // Pastes the copied cell into the row right after the selected one —
-  // not onto it (see `insertCellAfter`) — as long as there's still room
-  // for it (`layoutSelection.canPaste`).
-  function pasteToSelectedCell() {
-    if (!layoutSelection || !copiedCell || !layoutSelection.canPaste) return;
-    const row = rowOf(layoutSelection.index, rows);
-    if (row === -1) return;
-    const { rows: updatedRows, id } = insertCellAfter(
-      rows,
-      row,
-      layoutSelection.index,
+  // Whether every currently-selected top-level cell is reachable from
+  // every other by a chain of shared edges — the condition for "Merge" to
+  // show up on multiple selected cells (see `mergeSelectedCells`); a
+  // multi-selection that isn't only ever offers Delete.
+  const isCellSelectionContiguous =
+    selectedCellIndices.length > 1 &&
+    cellsAreContiguous(
+      selectedCellIndices,
+      (id) => cellRect(id, rows, cells, layoutSettings.unitMm, layoutSettings.gapMm),
+      layoutSettings.gapMm,
     );
-    setRowOverrides((current) => ({ ...current, [row]: updatedRows[row] }));
-    setCells((current) => ({
-      ...current,
-      [id]: {
-        typeId: copiedCell.typeId,
-        typeConfig: { ...copiedCell.typeConfig },
-        pluginIds: [...copiedCell.pluginIds],
-        unit: copiedCell.unit,
-      },
-    }));
-    setSelectedCellIndex(id);
-  }
+
+  // Which divisions of `selectedCellIndex`'s own divided cell (see
+  // `GridCell.divide`) are the real focus, instead of that cell as a
+  // whole — takes priority over `layoutSelection` wherever both could
+  // apply (the Properties tab, the context menu) since `Factory` only
+  // ever routes a click within a divided cell's own area to one of its
+  // divisions (see `selectDivision`), never to the divided cell as a
+  // whole. `null` unless exactly one division is selected — same
+  // reasoning as `layoutSelection` above, and for the same reason
+  // (Properties has one cell's worth of fields to show).
+  const selectedDivisionId =
+    selectedDivisionIndices.length === 1 ? selectedDivisionIndices[0] : null;
+  const divisionSelection =
+    selectedCellIndex !== null &&
+    selectedCell?.divide &&
+    selectedDivisionId !== null
+      ? {
+          parentId: selectedCellIndex,
+          subId: selectedDivisionId,
+          cell: selectedCell.divide.cells[selectedDivisionId] ?? defaultDivisionCell(),
+          isMerged:
+            groupOf(selectedDivisionId, selectedCell.divide.mergeGroups).length > 1,
+        }
+      : null;
+
+  // Same idea as `isCellSelectionContiguous`, scoped to the selected
+  // cell's own division grid — plain row/column adjacency there (see
+  // `divisionsAreContiguous`), not real rects.
+  const isDivisionSelectionContiguous =
+    selectedCellIndex !== null &&
+    selectedCell?.divide != null &&
+    selectedDivisionIndices.length > 1 &&
+    divisionsAreContiguous(selectedDivisionIndices, selectedCell.divide.cols);
 
   const emptySelection =
     selectedEmptyRow !== null
       ? {
           row: selectedEmptyRow,
-          // Same budget check as `layoutSelection.canPaste`, against
-          // whatever's left of this row instead of next to a selected cell.
+          // Whether the copied cell (if any) still fits in this row's
+          // remaining Unit budget — see `pasteToEmptyRow`. Pasting is only
+          // ever offered onto empty space now, not next to an already
+          // filled cell.
           canPaste:
             copiedCell !== null &&
             copiedCell.unit <=
@@ -668,34 +1048,58 @@ export default function App() {
         unit: copiedCell.unit,
       },
     }));
-    setSelectedCellIndex(id);
+    setSelectedCellIndices([id]);
     setSelectedEmptyRow(null);
   }
 
-  // The Actions menu's own shortcuts, all Layout-mode-only and all no-ops
+  // Whether any division of the sole selected cell is the real focus
+  // right now, as opposed to plain top-level cells — used below to route
+  // Backspace to the right bulk action, and to keep Copy (not implemented
+  // for divisions) from firing while one's selected.
+  const hasDivisionSelection =
+    selectedCellIndices.length === 1 && selectedDivisionIndices.length > 0;
+  const hasCellSelection = selectedCellIndices.length > 0 && !hasDivisionSelection;
+  // Copy only ever shows in the context menu for a single selected cell
+  // — never for a multi-selection, contiguous or not (see the context
+  // menu below) — so Cmd/Ctrl+C has to respect the same rule rather than
+  // firing for any non-empty cell selection.
+  const canCopySelection = hasCellSelection && selectedCellIndices.length === 1;
+
+  // The context menu's own shortcuts, all Layout-mode-only and all no-ops
   // while the user is actually typing into a text field somewhere else (a
-  // plugin's config, a name field…) rather than working the board:
-  // Backspace deletes the selected cell ("Delete"), Cmd/Ctrl+C copies it,
-  // Cmd/Ctrl+V pastes next to it. Read through a ref (rather than listed
-  // as effect deps) so the listener is attached once, not re-subscribed
-  // on every render.
+  // plugin's config, a name field…) rather than working the display:
+  // Backspace deletes whatever's selected, Cmd/Ctrl+C copies a cell,
+  // Cmd/Ctrl+V pastes into empty space. Read through a ref (rather than
+  // listed as effect deps) so the listener is attached once, not
+  // re-subscribed on every render.
+  const anyModalOpen = Boolean(
+    settingsOpened || layoutEditorOpened || layerEditorOpened || confirmDelete || divideModalOpened,
+  );
   const layoutShortcutsRef = useRef({
     mode,
-    layoutSelection,
+    anyModalOpen,
+    hasCellSelection,
+    hasDivisionSelection,
+    canCopySelection,
     emptySelection,
-    removeCell,
+    undo,
+    deleteSelectedCells,
+    deleteSelectedDivisions,
     copySelectedCell,
-    pasteToSelectedCell,
     pasteToEmptyRow,
   });
   useEffect(() => {
     layoutShortcutsRef.current = {
       mode,
-      layoutSelection,
+      anyModalOpen,
+      hasCellSelection,
+      hasDivisionSelection,
+      canCopySelection,
       emptySelection,
-      removeCell,
+      undo,
+      deleteSelectedCells,
+      deleteSelectedDivisions,
       copySelectedCell,
-      pasteToSelectedCell,
       pasteToEmptyRow,
     };
   });
@@ -704,35 +1108,61 @@ export default function App() {
     function handleKeyDown(event: KeyboardEvent) {
       const {
         mode,
-        layoutSelection,
+        anyModalOpen,
+        hasCellSelection,
+        hasDivisionSelection,
+        canCopySelection,
         emptySelection,
-        removeCell,
+        undo,
+        deleteSelectedCells,
+        deleteSelectedDivisions,
         copySelectedCell,
-        pasteToSelectedCell,
         pasteToEmptyRow,
       } = layoutShortcutsRef.current;
-      if (mode !== "layout" || (!layoutSelection && !emptySelection)) return;
       const target = event.target as HTMLElement | null;
-      if (
+      const isTyping = Boolean(
         target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.isContentEditable),
+      );
+      // Cmd/Ctrl+Z — independent of `mode`/selection (unlike every other
+      // shortcut below), but still not while a modal has its own fields
+      // to undo through normally, or while typing anywhere else.
+      if (
+        !anyModalOpen &&
+        !isTyping &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "z"
+      ) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if (
+        mode !== "layout" ||
+        isTyping ||
+        (!hasCellSelection && !hasDivisionSelection && !emptySelection)
       ) {
         return;
       }
       const withModifier = event.metaKey || event.ctrlKey;
-      if (layoutSelection?.canRemove && event.key === "Backspace") {
+      // A division being the real focus must win here — otherwise
+      // Backspace would fall through to `deleteSelectedCells` and delete
+      // the whole divided cell, every other division along with it,
+      // rather than just clearing the selected one(s)' own plugin (a
+      // division can never be removed on its own, only cleared).
+      if (event.key === "Backspace" && hasDivisionSelection) {
         event.preventDefault();
-        removeCell(layoutSelection.index);
-      } else if (layoutSelection && withModifier && event.key.toLowerCase() === "c") {
+        deleteSelectedDivisions();
+      } else if (event.key === "Backspace" && hasCellSelection) {
+        event.preventDefault();
+        deleteSelectedCells();
+      } else if (canCopySelection && withModifier && event.key.toLowerCase() === "c") {
         event.preventDefault();
         copySelectedCell();
       } else if (withModifier && event.key.toLowerCase() === "v") {
-        if (layoutSelection?.canPaste) {
-          event.preventDefault();
-          pasteToSelectedCell();
-        } else if (emptySelection?.canPaste) {
+        if (emptySelection?.canPaste) {
           event.preventDefault();
           pasteToEmptyRow();
         }
@@ -778,7 +1208,7 @@ export default function App() {
             <Layer
               key={layout.id}
               ref={layerMenuRef}
-              geometryId={layout.id}
+              layoutId={layout.id}
               onChange={changeLayer}
               onAdd={openAddLayer}
             />
@@ -802,7 +1232,7 @@ export default function App() {
         opened={settingsOpened}
         onClose={() => setSettingsOpened(false)}
         settings={layoutSettings}
-        onSave={saveBoardSettings}
+        onSave={saveDisplaySettings}
       />
 
       <AppShell.Main
@@ -832,16 +1262,19 @@ export default function App() {
                 cells={cells}
                 onCellsChange={setCells}
                 onCreateCell={createCell}
+                onMoveCell={moveCell}
                 mergeGroups={mergeGroups}
-                selectedCellIndex={selectedCellIndex}
+                selectedCellIndices={selectedCellIndices}
                 onSelectCell={selectCell}
-                mergeSourceIndex={mergeSourceIndex}
-                onMergeWith={mergeWith}
+                onToggleCell={toggleCellSelection}
                 selectedEmptyRow={selectedEmptyRow}
                 onSelectEmpty={selectEmptyRow}
-                onMergeWithEmpty={mergeWithEmpty}
-                isBoardSelected={boardSelected}
-                onSelectBoard={selectBoard}
+                selectedDivisionIndices={selectedDivisionIndices}
+                onSelectDivision={selectDivision}
+                onToggleDivision={toggleDivisionSelection}
+                isDisplaySelected={displaySelected}
+                onSelectDisplay={selectDisplay}
+                onContextMenu={handleContextMenu}
                 resizeEnabled={resizeEnabled}
                 maxColumns={layout?.max_columns ?? null}
               />
@@ -865,7 +1298,7 @@ export default function App() {
                 }}
               />
 
-              {/* Moved out of the board's own Actions menu — resizing is a
+              {/* Moved out of the display's own Actions menu — resizing is a
                   view option, not a per-layout action, so it lives here as
                   a persistent switch, aligned right at the same level as
                   the Layout/Mapping switch on the left. Also toggled by
@@ -886,181 +1319,224 @@ export default function App() {
                 }}
               />
 
-              {/* Moved out of Properties (was `LayoutCellProperties`) so
-                  it's reachable regardless of which Inspector tab is open
-                  — only meaningful in Layout mode, and only once a cell is
-                  selected for it to act on. */}
-              {mode === "layout" && layoutSelection && (
+              {/* One shared right-click context menu (see `Factory`'s
+                  `onContextMenu` and `handleContextMenu` above) — its
+                  content switches on `contextMenu.kind`, reading whichever
+                  selection Factory already made for it
+                  (`layoutSelection`/`divisionSelection`/`emptySelection`/
+                  `displaySelected`) the same way each used to feed its own
+                  floating "Actions" button. Anchored to an invisible,
+                  zero-size target positioned at the click itself instead
+                  of a fixed on-screen spot, so it opens right where the
+                  cursor was. */}
+              {contextMenu && (
                 <Menu
-                  position="bottom-end"
+                  opened
+                  onChange={(opened) => {
+                    if (!opened) setContextMenu(null);
+                  }}
+                  position="bottom-start"
+                  offset={0}
                   width={200}
                   styles={{ item: { padding: "4px var(--mantine-spacing-sm)" } }}
                 >
                   <Menu.Target>
-                    <Button
-                      variant="subtle"
-                      color="gray"
-                      size="xs"
-                      leftSection={<MdMoreVert />}
+                    <div
                       style={{
-                        position: "absolute",
-                        top: 20,
-                        right: 20,
-                        zIndex: 20,
+                        position: "fixed",
+                        left: contextMenu.x,
+                        top: contextMenu.y,
+                        width: 0,
+                        height: 0,
                       }}
-                    >
-                      Actions
-                    </Button>
+                    />
                   </Menu.Target>
                   <Menu.Dropdown>
-                    <Menu.Item leftSection={<MdCallMerge />} onClick={startMerge}>
-                      Merge
-                    </Menu.Item>
-                    {layoutSelection.isMerged && (
-                      <Menu.Item leftSection={<MdCallSplit />} onClick={unmerge}>
-                        Unmerge
+                    {contextMenu.kind === "cell" &&
+                      mode === "layout" &&
+                      selectedCellIndices.length > 0 && (
+                        <>
+                          {selectedCellIndices.length === 1 && layoutSelection && (
+                            <>
+                              {layoutSelection.isMerged && (
+                                <Menu.Item leftSection={<MdCallSplit />} onClick={unmerge}>
+                                  Unmerge
+                                </Menu.Item>
+                              )}
+                              {!layoutSelection.isMerged && !layoutSelection.cell.divide && (
+                                <Menu.Item
+                                  leftSection={<MdGridOn />}
+                                  onClick={() => setDivideModalOpened(true)}
+                                >
+                                  Divide
+                                </Menu.Item>
+                              )}
+                              <Menu.Divider />
+                              <Menu.Item
+                                leftSection={<MdContentCopy />}
+                                rightSection={<ShortcutHint>{MOD_KEY_LABEL}C</ShortcutHint>}
+                                onClick={copySelectedCell}
+                              >
+                                Copy
+                              </Menu.Item>
+                              {layoutSelection.canRemove && (
+                                <Menu.Item
+                                  color="red"
+                                  leftSection={<MdDelete />}
+                                  rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                                  onClick={() => removeCell(layoutSelection.index)}
+                                >
+                                  Delete
+                                </Menu.Item>
+                              )}
+                            </>
+                          )}
+                          {selectedCellIndices.length > 1 && isCellSelectionContiguous && (
+                            <>
+                              <Menu.Item
+                                leftSection={<MdCallMerge />}
+                                onClick={mergeSelectedCells}
+                              >
+                                Merge
+                              </Menu.Item>
+                              <Menu.Item
+                                color="red"
+                                leftSection={<MdDelete />}
+                                rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                                onClick={deleteSelectedCells}
+                              >
+                                Delete
+                              </Menu.Item>
+                            </>
+                          )}
+                          {selectedCellIndices.length > 1 && !isCellSelectionContiguous && (
+                            <Menu.Item
+                              color="red"
+                              leftSection={<MdDelete />}
+                              rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                              onClick={deleteSelectedCells}
+                            >
+                              Delete
+                            </Menu.Item>
+                          )}
+                        </>
+                      )}
+
+                    {contextMenu.kind === "division" &&
+                      mode === "layout" &&
+                      selectedDivisionIndices.length > 0 && (
+                        <>
+                          {selectedDivisionIndices.length === 1 && divisionSelection && (
+                            <>
+                              {divisionSelection.isMerged && (
+                                <Menu.Item
+                                  leftSection={<MdCallSplit />}
+                                  onClick={unmergeDivision}
+                                >
+                                  Unmerge
+                                </Menu.Item>
+                              )}
+                              {divisionSelection.cell.typeId && (
+                                <Menu.Item
+                                  color="red"
+                                  leftSection={<MdDelete />}
+                                  rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                                  onClick={deleteSelectedDivisions}
+                                >
+                                  Delete
+                                </Menu.Item>
+                              )}
+                            </>
+                          )}
+                          {selectedDivisionIndices.length > 1 && isDivisionSelectionContiguous && (
+                            <>
+                              <Menu.Item
+                                leftSection={<MdCallMerge />}
+                                onClick={mergeSelectedDivisions}
+                              >
+                                Merge
+                              </Menu.Item>
+                              <Menu.Item
+                                color="red"
+                                leftSection={<MdDelete />}
+                                rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                                onClick={deleteSelectedDivisions}
+                              >
+                                Delete
+                              </Menu.Item>
+                            </>
+                          )}
+                          {selectedDivisionIndices.length > 1 && !isDivisionSelectionContiguous && (
+                            <Menu.Item
+                              color="red"
+                              leftSection={<MdDelete />}
+                              rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                              onClick={deleteSelectedDivisions}
+                            >
+                              Delete
+                            </Menu.Item>
+                          )}
+                        </>
+                      )}
+
+                    {contextMenu.kind === "row" && mode === "layout" && emptySelection && (
+                      <Menu.Item
+                        leftSection={<MdContentPaste />}
+                        rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
+                        disabled={!emptySelection.canPaste}
+                        onClick={pasteToEmptyRow}
+                      >
+                        Paste
                       </Menu.Item>
                     )}
-                    <Menu.Divider />
-                    <Menu.Item
-                      leftSection={<MdContentCopy />}
-                      rightSection={<ShortcutHint>{MOD_KEY_LABEL}C</ShortcutHint>}
-                      onClick={copySelectedCell}
-                    >
-                      Copy
-                    </Menu.Item>
-                    <Menu.Item
-                      leftSection={<MdContentPaste />}
-                      rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
-                      disabled={!layoutSelection.canPaste}
-                      onClick={pasteToSelectedCell}
-                    >
-                      Paste
-                    </Menu.Item>
-                    {layoutSelection.canRemove && (
+
+                    {contextMenu.kind === "display" && (
                       <>
-                        <Menu.Divider />
+                        <Menu.Label>Layout</Menu.Label>
+                        <Menu.Item leftSection={<MdAdd />} onClick={openAddLayout}>
+                          Add
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<MdEdit />}
+                          disabled={!layout}
+                          onClick={openEditLayout}
+                        >
+                          Edit
+                        </Menu.Item>
                         <Menu.Item
                           color="red"
                           leftSection={<MdDelete />}
-                          rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                          onClick={() => removeCell(layoutSelection.index)}
+                          disabled={!layout}
+                          onClick={requestDeleteLayout}
+                        >
+                          Delete
+                        </Menu.Item>
+                        <Menu.Divider />
+                        <Menu.Label>Layer</Menu.Label>
+                        <Menu.Item
+                          leftSection={<MdAdd />}
+                          disabled={!layout}
+                          onClick={openAddLayer}
+                        >
+                          Add
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<MdEdit />}
+                          disabled={!layer}
+                          onClick={openEditLayer}
+                        >
+                          Edit
+                        </Menu.Item>
+                        <Menu.Item
+                          color="red"
+                          leftSection={<MdDelete />}
+                          disabled={!layer}
+                          onClick={requestDeleteLayer}
                         >
                           Delete
                         </Menu.Item>
                       </>
                     )}
-                  </Menu.Dropdown>
-                </Menu>
-              )}
-
-              {/* A row's empty space selected instead of a cell (see
-                  `selectEmptyRow`) — nothing to Merge/Copy/Delete yet, just
-                  somewhere a copied plugin can be pasted straight onto. */}
-              {mode === "layout" && emptySelection && (
-                <Menu
-                  position="bottom-end"
-                  width={200}
-                  styles={{ item: { padding: "4px var(--mantine-spacing-sm)" } }}
-                >
-                  <Menu.Target>
-                    <Button
-                      variant="subtle"
-                      color="gray"
-                      size="xs"
-                      leftSection={<MdMoreVert />}
-                      style={{
-                        position: "absolute",
-                        top: 20,
-                        right: 20,
-                        zIndex: 20,
-                      }}
-                    >
-                      Actions
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Item
-                      leftSection={<MdContentPaste />}
-                      rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
-                      disabled={!emptySelection.canPaste}
-                      onClick={pasteToEmptyRow}
-                    >
-                      Paste
-                    </Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-              )}
-
-              {/* The physical screen itself, selected as its own target —
-                  see `selectBoard` — for the Layout/Layer CRUD that used
-                  to live in their own header dropdowns. */}
-              {boardSelected && (
-                <Menu
-                  position="bottom-end"
-                  width={200}
-                  styles={{ item: { padding: "4px var(--mantine-spacing-sm)" } }}
-                >
-                  <Menu.Target>
-                    <Button
-                      variant="subtle"
-                      color="gray"
-                      size="xs"
-                      leftSection={<MdMoreVert />}
-                      style={{
-                        position: "absolute",
-                        top: 20,
-                        right: 20,
-                        zIndex: 20,
-                      }}
-                    >
-                      Actions
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Label>Layout</Menu.Label>
-                    <Menu.Item leftSection={<MdAdd />} onClick={openAddLayout}>
-                      Add
-                    </Menu.Item>
-                    <Menu.Item
-                      leftSection={<MdEdit />}
-                      disabled={!layout}
-                      onClick={openEditLayout}
-                    >
-                      Edit
-                    </Menu.Item>
-                    <Menu.Item
-                      color="red"
-                      leftSection={<MdDelete />}
-                      disabled={!layout}
-                      onClick={requestDeleteLayout}
-                    >
-                      Delete
-                    </Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Label>Layer</Menu.Label>
-                    <Menu.Item
-                      leftSection={<MdAdd />}
-                      disabled={!layout}
-                      onClick={openAddLayer}
-                    >
-                      Add
-                    </Menu.Item>
-                    <Menu.Item
-                      leftSection={<MdEdit />}
-                      disabled={!layer}
-                      onClick={openEditLayer}
-                    >
-                      Edit
-                    </Menu.Item>
-                    <Menu.Item
-                      color="red"
-                      leftSection={<MdDelete />}
-                      disabled={!layer}
-                      onClick={requestDeleteLayer}
-                    >
-                      Delete
-                    </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>
               )}
@@ -1072,8 +1548,17 @@ export default function App() {
               selectedKey={selectedKey}
               layout={layout?.layout ?? null}
               mode={mode}
-              layoutSelection={layoutSelection}
-              onLayoutCellChange={changeCell}
+              layoutSelection={
+                divisionSelection
+                  ? { index: divisionSelection.subId, cell: divisionSelection.cell }
+                  : layoutSelection
+              }
+              onLayoutCellChange={
+                divisionSelection
+                  ? (subId, patch) =>
+                      changeDivisionCell(divisionSelection.parentId, subId, patch)
+                  : changeCell
+              }
               tab={inspectorTab}
               onTabChange={setInspectorTab}
               onChange={changePlugins}
@@ -1127,26 +1612,11 @@ export default function App() {
           </Group>
         </Notification>
       )}
-      {mergeSourceIndex !== null && (
-        <Notification
-          icon={<MdCallMerge size={18} />}
-          title="Merge"
-          withCloseButton={false}
-          withBorder
-          style={{
-            position: "fixed",
-            left: 20,
-            bottom: 20,
-            zIndex: 1000,
-          }}
-        >
-          <Group gap="md" wrap="nowrap">
-            <Text size="sm">Click an adjacent cell to merge with it.</Text>
-            <Button size="compact-xs" color="red" onClick={stopMerge}>
-              STOP
-            </Button>
-          </Group>
-        </Notification>
+      {divideModalOpened && layoutSelection && (
+        <DivideModal
+          onClose={() => setDivideModalOpened(false)}
+          onDivide={divideSelectedCell}
+        />
       )}
       {layoutEditorOpened && (
         <LayoutEditorModal
@@ -1160,7 +1630,7 @@ export default function App() {
       )}
       {layerEditorOpened && layout && (
         <LayerEditorModal
-          geometryId={layout.id}
+          layoutId={layout.id}
           editing={editingLayer}
           onClose={() => setLayerEditorOpened(false)}
           onSaved={(id) => {

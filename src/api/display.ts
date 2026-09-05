@@ -1,12 +1,12 @@
 import { api } from "./client";
-import type { BoardData } from "../types/layout";
+import type { DisplayData } from "../types/layout";
 
-const BOARD_URL = "/api/board";
+const DISPLAY_URL = "/api/display";
 
-export const getBoard = () => api<BoardData>(BOARD_URL);
+export const getDisplay = () => api<DisplayData>(DISPLAY_URL);
 
-export const updateBoard = (payload: BoardData) =>
-  api<BoardData>(BOARD_URL, {
+export const updateDisplay = (payload: DisplayData) =>
+  api<DisplayData>(DISPLAY_URL, {
     method: "PUT",
     body: JSON.stringify(payload),
   });

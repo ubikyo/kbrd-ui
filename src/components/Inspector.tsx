@@ -78,12 +78,18 @@ type Props = {
   // Mapping (everything else) editor — see `kbrd-plugins`' per-plugin
   // `LayoutEditor`/`MappingEditor` exports.
   mode: "layout" | "mapping";
-  // The `<Factory>` grid cell currently selected, only set in Layout mode.
+  // The `<Factory>` grid cell (or division of a divided one) currently
+  // selected, only set in Layout mode — `cell` only needs to carry the
+  // plugin-facing fields `LayoutCellProperties` actually reads, the same
+  // for either kind of selection (see its own `PluginCell`).
   layoutSelection: {
     index: number;
-    cell: GridCell;
+    cell: Pick<GridCell, "typeId" | "typeConfig">;
   } | null;
-  onLayoutCellChange: (index: number, patch: Partial<GridCell>) => void;
+  onLayoutCellChange: (
+    index: number,
+    patch: Partial<Pick<GridCell, "typeId" | "typeConfig">>,
+  ) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
   onPreviewDownTargetChange: (keyRef: string | null) => void;

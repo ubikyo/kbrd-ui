@@ -16,6 +16,21 @@ body {
   margin: 0;
   background-color: var(--kbrd-color-body);
   color: var(--mantine-color-dark-0);
+  /* No text anywhere in the app is meant to be selected (labels,
+     buttons, the Factory grid's own SVG text…) — a stray drag (over the
+     board's cells especially, now that dragging one moves it) shouldn't
+     paint a text selection instead. Native form controls (input,
+     textarea, contentEditable) keep their own editable-text selection
+     regardless of this — it only suppresses it on everything else. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .inspector-accordion-heading {

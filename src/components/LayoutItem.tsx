@@ -50,7 +50,7 @@ type Props = {
   // Invoke/Display plugins attached in Mapping mode (only meaningful once
   // `typeId` is kbrd.layout-key).
   pluginIds?: string[];
-  // Keycap width as a multiple of the board's Unit, shown above the type
+  // Keycap width as a multiple of the display's Unit, shown above the type
   // label — undefined when the cell itself is unknown (shouldn't normally
   // happen, since every `GridCell` has a `unit`).
   unit?: number;
@@ -61,10 +61,31 @@ type Props = {
   // solid, since there's nothing there yet.
   isEmpty?: boolean;
   isDropTarget?: boolean;
+  // False for a division whose border `Factory` is instead drawing as
+  // part of its own deduplicated pass over the whole division grid (see
+  // `renderDivisions`) — two adjacent, both-dashed divisions each
+  // stroking their own full outline would draw the exact same shared
+  // edge twice, and since each shape's dash pattern starts counting from
+  // its own path's own start point, the two independently-phased dashed
+  // strokes can land out of sync and visually fill each other's gaps in,
+  // reading as one solid line where neither one actually is.
+  showBorder?: boolean;
   onClick?: (event: MouseEvent<SVGGElement>) => void;
+  // Right-click — opens this cell's own context menu (see `App`'s
+  // `contextMenu`), after selecting it the same way a left click does.
+  onContextMenu?: (event: MouseEvent<SVGGElement>) => void;
   onDragOver?: (event: DragEvent<SVGGElement>) => void;
   onDragLeave?: (event: DragEvent<SVGGElement>) => void;
   onDrop?: (event: DragEvent<SVGGElement>) => void;
+  // Starts dragging this cell itself to move it elsewhere on the display
+  // (see `Factory`'s own pointer-based `handleCellPointerDown`/
+  // `onMoveCell` — plain pointer events rather than native HTML5
+  // drag-and-drop, which SVG elements support too inconsistently across
+  // browsers to rely on). Only ever set for a plain, unmerged cell (a
+  // merge's shape comes from all of its members together, so there's no
+  // one well-defined place to drag *from*) — never for the row's own
+  // empty space (nothing there to move).
+  onPointerDown?: (event: PointerEvent<SVGGElement>) => void;
 };
 
 /** One SVG cell (or merged group of cells) in the grid `<Factory>` lays
@@ -80,10 +101,13 @@ export default function LayoutItem({
   isSelected = false,
   isEmpty = false,
   isDropTarget = false,
+  showBorder = true,
   onClick,
+  onContextMenu,
   onDragOver,
   onDragLeave,
   onDrop,
+  onPointerDown,
 }: Props) {
   const type = typeId ? pluginById(typeId) : null;
   const stroke = isDropTarget
@@ -104,7 +128,7 @@ export default function LayoutItem({
     // shape to punch the hole rather than fill straight through it.
     fillRule: "evenodd" as const,
     stroke,
-    strokeWidth: 1,
+    strokeWidth: showBorder ? 1 : 0,
     // Selected stays dashed for empty space — there's no real cell there
     // yet, only a spot something could still be merged or pasted into.
     strokeDasharray: isSelected && !isEmpty ? undefined : "4 3",
@@ -114,10 +138,12 @@ export default function LayoutItem({
   return (
     <g
       onClick={onClick}
+      onContextMenu={onContextMenu}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      style={{ cursor: "pointer" }}
+      onPointerDown={onPointerDown}
+      style={{ cursor: onPointerDown ? "grab" : "pointer" }}
     >
       {path ? (
         <path d={path} {...shapeProps} />

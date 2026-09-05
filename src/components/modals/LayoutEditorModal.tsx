@@ -14,11 +14,11 @@ import {
 } from "@mantine/core";
 import { MdInfoOutline, MdStraighten } from "react-icons/md";
 
-import { getBoard } from "../api/board";
-import { createLayout, updateLayout } from "../api/layouts";
-import { DEFAULT_LAYOUT_SETTINGS } from "../types/layout";
-import type { BoardData, LayoutData, LayoutPayload } from "../types/layout";
-import { maxItems, pitchMm } from "../utils/layout";
+import { getDisplay } from "../../api/display";
+import { createLayout, updateLayout } from "../../api/layouts";
+import { DEFAULT_LAYOUT_SETTINGS } from "../../types/layout";
+import type { DisplayData, LayoutData, LayoutPayload } from "../../types/layout";
+import { maxItems, pitchMm } from "../../utils/layout";
 
 type FieldRowProps = {
   label: string;
@@ -77,11 +77,11 @@ export default function LayoutEditorModal({
     editing?.gap_mm ?? DEFAULT_LAYOUT_SETTINGS.gapMm,
   );
   const [error, setError] = useState("");
-  // The physical screen's width/height (`board`, see App) aren't edited
+  // The physical screen's width/height (`display`, see App) aren't edited
   // here — Caps/Gap size are — but Max width/height still need them, so
   // this reads them once just to compute that Display section's rows.
-  const [board, setBoard] = useState<BoardData | null>(null);
-  // `null` until `board` loads, or if this is a brand-new layout with no
+  const [display, setDisplay] = useState<DisplayData | null>(null);
+  // `null` until `display` loads, or if this is a brand-new layout with no
   // override yet — the fields below fall back to the *computed* max
   // (`maxColumns`/`maxRows`) while this stays null, exactly like Caps
   // size/Gap size fall back to `DEFAULT_LAYOUT_SETTINGS`.
@@ -94,23 +94,23 @@ export default function LayoutEditorModal({
 
   useEffect(() => {
     let cancelled = false;
-    void getBoard().then((data) => {
-      if (!cancelled) setBoard(data);
+    void getDisplay().then((data) => {
+      if (!cancelled) setDisplay(data);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // How many 1U reference items actually fit, given the board's physical
+  // How many 1U reference items actually fit, given the display's physical
   // size and this layout's own Caps/Gap size — the ceiling neither field
   // below can exceed (see `maxColumns`/`gridItemsY` in `Factory`/`App`,
   // which clamp to this same computation independently).
-  const computedMaxColumns = board
-    ? maxItems(board.physical_width_mm, capsMm, gapMm)
+  const computedMaxColumns = display
+    ? maxItems(display.physical_width_mm, capsMm, gapMm)
     : null;
-  const computedMaxRows = board
-    ? maxItems(board.physical_height_mm, capsMm, gapMm)
+  const computedMaxRows = display
+    ? maxItems(display.physical_height_mm, capsMm, gapMm)
     : null;
 
   // Clamped on read rather than written back into the override itself —

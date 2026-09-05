@@ -1,7 +1,7 @@
 import { api } from "./client";
 import type { LayoutData, LayoutPayload } from "../types/layout";
 
-const LAYOUT_URL = "/api/geometry";
+const LAYOUT_URL = "/api/layout";
 
 export const listLayouts = () => api<LayoutData[]>(LAYOUT_URL);
 

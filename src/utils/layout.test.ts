@@ -4,8 +4,13 @@ import {
   addMerge,
   canRemoveCell,
   cellRect,
+  cellsAreContiguous,
   cellSizeMm,
   defaultLayout,
+  divisionCellRect,
+  divisionOutline,
+  divisionsAreContiguous,
+  divisionsShareEdge,
   gridRows,
   gridSizeMm,
   groupOf,
@@ -429,4 +434,110 @@ test("mergedOutline doesn't bleed into a cell left out of the merge", () => {
   // The path traces one closed loop wrapping A/D/G/H/I/F around E and B/C
   // without ever bridging over them.
   expect(path).toBe(EXPECTED_STAPLE_PATH);
+});
+
+test("divisionCellRect splits the parent rect into equal, gap-less shares", () => {
+  const parent = { x: 10, y: 20, width: 40, height: 20 };
+  const divide = { cols: 4, rows: 2 };
+  // Row-major: id 0 is the top-left division, id 3 the top-right, id 4
+  // the bottom-left, id 7 the bottom-right.
+  expect(divisionCellRect(0, divide, parent)).toEqual({
+    x: 10,
+    y: 20,
+    width: 10,
+    height: 10,
+  });
+  expect(divisionCellRect(3, divide, parent)).toEqual({
+    x: 40,
+    y: 20,
+    width: 10,
+    height: 10,
+  });
+  expect(divisionCellRect(4, divide, parent)).toEqual({
+    x: 10,
+    y: 30,
+    width: 10,
+    height: 10,
+  });
+  // Adjacent divisions touch exactly — no gap, unlike an ordinary row.
+  const right = divisionCellRect(0, divide, parent).x + divisionCellRect(0, divide, parent).width;
+  expect(right).toBe(divisionCellRect(1, divide, parent).x);
+});
+
+test("divisionsShareEdge is true for side-by-side divisions, false for diagonal ones", () => {
+  const parent = { x: 0, y: 0, width: 40, height: 20 };
+  const divide = { cols: 4, rows: 2 };
+  expect(divisionsShareEdge([0], [1], divide, parent)).toBe(true);
+  expect(divisionsShareEdge([0], [4], divide, parent)).toBe(true);
+  expect(divisionsShareEdge([0], [5], divide, parent)).toBe(false);
+  expect(divisionsShareEdge([0], [3], divide, parent)).toBe(false);
+});
+
+test("divisionOutline of a merged 2x1 pair of divisions is one seamless rectangle", () => {
+  const parent = { x: 0, y: 0, width: 40, height: 20 };
+  const divide = { cols: 4, rows: 2 };
+  const { path, bounds, labelBounds } = divisionOutline([0, 1], divide, parent);
+  // No gap between id 0 (x0-10) and id 1 (x10-20) — the outline reads as
+  // one plain rectangle, not two with a slit down the middle.
+  expect(bounds).toEqual({ x: 0, y: 0, width: 20, height: 10 });
+  expect(path).toBe("M0,0 H20 V10 H0 Z");
+  // The two divisions add up to the entire bounding box — a plain, solid
+  // rectangle with nothing for a merge to bleed into — so the label
+  // anchors on the *whole* merged shape, not arbitrarily on just one of
+  // the two equal-sized (and so tied-for-"largest") divisions.
+  expect(labelBounds).toEqual(bounds);
+});
+
+test("divisionOutline's labelBounds still dodges a notch for an irregular (non-rectangular) merge", () => {
+  // A 2x2 division grid, merged as an L: ids 0, 1, 2 (leaving 3 out) —
+  //   0 1
+  //   2 .
+  const parent = { x: 0, y: 0, width: 20, height: 20 };
+  const divide = { cols: 2, rows: 2 };
+  const { bounds, labelBounds } = divisionOutline([0, 1, 2], divide, parent);
+  // The bounding box still covers all 4 quadrants (including the
+  // untouched id 3), but the merge itself doesn't — so its centre isn't
+  // solid, and `labelBounds` must fall back to one of the merge's own
+  // (equal-sized) spans rather than that unfilled centre.
+  expect(bounds).toEqual({ x: 0, y: 0, width: 20, height: 20 });
+  expect(labelBounds).not.toEqual(bounds);
+  expect(labelBounds).toEqual({ x: 0, y: 0, width: 10, height: 10 });
+});
+
+test("cellsAreContiguous is true for a connected set, false when one member is isolated", () => {
+  const rows = gridRows(1, { 0: [1, 2, 3] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 1 }),
+    2: cellAt({ unit: 1 }),
+    3: cellAt({ unit: 1 }),
+  };
+  const rectOf = (id: number) => cellRect(id, rows, cells, 10, 3);
+  expect(cellsAreContiguous([1, 2, 3], rectOf, 3)).toBe(true);
+  expect(cellsAreContiguous([1, 3], rectOf, 3)).toBe(false);
+  expect(cellsAreContiguous([2], rectOf, 3)).toBe(true);
+  expect(cellsAreContiguous([], rectOf, 3)).toBe(true);
+});
+
+test("cellsAreContiguous chains connectivity through an intermediate member", () => {
+  // 1-2-3 in a row: {1, 3} alone aren't touching, but the full {1, 2, 3}
+  // set is one connected chain even though 1 and 3 never touch directly.
+  const rows = gridRows(1, { 0: [1, 2, 3] });
+  const cells: Record<number, GridCell> = {
+    1: cellAt({ unit: 1 }),
+    2: cellAt({ unit: 1 }),
+    3: cellAt({ unit: 1 }),
+  };
+  const rectOf = (id: number) => cellRect(id, rows, cells, 10, 3);
+  expect(cellsAreContiguous([1, 2, 3], rectOf, 3)).toBe(true);
+});
+
+test("divisionsAreContiguous checks the division grid's own row/column adjacency", () => {
+  // A 3x2 grid (cols=3, rows=2):
+  //   0 1 2
+  //   3 4 5
+  expect(divisionsAreContiguous([0, 1, 2], 3)).toBe(true); // full top row
+  expect(divisionsAreContiguous([0, 3], 3)).toBe(true); // stacked, same column
+  expect(divisionsAreContiguous([0, 2], 3)).toBe(false); // same row, not adjacent
+  expect(divisionsAreContiguous([0, 4], 3)).toBe(false); // diagonal
+  expect(divisionsAreContiguous([0, 1, 4], 3)).toBe(true); // 0-1 adjacent, 1-4 adjacent
 });

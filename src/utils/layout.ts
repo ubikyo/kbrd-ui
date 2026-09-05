@@ -1,5 +1,6 @@
 import {
   defaultGridCell,
+  type DivideGrid,
   type GridCell,
   type LayoutData,
   type MergeGroups,
@@ -27,7 +28,7 @@ export function maxItems(physicalMm: number, unitMm: number, gapMm: number) {
 
 /** Reference footprint of `items` 1U slots laid out with `gapMm` between
  * them — the same total width/height `maxItems` fits within `physicalMm`.
- * Used to center the board's rows within the physical display, both
+ * Used to center the display's rows within its own physical size, both
  * vertically (its row count) and horizontally (its column count) — see
  * `gridOffsetY`/`gridOffsetX` in `Factory`. */
 export function gridSizeMm(items: number, unitMm: number, gapMm: number) {
@@ -41,7 +42,7 @@ export function gridSizeMm(items: number, unitMm: number, gapMm: number) {
  * `cell.unit` pitches isn't simply `cell.unit * unitMm` — it eats that
  * many pitches of row space, plastic and gap alike, except for the one
  * trailing gap it doesn't need past its own last pitch. Height is always
- * the board's base cap size (a row's height doesn't depend on Unit).
+ * the display's base cap size (a row's height doesn't depend on Unit).
  */
 export function cellSizeMm(cell: GridCell, unitMm: number, gapMm: number) {
   return {
@@ -51,7 +52,7 @@ export function cellSizeMm(cell: GridCell, unitMm: number, gapMm: number) {
 }
 
 /**
- * The board's full grid: `itemsY` rows, each an ordered list of cell ids
+ * The display's full grid: `itemsY` rows, each an ordered list of cell ids
  * — empty until a plugin is actually dropped on that row (there is no
  * "default cell"; see `GridCell`'s docstring). `rowOverrides` holds
  * whatever rows have at least one cell.
@@ -241,7 +242,7 @@ export function remainingUnitsInRow(
 }
 
 /** A cell's absolute rectangle: `x`/`width` from its own row's flow,
- * `y`/`height` from the board's fixed row pitch. */
+ * `y`/`height` from the display's fixed row pitch. */
 export type CellRect = {
   x: number;
   y: number;
@@ -334,6 +335,69 @@ export function groupsShareEdge(
   return rectsA.some((a) => rectsB.some((b) => shareEdge(a, b, gapMm)));
 }
 
+/**
+ * Whether every id in `ids` is reachable from every other by a chain of
+ * `shareEdge` adjacency — the condition for treating an arbitrary,
+ * multi-selected set of cells as one mergeable region, rather than
+ * building a merge up one adjacent click at a time. `rectOf` abstracts
+ * over what's actually being checked (a row's cells via `cellRect`, a
+ * division grid's own cells via `divisionCellRect`), so this one
+ * traversal serves both. A single id (or none) is trivially contiguous.
+ */
+export function cellsAreContiguous(
+  ids: number[],
+  rectOf: (id: number) => CellRect,
+  gapMm: number,
+): boolean {
+  if (ids.length <= 1) return true;
+  const remaining = new Set(ids);
+  const start = ids[0];
+  remaining.delete(start);
+  const stack = [start];
+  while (stack.length > 0) {
+    const current = stack.pop() as number;
+    for (const other of remaining) {
+      if (shareEdge(rectOf(current), rectOf(other), gapMm)) {
+        remaining.delete(other);
+        stack.push(other);
+      }
+    }
+  }
+  return remaining.size === 0;
+}
+
+/** Same idea as `cellsAreContiguous`, but for a division grid's own
+ * uniform `cols` × `rows` layout — adjacency there is plain row/column
+ * arithmetic (row-major ids, see `DivideGrid`), so it doesn't need any
+ * rect (or `parentRect`) at all. */
+export function divisionsAreContiguous(ids: number[], cols: number): boolean {
+  if (ids.length <= 1) return true;
+  const adjacent = (a: number, b: number) => {
+    const colA = a % cols;
+    const rowA = Math.floor(a / cols);
+    const colB = b % cols;
+    const rowB = Math.floor(b / cols);
+    return (
+      (colA === colB && Math.abs(rowA - rowB) === 1) ||
+      (rowA === rowB && Math.abs(colA - colB) === 1)
+    );
+  };
+  const remaining = new Set(ids);
+  const start = ids[0];
+  remaining.delete(start);
+  const stack = [start];
+  while (stack.length > 0) {
+    const current = stack.pop() as number;
+    for (const other of remaining) {
+      if (adjacent(current, other)) {
+        remaining.delete(other);
+        stack.push(other);
+      }
+    }
+  }
+  return remaining.size === 0;
+}
+
 /** A point in the mm-space `mergedOutline` traces its shape in. */
 type Point = { x: number; y: number };
 
@@ -347,7 +411,7 @@ function near(a: number, b: number): boolean {
  * group members — members with nothing, group or not, between them in the
  * row's own left-to-right order. A run's rect bridges the real `gapMm`
  * gaps *within* it, so a merge reads as one seamless keycap rather than
- * several with slivers of board showing through — but a cell that's
+ * several with slivers of display showing through — but a cell that's
  * *not* in the group breaks the run right there: merging a row's outer
  * cells without its middle one, say, leaves the gaps on either side of
  * that untouched cell open rather than bridging across it.
@@ -396,6 +460,34 @@ function largestSpan(rects: CellRect[]): CellRect {
   return rects.reduce((largest, rect) =>
     rect.width * rect.height > largest.width * largest.height ? rect : largest,
   );
+}
+
+/** The shared tail of `mergedOutline` and `divisionOutline`: once a
+ * group's own rects (its real spans, plus any bridges closing the gaps
+ * between them) are worked out, tracing the outline and picking a label
+ * anchor are the same for either. */
+function outlineOfRects(
+  spans: CellRect[],
+  rects: CellRect[],
+): { path: string; bounds: CellRect; labelBounds: CellRect } {
+  const bounds = boundingBox(rects);
+  // `largestSpan` exists to dodge a notch a stepped/concave merge leaves
+  // empty at its centre (see its own docstring) — but when `rects` (which
+  // never overlap each other) already add up to the *entire* bounding
+  // box, the merge is just a plain, solid rectangle with nothing to
+  // dodge, and centring on one arbitrary span instead of the whole shape
+  // is wrong: for equal-sized rects (any merge of a division grid's own
+  // uniform cells, the common case), several are tied for "largest",
+  // so the tie-break would arbitrarily anchor the label on only one of
+  // them — off-centre in the merged shape as a whole.
+  const coveredArea = rects.reduce((sum, r) => sum + r.width * r.height, 0);
+  const boundsArea = bounds.width * bounds.height;
+  const isSolidRect = Math.abs(coveredArea - boundsArea) < 1e-6 * Math.max(1, boundsArea);
+  return {
+    path: tracePolygon(rects),
+    bounds,
+    labelBounds: isSolidRect ? bounds : largestSpan(spans),
+  };
 }
 
 /**
@@ -512,7 +604,7 @@ function pathFromLoop(loop: Point[]): string {
  * breaks the run rather than being bridged over.
  *
  * Two members stacked in physically adjacent rows meet the same way,
- * across the board's own row-to-row gap: whatever column range their runs
+ * across the display's own row-to-row gap: whatever column range their runs
  * actually share is bridged, so the merge covers that strip too instead
  * of leaving a slit — a column only one of them occupies keeps its full
  * gap open, so the merge never bleeds into a neighbouring, unmerged
@@ -562,9 +654,59 @@ export function mergedOutline(
     }
   }
 
+  return outlineOfRects(spans, rects);
+}
+
+/** A division's own rect within its parent cell's rect: `parentRect`
+ * split into `divide.cols` × `divide.rows` equal shares, `id` row-major
+ * (`row = Math.floor(id / cols)`, `col = id % cols`) — no gap between any
+ * of them, unlike `layoutRow`'s ordinary same-row cells. */
+export function divisionCellRect(
+  id: number,
+  divide: Pick<DivideGrid, "cols" | "rows">,
+  parentRect: CellRect,
+): CellRect {
+  const width = parentRect.width / divide.cols;
+  const height = parentRect.height / divide.rows;
+  const col = id % divide.cols;
+  const row = Math.floor(id / divide.cols);
   return {
-    path: tracePolygon(rects),
-    bounds: boundingBox(rects),
-    labelBounds: largestSpan(spans),
+    x: parentRect.x + col * width,
+    y: parentRect.y + row * height,
+    width,
+    height,
   };
+}
+
+/** Whether any division of `groupA` shares an edge with any of `groupB`
+ * — the condition for the two to be merge-able (mirrors `groupsShareEdge`,
+ * just against a division grid's own uniform rects instead of a row's
+ * cells). There's never a real gap to close between two divisions, so
+ * unlike `groupsShareEdge` this always checks with `gapMm` 0. */
+export function divisionsShareEdge(
+  groupA: number[],
+  groupB: number[],
+  divide: Pick<DivideGrid, "cols" | "rows">,
+  parentRect: CellRect,
+): boolean {
+  const rectOf = (id: number) => divisionCellRect(id, divide, parentRect);
+  return groupA.some((a) => groupB.some((b) => shareEdge(rectOf(a), rectOf(b), 0)));
+}
+
+/**
+ * The outline of a merged group of divisions — the same shape
+ * `mergedOutline` returns for a merged group of ordinary cells (a plain
+ * rectangle, a stepped shape, or anything else `tracePolygon` can trace)
+ * — but over a division grid's own uniform, gap-less rects
+ * (`divisionCellRect`) instead of a row's cells, so there's no
+ * gap-bridging step needed: touching divisions already touch exactly,
+ * with nothing between them left to close.
+ */
+export function divisionOutline(
+  group: number[],
+  divide: Pick<DivideGrid, "cols" | "rows">,
+  parentRect: CellRect,
+): { path: string; bounds: CellRect; labelBounds: CellRect } {
+  const rects = group.map((id) => divisionCellRect(id, divide, parentRect));
+  return outlineOfRects(rects, rects);
 }

@@ -7,8 +7,8 @@ import {
   FALLBACK_WIDTH,
   getDevice,
   type DeviceStatus,
-} from "../api/device";
-import type { LayoutSettings } from "../types/layout";
+} from "../../api/device";
+import type { LayoutSettings } from "../../types/layout";
 
 const DEVICE_POLL_INTERVAL_MS = 5000;
 const MM_PER_INCH = 25.4;
@@ -58,7 +58,7 @@ export default function SettingsModal({
   settings,
   onSave,
 }: Props) {
-  const [tab, setTab] = useState<string | null>("geometry");
+  const [tab, setTab] = useState<string | null>("display");
   const [draft, setDraft] = useState<LayoutSettings>(settings);
   const [device, setDevice] = useState<DeviceStatus>({ connected: false });
 
@@ -162,13 +162,13 @@ export default function SettingsModal({
           }}
         >
           <Tabs.List w={180} style={{ flexShrink: 0 }}>
-            <Tabs.Tab value="geometry" leftSection={<MdStraighten size={16} />}>
-              Geometry
+            <Tabs.Tab value="display" leftSection={<MdStraighten size={16} />}>
+              Display
             </Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel
-            value="geometry"
+            value="display"
             style={{ overflowY: "auto", padding: 0, paddingLeft: 40 }}
           >
             <Stack gap="md">
@@ -210,7 +210,7 @@ export default function SettingsModal({
                 />
               </FieldRow>
 
-              <Title order={4} mt="md">Display</Title>
+              <Title order={4} mt="md">Information</Title>
               <FieldRow label="State">
                 <Text size="sm" fw={700} c={device.connected ? "green" : "red"}>
                   {device.connected ? "Connected" : "Disconnected"}

@@ -22,15 +22,15 @@ import {
 import type { LayerData } from "../types/layer";
 
 type Props = {
-  geometryId: number;
+  layoutId: number;
   onChange: (layer: LayerData | null) => void;
-  // Edit/Delete live in Factory's own board Actions menu (select the
+  // Edit/Delete live in Factory's own display Actions menu (select the
   // physical screen), but Add stays reachable straight from this picker
   // too — the "+" below the list, the quickest path to a new one.
   onAdd: () => void;
 };
 
-// Add/Edit/Delete now live in Factory's own board Actions menu (select the
+// Add/Edit/Delete now live in Factory's own display Actions menu (select the
 // physical screen), not here — this dropdown is just the picker. `App`
 // drives those through this handle so it can refresh the list and
 // re-select afterwards, the same way this component always has.
@@ -39,7 +39,7 @@ export type LayerMenuHandle = {
 };
 
 const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
-  { geometryId, onChange, onAdd },
+  { layoutId, onChange, onAdd },
   ref,
 ) {
   const [items, setItems] = useState<LayerData[]>([]);
@@ -58,7 +58,7 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
 
   useEffect(() => {
     let cancelled = false;
-    void listLayers(geometryId).then(async (data) => {
+    void listLayers(layoutId).then(async (data) => {
       if (cancelled) return;
       setItems(data);
       const current = data.find((item) => item.active) ?? data[0];
@@ -73,10 +73,10 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
     return () => {
       cancelled = true;
     };
-  }, [geometryId, onChange, select]);
+  }, [layoutId, onChange, select]);
 
   async function refresh(preferredId?: number) {
-    const data = await listLayers(geometryId);
+    const data = await listLayers(layoutId);
     setItems(data);
     const current = data.find((item) => item.id === preferredId) ?? data[0];
     if (current) await select(current);

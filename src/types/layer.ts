@@ -2,9 +2,7 @@ import type { FactoryLayout } from "./layout";
 
 export type KeyPlugin = {
   id: number;
-  // Straight from KBRD-API, which still calls this a "workspace" — see
-  // the note atop `api/layers.ts`.
-  workspace_id: number;
+  layer_id: number;
   key_ref: string;
   plugin_id: string;
   plugin_version: string;
@@ -36,7 +34,7 @@ export type KeyProperty = {
 
 export type LayerData = {
   id: number;
-  geometry_id: number;
+  layout_id: number;
   name: string;
   description: string;
   active: boolean;
@@ -45,6 +43,6 @@ export type LayerData = {
   key_properties: KeyProperty[];
   // `<Factory>`'s own grid disposition (see `FactoryLayout`), persisted
   // alongside this layer and reloaded whenever it's switched back to —
-  // `null` until something's actually been laid out on the board.
+  // `null` until something's actually been laid out on the display.
   factory_layout: FactoryLayout | null;
 };
