@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
-import type { LayerMenuHandle } from "../components/Layer";
-import type { LayoutMenuHandle } from "../components/Layout";
+import type { LayerMenuHandle } from "../components/menu/Layer";
+import type { LayoutMenuHandle } from "../components/menu/Layout";
 import { deleteLayout } from "../api/layouts";
 import { deleteLayer } from "../api/layers";
 import type { LayerData } from "../types/layer";

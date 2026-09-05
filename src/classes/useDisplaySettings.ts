@@ -7,7 +7,7 @@ import type { LayoutSettings } from "../types/layout";
 /**
  * Physical grid settings (Settings' own physical width/height, plus each
  * layout's Caps size / Gap size) as one bag of numbers, the shape
- * `<Display>`/`<LayoutEditorModal>` share regardless of where each field
+ * `<Display>`/`<LayoutEditor>` share regardless of where each field
  * is actually edited or persisted (see `LayoutSettings`). The physical
  * screen's width/height (`display`, see KBRD-API) are one row for the
  * whole device, loaded once here rather than re-seeded on every layout

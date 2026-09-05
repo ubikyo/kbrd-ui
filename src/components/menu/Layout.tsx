@@ -2,9 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { Box, Group, Menu, Text, UnstyledButton } from "@mantine/core";
 import { MdAdd, MdCheck, MdChevronRight, MdKeyboardAlt } from "react-icons/md";
 
-import { listLayouts } from "../api/layouts";
-import type { LayoutData } from "../types/layout";
-import { defaultLayout } from "../utils/layout";
+import { listLayouts } from "../../api/layouts";
+import type { LayoutData } from "../../types/layout";
+import { defaultLayout } from "../../utils/layout";
 
 type Props = {
   onChange: (layout: LayoutData | null) => void;

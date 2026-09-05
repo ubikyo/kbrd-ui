@@ -17,15 +17,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import kbrdLogo from "./assets/media/KBRD.svg";
 
-import Layout from "./components/Layout";
-import LayoutEditorModal from "./components/modals/LayoutEditorModal";
+import Layout from "./components/menu/Layout";
+import LayoutEditor from "./components/modals/LayoutEditor";
 import type { FactoryLayout, LayoutData } from "./types/layout";
 
 import Composer from "./components/Composer";
 import Inspector from "./components/Inspector";
-import SettingsModal from "./components/modals/SettingsModal";
-import Layer from "./components/Layer";
-import LayerEditorModal from "./components/modals/LayerEditorModal";
+import Settings from "./components/modals/Settings";
+import Layer from "./components/menu/Layer";
+import LayerEditor from "./components/modals/LayerEditor";
 import { updateFactoryLayout } from "./api/layers";
 import { maxItems } from "./utils/layout";
 import type { LayerData } from "./types/layer";
@@ -269,7 +269,7 @@ export default function App() {
         </Group>
       </AppShell.Header>
 
-      <SettingsModal
+      <Settings
         opened={settingsOpened}
         onClose={() => setSettingsOpened(false)}
         settings={layoutSettings}
@@ -375,7 +375,7 @@ export default function App() {
         </Notification>
       )}
       {entityEditors.layoutEditorOpened && (
-        <LayoutEditorModal
+        <LayoutEditor
           editing={entityEditors.editingLayout}
           onClose={() => entityEditors.setLayoutEditorOpened(false)}
           onSaved={(id) => {
@@ -385,7 +385,7 @@ export default function App() {
         />
       )}
       {entityEditors.layerEditorOpened && layout && (
-        <LayerEditorModal
+        <LayerEditor
           layoutId={layout.id}
           editing={entityEditors.editingLayer}
           onClose={() => entityEditors.setLayerEditorOpened(false)}

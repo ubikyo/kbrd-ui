@@ -7,7 +7,7 @@ import type { ElementSize } from "./useElementSize";
 
 /**
  * Drag-resizing a cell from its right-edge handle (`<ResizeGrip>`, see
- * `LayoutItem`) — pixels moved on screen convert to mm via the SVG's own
+ * `LayoutCell`) — pixels moved on screen convert to mm via the SVG's own
  * scale (`pxPerMm`), then to Units, snapped to `UNIT_STEP` and capped by
  * `maxUnitForCell` so it can never outgrow its row's budget. A cell's
  * width grows by one whole *pitch* per +1 Unit (see `cellSizeMm`), not by

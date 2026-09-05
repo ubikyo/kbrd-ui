@@ -564,7 +564,7 @@ function tracePolygon(rects: CellRect[]): string {
 
   // Holes (a fully-enclosed unmerged cell, say) come out wound the
   // opposite way from the outer loop for free — nothing extra to do here,
-  // as long as the caller fills with the `evenodd` rule (see `LayoutItem`).
+  // as long as the caller fills with the `evenodd` rule (see `LayoutCell`).
   return loops.map(pathFromLoop).join(" ");
 }
 
@@ -610,7 +610,7 @@ function pathFromLoop(loop: Point[]): string {
  * gap open, so the merge never bleeds into a neighbouring, unmerged
  * cell's own row or gap.
  *
- * Also returns `labelBounds` — where `LayoutItem` centres the cell's size
+ * Also returns `labelBounds` — where `LayoutCell` centres the cell's size
  * / type label, `largestSpan` of the group's own real spans rather than
  * the shape's bounding box (`bounds`), which a stepped or concave merge
  * can leave empty right at its centre.

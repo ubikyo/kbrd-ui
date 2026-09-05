@@ -20,7 +20,7 @@ type Props = {
   onSaved: (id: number) => void;
 };
 
-export default function LayerEditorModal({
+export default function LayerEditor({
   layoutId,
   editing,
   onClose,

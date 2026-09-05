@@ -52,7 +52,7 @@ type Props = {
   onSave: (settings: LayoutSettings) => void;
 };
 
-export default function SettingsModal({
+export default function Settings({
   opened,
   onClose,
   settings,

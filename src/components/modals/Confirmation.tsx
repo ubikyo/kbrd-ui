@@ -11,7 +11,7 @@ type Props = {
  * are the only thing that varies between uses (e.g. overwriting a cell/
  * division's content with a paste — see `Composer`). "No" and the modal's
  * own close (Escape, clicking outside) both just cancel. */
-export default function ConfirmationModal({
+export default function Confirmation({
   title,
   message,
   onConfirm,

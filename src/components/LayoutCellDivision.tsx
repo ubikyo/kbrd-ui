@@ -8,7 +8,7 @@ import {
   groupOf,
   type CellRect,
 } from "../utils/layout";
-import LayoutItem from "./LayoutItem";
+import LayoutCell from "./LayoutCell";
 
 type Props = {
   mode: "layout" | "mapping";
@@ -47,7 +47,7 @@ type Props = {
 
 /**
  * `parentId`'s own division grid (see `GridCell.divide`) in place of the
- * one plain `<LayoutItem>` an ordinary cell gets — one `<LayoutItem>` per
+ * one plain `<LayoutCell>` an ordinary cell gets — one `<LayoutCell>` per
  * division *group* (a division merged with a sibling renders once, from
  * its primary, exactly like a top-level merge does), laid out directly
  * over `parentRect` with no gap between any of them
@@ -57,7 +57,7 @@ type Props = {
  * pass — see `Display`'s own comment on the resize grip for why the
  * border-dedup pass below needs a second, later pass of its own too.
  */
-export default function DivisionGrid({
+export default function LayoutCellDivision({
   mode,
   parentId,
   divide,
@@ -206,7 +206,7 @@ export default function DivisionGrid({
       key: `division-${parentId}-${primary}`,
       priority: isSelected || primaryIsDropTarget,
       element: (
-        <LayoutItem
+        <LayoutCell
           key={`division-${parentId}-${primary}`}
           bounds={bounds}
           path={outline?.path}

@@ -25,7 +25,7 @@ type FieldRowProps = {
   children: React.ReactNode;
 };
 
-/** Same 40/60 label/control split as `SettingsModal`'s own fields — this
+/** Same 40/60 label/control split as `Settings`'s own fields — this
  * modal shares its tabbed, settings-style layout. */
 function FieldRow({ label, children }: FieldRowProps) {
   return (
@@ -59,7 +59,7 @@ type Props = {
   onSaved: (id: number) => void;
 };
 
-export default function LayoutEditorModal({
+export default function LayoutEditor({
   editing,
   onClose,
   onSaved,

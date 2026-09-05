@@ -84,7 +84,7 @@ export function useDisplayGrid(params: {
   >(null);
   // A Paste, or dropping a Layout plugin (Key/Space), that would overwrite
   // a cell/division that isn't blank waits here for confirmation (see
-  // `ConfirmationModal` in `Composer`) instead of applying right away —
+  // `Confirmation` in `Composer`) instead of applying right away —
   // `pasteToEmptyRow`/`assignLayoutPlugin`/`assignLayoutPluginToDivision`
   // set this instead of mutating whenever their target already has
   // content that dropping the same kind again wouldn't (a no-op, see
@@ -681,7 +681,7 @@ export function useDisplayGrid(params: {
       !layoutSelection ||
       layoutSelection.isMerged ||
       layoutSelection.cell.divide ||
-      cols * divideRows <= 1 // see `DivideModal`'s own `isNoOp` guard
+      cols * divideRows <= 1 // see `Divide`'s own `isNoOp` guard
     ) {
       return;
     }
@@ -885,7 +885,7 @@ export function useDisplayGrid(params: {
   }
 
   // "Yes" on the confirmation a non-blank overwrite shows (`Composer`'s
-  // `ConfirmationModal`) — applies whichever of `pasteToEmptyRow`/
+  // `Confirmation`) — applies whichever of `pasteToEmptyRow`/
   // `assignLayoutPlugin`/`assignLayoutPluginToDivision` set `pendingOverwrite`.
   function confirmOverwrite() {
     const pending = pendingOverwrite;

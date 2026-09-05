@@ -13,7 +13,7 @@ type FieldRowProps = {
   children: React.ReactNode;
 };
 
-// Same 40/60 label/control split as `LayoutEditorModal`/`SettingsModal`'s
+// Same 40/60 label/control split as `LayoutEditor`/`Settings`'s
 // own fields — each defines this locally rather than sharing one, so this
 // follows suit rather than introducing a new shared component on its own.
 function FieldRow({ label, children }: FieldRowProps) {
@@ -36,7 +36,7 @@ function FieldRow({ label, children }: FieldRowProps) {
  * grid of independent, gap-less divisions (see `createDivideGrid`) —
  * division `0` keeps the cell's own plugin, every other one starts blank
  * — see `App`'s `divideSelectedCell`. */
-export default function DivideModal({ onClose, onDivide }: Props) {
+export default function Divide({ onClose, onDivide }: Props) {
   const [cols, setCols] = useState(1);
   const [rows, setRows] = useState(1);
 

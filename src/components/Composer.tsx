@@ -19,8 +19,8 @@ import type { LayerData } from "../types/layer";
 import type { LayoutData, LayoutSettings } from "../types/layout";
 import Display from "./Display";
 import type { ContextMenuTarget } from "./Display";
-import ConfirmationModal from "./modals/ConfirmationModal";
-import DivideModal from "./modals/DivideModal";
+import Confirmation from "./modals/Confirmation";
+import Divide from "./modals/Divide";
 
 // The Actions menu's own shortcuts are shown next to their label in
 // whichever form this platform actually uses — ⌘ on macOS, Ctrl+
@@ -263,7 +263,7 @@ export default function Composer({
                             instead, without first re-selecting that space
                             explicitly. A *different*, non-empty cell
                             would instead ask before overwriting it — see
-                            `ConfirmationModal` below. */}
+                            `Confirmation` below. */}
                         <Menu.Item
                           leftSection={<MdContentPaste />}
                           rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
@@ -447,7 +447,7 @@ export default function Composer({
       )}
 
       {divideModalOpened && grid.layoutSelection && (
-        <DivideModal
+        <Divide
           onClose={() => setDivideModalOpened(false)}
           onDivide={(cols, rows) => {
             grid.divideSelectedCell(cols, rows);
@@ -460,7 +460,7 @@ export default function Composer({
           already has content asks first — see
           `pendingOverwrite`/`confirmOverwrite` in `useDisplayGrid`. */}
       {grid.pendingOverwrite && (
-        <ConfirmationModal
+        <Confirmation
           title="Delete"
           message="Delete the current content?"
           onConfirm={grid.confirmOverwrite}

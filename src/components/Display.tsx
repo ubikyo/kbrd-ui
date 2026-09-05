@@ -27,12 +27,12 @@ import {
   remainingUnitsInRow,
   type CellRect,
 } from "../utils/layout";
-import DivisionGrid from "./DivisionGrid";
-import LayoutItem, { ResizeGrip } from "./LayoutItem";
+import LayoutCellDivision from "./LayoutCellDivision";
+import LayoutCell, { ResizeGrip } from "./LayoutCell";
 
 const PADDING = 60;
 const PLUGIN_DRAG_TYPE = "application/kbrd-plugin";
-// Same green `LayoutItem` uses for a selected cell.
+// Same green `LayoutCell` uses for a selected cell.
 const DISPLAY_SELECTED_STROKE = "#00ff00";
 
 // What's currently under the drag cursor: an existing cell, a row's
@@ -226,7 +226,7 @@ export default function Display({
     return { width, height };
   })();
   // The SVG's own scale — real screen pixels per mm of `viewBox` — used to
-  // convert a fixed-pixel size (the resize grip, see `LayoutItem`) into
+  // convert a fixed-pixel size (the resize grip, see `LayoutCell`) into
   // this SVG's mm-space, and pixel drag deltas back into mm below.
   const pxPerMm = (() => {
     if (!display || physicalWidthMm <= 0) return 0;
@@ -656,7 +656,7 @@ export default function Display({
                   // resize grip above still targets its own outer `unit`.
                   if (group.length === 1 && cell?.divide) {
                     return (
-                      <DivisionGrid
+                      <LayoutCellDivision
                         key={primary}
                         mode={mode}
                         parentId={primary}
@@ -692,7 +692,7 @@ export default function Display({
                   }
 
                   return (
-                    <LayoutItem
+                    <LayoutCell
                       key={primary}
                       bounds={bounds}
                       path={merged?.path}
@@ -708,7 +708,7 @@ export default function Display({
                       }
                       // Layout-only: Mapping mode shows the shape (once
                       // `mapping-visible`) with no size/type caption under
-                      // it — see `LayoutItem`'s own `showText`.
+                      // it — see `LayoutCell`'s own `showText`.
                       showText={mode === "layout"}
                       onClick={(event) => handleClick(event, primary)}
                       onContextMenu={(event) => handleCellContextMenu(primary, event)}
@@ -761,7 +761,7 @@ export default function Display({
                 const emptyWidth = Math.max(referenceRowWidthMm - emptyX, 0);
                 return [
                   ...cellItems,
-                  <LayoutItem
+                  <LayoutCell
                     key={`row-${row}-empty`}
                     bounds={{
                       x: emptyX,

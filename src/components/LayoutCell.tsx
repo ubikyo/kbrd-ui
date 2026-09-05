@@ -95,7 +95,7 @@ type Props = {
 /** One SVG cell (or merged group of cells) in the grid `<Display>` lays
  * out over the display, and a drop target for the plugins dragged from
  * `<Inspector>`'s Plugins tab. */
-export default function LayoutItem({
+export default function LayoutCell({
   bounds,
   path,
   labelBounds = bounds,

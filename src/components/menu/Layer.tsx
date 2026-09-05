@@ -18,8 +18,8 @@ import {
   activateLayer,
   deactivateLayer,
   listLayers,
-} from "../api/layers";
-import type { LayerData } from "../types/layer";
+} from "../../api/layers";
+import type { LayerData } from "../../types/layer";
 
 type Props = {
   layoutId: number;
