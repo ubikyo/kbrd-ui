@@ -47,6 +47,11 @@ type Props = {
   // happen, since every `GridCell` has a `unit`).
   unit?: number;
   isSelected?: boolean;
+  // A row's trailing empty space (or a fully empty row) rather than a real
+  // cell — no `typeId` ever applies to it. Selecting it (to merge into, or
+  // to paste a plugin onto) still shows green, but dashed rather than
+  // solid, since there's nothing there yet.
+  isEmpty?: boolean;
   isDropTarget?: boolean;
   onClick?: (event: MouseEvent<SVGGElement>) => void;
   onDragOver?: (event: DragEvent<SVGGElement>) => void;
@@ -64,6 +69,7 @@ export default function LayoutItem({
   pluginIds = [],
   unit,
   isSelected = false,
+  isEmpty = false,
   isDropTarget = false,
   onClick,
   onDragOver,
@@ -85,7 +91,9 @@ export default function LayoutItem({
     fill: "transparent",
     stroke,
     strokeWidth: 1,
-    strokeDasharray: isSelected ? undefined : "4 3",
+    // Selected stays dashed for empty space — there's no real cell there
+    // yet, only a spot something could still be merged or pasted into.
+    strokeDasharray: isSelected && !isEmpty ? undefined : "4 3",
     vectorEffect: "non-scaling-stroke" as const,
   };
 

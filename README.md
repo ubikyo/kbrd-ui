@@ -17,8 +17,6 @@
 
 ## Development
 
-Use this commands to run `KBRD-WEB` without a Raspberry :
+Use this command to run `KBRD-WEB` without a Raspberry :
 
-    cd kbrd-web
-    npm install
-    npm run dev
+    ./dev.sh

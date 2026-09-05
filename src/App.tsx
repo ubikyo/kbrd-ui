@@ -10,6 +10,7 @@ import {
   SegmentedControl,
   Splitter,
   Stack,
+  Switch,
   Text,
 } from "@mantine/core";
 
@@ -17,7 +18,6 @@ import {
   MdAdd,
   MdCallMerge,
   MdCallSplit,
-  MdCheck,
   MdContentCopy,
   MdContentPaste,
   MdDelete,
@@ -25,7 +25,6 @@ import {
   MdEdit,
   MdMoreVert,
   MdSettings,
-  MdSwapHoriz,
 } from "react-icons/md";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,7 +34,7 @@ import kbrdLogo from "./assets/media/KBRD.svg";
 import Layout from "./components/Layout";
 import type { LayoutMenuHandle } from "./components/Layout";
 import LayoutEditorModal from "./components/LayoutEditorModal";
-import { defaultGridCell, DEFAULT_LAYOUT_SETTINGS } from "./types/layout";
+import { defaultGridCell, DEFAULT_LAYOUT_SETTINGS, MIN_UNIT } from "./types/layout";
 import type {
   FactoryLayout,
   GridCell,
@@ -117,6 +116,13 @@ export default function App() {
   );
   const [mergeGroups, setMergeGroups] = useState<MergeGroups>([]);
   const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(
+    null,
+  );
+  // A row's trailing empty space (or a fully empty row), selected instead
+  // of a real cell — mutually exclusive with `selectedCellIndex`/
+  // `boardSelected`, the same way those already are with each other. Lets
+  // a copied plugin be pasted straight onto space nothing has claimed yet.
+  const [selectedEmptyRow, setSelectedEmptyRow] = useState<number | null>(
     null,
   );
   // "Resize" in the Actions menu — while off, `Factory` hides every cell's
@@ -217,6 +223,7 @@ export default function App() {
     setRowOverrides({});
     setMergeGroups([]);
     setSelectedCellIndex(null);
+    setSelectedEmptyRow(null);
     setBoardSelected(false);
     setMergeSourceIndex(null);
     skipFactoryAutosaveRef.current = true;
@@ -236,21 +243,36 @@ export default function App() {
     setRowOverrides(value?.factory_layout?.rowOverrides ?? {});
     setMergeGroups(value?.factory_layout?.mergeGroups ?? []);
     setSelectedCellIndex(null);
+    setSelectedEmptyRow(null);
     setBoardSelected(false);
     setMergeSourceIndex(null);
     skipFactoryAutosaveRef.current = true;
   }, []);
 
   // The board (the physical screen) and a grid cell are mutually
-  // exclusive selections — each shows its own Actions menu.
+  // exclusive selections — each shows its own Actions menu. While a merge
+  // is in progress, a click that misses every cell (e.g. the background,
+  // or an adjacent cell that turns out not to share an edge) must not
+  // cancel it — only the STOP button or Escape does (see the Escape
+  // effect near `stopMerge`).
   function selectBoard() {
+    if (mergeSourceIndex !== null) return;
     setBoardSelected(true);
     setSelectedCellIndex(null);
-    setMergeSourceIndex(null);
+    setSelectedEmptyRow(null);
   }
 
   function selectCell(index: number | null) {
     setSelectedCellIndex(index);
+    setSelectedEmptyRow(null);
+    setBoardSelected(false);
+  }
+
+  // A row's empty space, selected (instead of a cell) so a copied plugin
+  // can be pasted straight onto it — see `emptySelection`/`pasteToEmptyRow`.
+  function selectEmptyRow(row: number) {
+    setSelectedEmptyRow(row);
+    setSelectedCellIndex(null);
     setBoardSelected(false);
   }
 
@@ -392,6 +414,42 @@ export default function App() {
     setMergeSourceIndex(null);
   }
 
+  // Merge only ever stops two ways: the notification's own STOP button, or
+  // Escape — no click-away, no closing the notification some other way.
+  useEffect(() => {
+    if (mergeSourceIndex === null) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") stopMerge();
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [mergeSourceIndex]);
+
+  // Tab toggles Resize — a global shortcut, independent of mode/selection —
+  // except while a modal has its own fields to tab through normally, or
+  // while typing in a text field, where Tab must keep doing its normal job.
+  useEffect(() => {
+    if (settingsOpened || layoutEditorOpened || layerEditorOpened || confirmDelete) {
+      return;
+    }
+    function handleTab(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setResizeEnabled((current) => !current);
+    }
+    window.addEventListener("keydown", handleTab);
+    return () => window.removeEventListener("keydown", handleTab);
+  }, [settingsOpened, layoutEditorOpened, layerEditorOpened, confirmDelete]);
+
   function mergeWith(target: number) {
     if (mergeSourceIndex === null) return;
     const newPrimary = Math.min(
@@ -399,8 +457,41 @@ export default function App() {
       ...groupOf(target, mergeGroups),
     );
     setMergeGroups((current) => addMerge(current, mergeSourceIndex, target));
-    setMergeSourceIndex(null);
     setSelectedCellIndex(newPrimary);
+    // Merging one cell in doesn't end merge mode — it keeps going, now
+    // from the grown group, so the next adjacent cell clicked keeps
+    // merging into it. Only STOP/Escape (`stopMerge`) ends it.
+    setMergeSourceIndex(newPrimary);
+  }
+
+  // Growing a merge into `row`'s still-empty space instead of an existing
+  // cell — `Factory` has already checked it's actually adjacent to the
+  // merge's group before calling this. The new cell is a plain,
+  // plugin-less `defaultGridCell`: it never renders or is edited on its
+  // own once merged (only the group's primary is — see `primaryOf`), so it
+  // needs no `typeId` of its own, unlike one created by dropping a plugin.
+  function mergeWithEmpty(row: number) {
+    if (mergeSourceIndex === null) return;
+    const remaining = remainingUnitsInRow(
+      row,
+      rows,
+      cells,
+      layoutSettings.physicalWidthMm,
+      layoutSettings.unitMm,
+      layoutSettings.gapMm,
+    );
+    if (remaining < MIN_UNIT) return;
+    const { rows: updatedRows, id } = addCellToRow(rows, row);
+    const newPrimary = Math.min(...groupOf(mergeSourceIndex, mergeGroups), id);
+    setRowOverrides((current) => ({ ...current, [row]: updatedRows[row] }));
+    setCells((current) => ({
+      ...current,
+      [id]: defaultGridCell(Math.min(1, remaining)),
+    }));
+    setMergeGroups((current) => addMerge(current, mergeSourceIndex, id));
+    setSelectedCellIndex(newPrimary);
+    // Same continuation as `mergeWith` — merging doesn't end merge mode.
+    setMergeSourceIndex(newPrimary);
   }
 
   function unmerge() {
@@ -465,6 +556,7 @@ export default function App() {
     setRowOverrides((current) => ({ ...current, [row]: updatedRows[row] }));
     setCells((current) => ({ ...current, [id]: cell }));
     setSelectedCellIndex(id);
+    setSelectedEmptyRow(null);
   }
 
   // Removes `index` from its row entirely — "Remove cell" in the Actions
@@ -537,6 +629,49 @@ export default function App() {
     setSelectedCellIndex(id);
   }
 
+  const emptySelection =
+    selectedEmptyRow !== null
+      ? {
+          row: selectedEmptyRow,
+          // Same budget check as `layoutSelection.canPaste`, against
+          // whatever's left of this row instead of next to a selected cell.
+          canPaste:
+            copiedCell !== null &&
+            copiedCell.unit <=
+              remainingUnitsInRow(
+                selectedEmptyRow,
+                rows,
+                cells,
+                layoutSettings.physicalWidthMm,
+                layoutSettings.unitMm,
+                layoutSettings.gapMm,
+              ),
+        }
+      : null;
+
+  // Pastes the copied cell straight into the selected empty row/space —
+  // the same fresh-cell creation `createCell` does for a plugin dropped
+  // there, just fed from the clipboard instead of a drag.
+  function pasteToEmptyRow() {
+    if (!emptySelection || !copiedCell || !emptySelection.canPaste) return;
+    const { rows: updatedRows, id } = addCellToRow(rows, emptySelection.row);
+    setRowOverrides((current) => ({
+      ...current,
+      [emptySelection.row]: updatedRows[emptySelection.row],
+    }));
+    setCells((current) => ({
+      ...current,
+      [id]: {
+        typeId: copiedCell.typeId,
+        typeConfig: { ...copiedCell.typeConfig },
+        pluginIds: [...copiedCell.pluginIds],
+        unit: copiedCell.unit,
+      },
+    }));
+    setSelectedCellIndex(id);
+    setSelectedEmptyRow(null);
+  }
+
   // The Actions menu's own shortcuts, all Layout-mode-only and all no-ops
   // while the user is actually typing into a text field somewhere else (a
   // plugin's config, a name field…) rather than working the board:
@@ -547,25 +682,36 @@ export default function App() {
   const layoutShortcutsRef = useRef({
     mode,
     layoutSelection,
+    emptySelection,
     removeCell,
     copySelectedCell,
     pasteToSelectedCell,
+    pasteToEmptyRow,
   });
   useEffect(() => {
     layoutShortcutsRef.current = {
       mode,
       layoutSelection,
+      emptySelection,
       removeCell,
       copySelectedCell,
       pasteToSelectedCell,
+      pasteToEmptyRow,
     };
   });
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      const { mode, layoutSelection, removeCell, copySelectedCell, pasteToSelectedCell } =
-        layoutShortcutsRef.current;
-      if (mode !== "layout" || !layoutSelection) return;
+      const {
+        mode,
+        layoutSelection,
+        emptySelection,
+        removeCell,
+        copySelectedCell,
+        pasteToSelectedCell,
+        pasteToEmptyRow,
+      } = layoutShortcutsRef.current;
+      if (mode !== "layout" || (!layoutSelection && !emptySelection)) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -576,15 +722,20 @@ export default function App() {
         return;
       }
       const withModifier = event.metaKey || event.ctrlKey;
-      if (event.key === "Backspace" && layoutSelection.canRemove) {
+      if (layoutSelection?.canRemove && event.key === "Backspace") {
         event.preventDefault();
         removeCell(layoutSelection.index);
-      } else if (withModifier && event.key.toLowerCase() === "c") {
+      } else if (layoutSelection && withModifier && event.key.toLowerCase() === "c") {
         event.preventDefault();
         copySelectedCell();
-      } else if (withModifier && event.key.toLowerCase() === "v" && layoutSelection.canPaste) {
-        event.preventDefault();
-        pasteToSelectedCell();
+      } else if (withModifier && event.key.toLowerCase() === "v") {
+        if (layoutSelection?.canPaste) {
+          event.preventDefault();
+          pasteToSelectedCell();
+        } else if (emptySelection?.canPaste) {
+          event.preventDefault();
+          pasteToEmptyRow();
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -686,6 +837,9 @@ export default function App() {
                 onSelectCell={selectCell}
                 mergeSourceIndex={mergeSourceIndex}
                 onMergeWith={mergeWith}
+                selectedEmptyRow={selectedEmptyRow}
+                onSelectEmpty={selectEmptyRow}
+                onMergeWithEmpty={mergeWithEmpty}
                 isBoardSelected={boardSelected}
                 onSelectBoard={selectBoard}
                 resizeEnabled={resizeEnabled}
@@ -701,10 +855,32 @@ export default function App() {
                   { label: "Layout", value: "layout" },
                   { label: "Mapping", value: "mapping" },
                 ]}
+                color="green"
                 size="xs"
                 style={{
                   position: "absolute",
                   left: 20,
+                  bottom: 20,
+                  zIndex: 20,
+                }}
+              />
+
+              {/* Moved out of the board's own Actions menu — resizing is a
+                  view option, not a per-layout action, so it lives here as
+                  a persistent switch, aligned right at the same level as
+                  the Layout/Mapping switch on the left. Also toggled by
+                  Tab (see the keydown effect near `stopMerge`). */}
+              <Switch
+                label="Resize"
+                size="xs"
+                color="green"
+                checked={resizeEnabled}
+                onChange={(event) =>
+                  setResizeEnabled(event.currentTarget.checked)
+                }
+                style={{
+                  position: "absolute",
+                  right: 20,
                   bottom: 20,
                   zIndex: 20,
                 }}
@@ -778,6 +954,44 @@ export default function App() {
                 </Menu>
               )}
 
+              {/* A row's empty space selected instead of a cell (see
+                  `selectEmptyRow`) — nothing to Merge/Copy/Delete yet, just
+                  somewhere a copied plugin can be pasted straight onto. */}
+              {mode === "layout" && emptySelection && (
+                <Menu
+                  position="bottom-end"
+                  width={200}
+                  styles={{ item: { padding: "4px var(--mantine-spacing-sm)" } }}
+                >
+                  <Menu.Target>
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      size="xs"
+                      leftSection={<MdMoreVert />}
+                      style={{
+                        position: "absolute",
+                        top: 20,
+                        right: 20,
+                        zIndex: 20,
+                      }}
+                    >
+                      Actions
+                    </Button>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item
+                      leftSection={<MdContentPaste />}
+                      rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
+                      disabled={!emptySelection.canPaste}
+                      onClick={pasteToEmptyRow}
+                    >
+                      Paste
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              )}
+
               {/* The physical screen itself, selected as its own target —
                   see `selectBoard` — for the Layout/Layer CRUD that used
                   to live in their own header dropdowns. */}
@@ -814,14 +1028,6 @@ export default function App() {
                       onClick={openEditLayout}
                     >
                       Edit
-                    </Menu.Item>
-                    <Menu.Item
-                      leftSection={<MdSwapHoriz />}
-                      rightSection={resizeEnabled && <MdCheck size={16} />}
-                      closeMenuOnClick={false}
-                      onClick={() => setResizeEnabled((current) => !current)}
-                    >
-                      Resize
                     </Menu.Item>
                     <Menu.Item
                       color="red"
@@ -925,7 +1131,7 @@ export default function App() {
         <Notification
           icon={<MdCallMerge size={18} />}
           title="Merge"
-          onClose={stopMerge}
+          withCloseButton={false}
           withBorder
           style={{
             position: "fixed",

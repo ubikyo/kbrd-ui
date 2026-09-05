@@ -9,6 +9,9 @@ import {
 } from "@mantine/core";
 
 export const theme = createTheme({
+  // Mantine's default `:focus-visible` style draws a 2px outline around
+  // interactive elements; the app doesn't want that ring.
+  focusRing: "never",
   components: {
     NumberInput: NumberInput.extend({
       styles: {

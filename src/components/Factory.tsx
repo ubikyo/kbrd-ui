@@ -22,6 +22,8 @@ import {
   type MergeGroups,
 } from "../types/layout";
 import {
+  cellRect,
+  cellSizeMm,
   gridSizeMm,
   groupOf,
   groupsShareEdge,
@@ -32,6 +34,7 @@ import {
   pitchMm,
   primaryOf,
   remainingUnitsInRow,
+  shareEdge,
   type CellRect,
 } from "../utils/layout";
 import LayoutItem, { ResizeGrip } from "./LayoutItem";
@@ -72,6 +75,15 @@ type Props = LayoutSettings & {
   // `LayoutCellProperties`'s Actions menu and `App`'s Notification/STOP.
   mergeSourceIndex: number | null;
   onMergeWith: (target: number) => void;
+  // A row's trailing empty space (or a fully empty row), selected instead
+  // of a real cell — mutually exclusive with `selectedCellIndex`. Lets a
+  // copied plugin be pasted straight into space nothing has claimed yet.
+  selectedEmptyRow: number | null;
+  onSelectEmpty: (row: number) => void;
+  // While a merge is in progress, clicking `row`'s empty space instead of
+  // a cell grows the merge into it — a brand-new, plugin-less cell is
+  // created there and merged in, rather than requiring one be typed first.
+  onMergeWithEmpty: (row: number) => void;
   // The physical screen itself (the white outline) selected as its own
   // target — mutually exclusive with a cell — for `App`'s Layout/Layer
   // Actions menu (Add/Edit/Delete), the same way selecting a cell shows
@@ -114,11 +126,14 @@ type Props = LayoutSettings & {
  * mode (dropping on empty space creates a brand new cell there instead),
  * and, once a cell is a Key, an Invoke/Display plugin can be dropped onto
  * it while in Mapping mode. Adjacent cells can also be merged into one
- * (see the Actions menu in Layout mode); every member of a merge shows
- * and edits the same `GridCell`, the group's smallest index (`primaryOf`).
- * Dropping a plugin selects the cell; clicking one does too, unless a
- * merge is in progress, in which case clicking a valid neighbour
- * completes it.
+ * (see the Actions menu in Layout mode) — including a row's still-empty
+ * space, which becomes a brand-new, plugin-less cell as part of the merge
+ * rather than needing one typed first; every member of a merge shows and
+ * edits the same `GridCell`, the group's smallest index (`primaryOf`).
+ * Dropping a plugin selects the cell; clicking one does too (and clicking
+ * a row's empty space selects *that*, so a copied plugin can be pasted
+ * straight onto it), unless a merge is in progress, in which case clicking
+ * a valid neighbour — cell or empty space alike — completes it.
  * The whole grid — cells, their merges, which populate each row — is
  * autosaved onto the current layer's own `factory_layout` (see the
  * effect in `App`) and reloaded whenever the user switches layer, as
@@ -140,6 +155,9 @@ export default function Factory({
   onSelectCell,
   mergeSourceIndex,
   onMergeWith,
+  selectedEmptyRow,
+  onSelectEmpty,
+  onMergeWithEmpty,
   isBoardSelected,
   onSelectBoard,
   resizeEnabled,
@@ -348,6 +366,51 @@ export default function Factory({
       return;
     }
     onSelectCell(selectedCellIndex === primary ? null : primary);
+  }
+
+  // The rect a brand-new cell would occupy if `row`'s empty space were
+  // used right now — the same spot and up-to-1U size `handleRowDrop`
+  // gives a dropped Layout plugin — used to test whether merging into it
+  // would actually reach `mergeSourceIndex`'s group.
+  function pendingCellRect(row: number): CellRect | null {
+    const remaining = remainingUnitsInRow(
+      row,
+      rows,
+      cells,
+      physicalWidthMm,
+      unitMm,
+      gapMm,
+    );
+    if (remaining < MIN_UNIT) return null;
+    const slots = layoutRow(rows[row] ?? [], cells, unitMm, gapMm);
+    const last = slots[slots.length - 1];
+    const x = last ? last.x + last.width + gapMm : 0;
+    const { width } = cellSizeMm(
+      defaultGridCell(Math.min(1, remaining)),
+      unitMm,
+      gapMm,
+    );
+    return { x, y: row * rowPitch, width, height: unitMm };
+  }
+
+  function handleEmptyClick(
+    row: number,
+    event: ReactMouseEvent<SVGGElement>,
+  ) {
+    // Same as `handleClick` — never also a click on the board behind it.
+    event.stopPropagation();
+    if (mergeSourceIndex !== null) {
+      const targetRect = pendingCellRect(row);
+      if (!targetRect) return;
+      const sourceRects = groupOf(mergeSourceIndex, mergeGroups).map((id) =>
+        cellRect(id, rows, cells, unitMm, gapMm),
+      );
+      if (sourceRects.some((rect) => shareEdge(rect, targetRect, gapMm))) {
+        onMergeWithEmpty(row);
+      }
+      return;
+    }
+    onSelectEmpty(row);
   }
 
   function handleCellDrop(index: number, event: DragEvent<SVGGElement>) {
@@ -561,9 +624,12 @@ export default function Factory({
                       width: emptyWidth,
                       height: unitMm,
                     }}
+                    isEmpty
+                    isSelected={selectedEmptyRow === row}
                     isDropTarget={
                       dropTarget?.kind === "row" && dropTarget.row === row
                     }
+                    onClick={(event) => handleEmptyClick(row, event)}
                     onDragOver={(event) => handleRowDragOver(row, event)}
                     onDragLeave={() =>
                       handleDragLeave({ kind: "row", row })
