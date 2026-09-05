@@ -589,6 +589,11 @@ export function useDisplayGrid(params: {
             typeId: survivor.typeId,
             typeConfig: survivor.typeConfig,
             pluginIds: survivor.pluginIds,
+            // A fresh reference, same as any other Layout-plugin
+            // assignment — see `GridCell.keyRef` — rather than the
+            // division's own, now that it's collapsing back into a
+            // plain top-level cell.
+            keyRef: crypto.randomUUID(),
             divide: undefined,
           },
         };
@@ -691,10 +696,14 @@ export function useDisplayGrid(params: {
       ...current,
       [index]: {
         ...current[index],
+        // Division 0's own `keyRef` is deliberately not carried over from
+        // the cell being divided — `createDivideGrid` mints it a fresh one
+        // regardless of what's passed here (see its own docblock).
         divide: createDivideGrid(cols, divideRows, {
           typeId,
           typeConfig,
           pluginIds,
+          keyRef: null,
         }),
       },
     }));
@@ -721,12 +730,17 @@ export function useDisplayGrid(params: {
     });
   }
 
+  // Each paste target gets its own fresh `keyRef` (see `GridCell.keyRef`)
+  // rather than inheriting the copied cell's — pasting the same content
+  // onto two different cells must never leave them both pointing real
+  // Mapping-mode plugins at the same reference.
   function applyPasteOntoCell(id: number) {
     if (!copiedCell) return;
     changeCell(id, {
       typeId: copiedCell.typeId,
       typeConfig: { ...copiedCell.typeConfig },
       pluginIds: [...copiedCell.pluginIds],
+      keyRef: crypto.randomUUID(),
     });
   }
 
@@ -736,6 +750,7 @@ export function useDisplayGrid(params: {
       typeId: copiedCell.typeId,
       typeConfig: { ...copiedCell.typeConfig },
       pluginIds: [...copiedCell.pluginIds],
+      keyRef: crypto.randomUUID(),
     });
   }
 
@@ -782,6 +797,7 @@ export function useDisplayGrid(params: {
           typeId: copiedCell.typeId,
           typeConfig: { ...copiedCell.typeConfig },
           pluginIds: [...copiedCell.pluginIds],
+          keyRef: crypto.randomUUID(),
           unit: copiedCell.unit,
         },
       }));
@@ -806,6 +822,10 @@ export function useDisplayGrid(params: {
     }
   }
 
+  // Assigning (or re-assigning, onto a different kind) a Layout plugin
+  // always mints a fresh `keyRef` — see `GridCell.keyRef` — so whatever
+  // Mapping-mode plugins get dropped on it next attach to *this* instance,
+  // never to whatever a previous kind change or a stale save left behind.
   function applyLayoutPluginToCell(
     id: number,
     pluginId: string,
@@ -817,6 +837,7 @@ export function useDisplayGrid(params: {
         ...defaultGridCell(current[id]?.unit),
         typeId: pluginId,
         typeConfig: { ...defaultConfig },
+        keyRef: crypto.randomUUID(),
       },
     }));
   }
@@ -831,6 +852,7 @@ export function useDisplayGrid(params: {
       typeId: pluginId,
       typeConfig: { ...defaultConfig },
       pluginIds: [],
+      keyRef: crypto.randomUUID(),
     });
   }
 

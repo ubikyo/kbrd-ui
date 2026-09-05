@@ -9,13 +9,13 @@ import {
   MdEdit,
   MdGridOn,
 } from "react-icons/md";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DisplayGridApi } from "../classes/useDisplayGrid";
 import type { EntityEditorsApi } from "../classes/useEntityEditors";
 import { useLayoutShortcuts } from "../classes/useLayoutShortcuts";
 import { useUndoHistory } from "../classes/useUndoHistory";
-import type { LayerData } from "../types/layer";
+import type { KeyPlugin, LayerData } from "../types/layer";
 import type { LayoutData, LayoutSettings } from "../types/layout";
 import Display from "./Display";
 import type { ContextMenuTarget } from "./Display";
@@ -50,17 +50,22 @@ type Props = {
   // the equivalent flags for the Layout/Layer editors and the delete
   // confirmation, all three owned by `App` alongside Settings.
   settingsOpened: boolean;
+  // Saves a freshly-created `KeyPlugin` back onto the layer — see
+  // `Display`'s own docblock on `layer`/`onChangePlugins`: only its
+  // Mapping-mode drop handling actually reads either of these.
+  onChangePlugins: (plugins: KeyPlugin[]) => void;
 };
 
 /**
- * Everything around `<Display>`'s own SVG — the Layout/Mapping switch,
- * Resize, the right-click context menu (cell/division/row/display) and
- * Divide — plus the grid-editing keyboard shortcuts and undo history that
- * act on the same selection. `App` only ever hands this the display's own
- * settings, the current layout/layer (read-only, for a few menu items'
- * disabled state) and `useDisplayGrid`/`useEntityEditors`'s own handles;
- * everything about *how* the display reacts to a mode, a shortcut or a
- * menu click stays in here rather than in `App`.
+ * The display pane's own mode switch, plus `<Display>` itself and every
+ * bit of chrome around it (Resize, the right-click context menu, Divide,
+ * the grid-editing keyboard shortcuts/undo history). Both modes share the
+ * exact same `<Display>` — its synthetic Unit grid *is* "the layout": a
+ * Key cell/division is where a Render/Invoke plugin actually gets dropped
+ * in Mapping mode too (see `Display`'s own `keyPluginsFor`/
+ * `handleCellDrop`), not a separate real-geometry view. Only Resize and
+ * the context menu/Divide are Layout-only chrome (Mapping mode has
+ * nothing of the sort to act on — see `Display`'s own `mode` checks).
  */
 export default function Composer({
   layoutSettings,
@@ -71,6 +76,7 @@ export default function Composer({
   grid,
   entityEditors,
   settingsOpened,
+  onChangePlugins,
 }: Props) {
   const [divideModalOpened, setDivideModalOpened] = useState(false);
   // The display's own right-click context menu — replaces the old floating
@@ -116,26 +122,41 @@ export default function Composer({
     pasteToEmptyRow: grid.pasteToEmptyRow,
   });
 
+  // Opt/Alt+Tab toggles Layout/Mapping — most desktop window managers grab
+  // plain Alt+Tab for their own app switcher before it ever reaches the
+  // browser, so this only fires where that isn't the case.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.altKey && event.key === "Tab") {
+        event.preventDefault();
+        onModeChange(mode === "layout" ? "mapping" : "layout");
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mode, onModeChange]);
+
   // `Display`'s `onContextMenu` — a right-click anywhere on the display.
   // `Display` has already made whatever selection this right-click
   // implies by the time this fires (preserving a multi-selection the
   // clicked cell/division was already part of, rather than always
   // collapsing it to just that one — see its own context-menu handlers),
-  // so this only needs to open the menu itself, at the click.
+  // so this only needs to open the menu itself, at the click. Layout-only
+  // in practice: `Display` never reports one in Mapping mode.
   function handleContextMenu(x: number, y: number, target: ContextMenuTarget) {
     setContextMenu({ x, y, kind: target.kind });
   }
 
   return (
     <Box h="100%" style={{ position: "relative", overflow: "hidden" }}>
-      {/* TODO(preview-rebuild): Display temporarily stands in for Preview
-          while that component is redesigned from scratch. */}
       <Display
         {...layoutSettings}
         mode={mode}
         rows={grid.rows}
         cells={grid.cells}
         onCellsChange={grid.setCells}
+        layer={layer}
+        onChangePlugins={onChangePlugins}
         onCreateCell={grid.createCell}
         onAssignLayoutPlugin={grid.assignLayoutPlugin}
         onAssignLayoutPluginToDivision={grid.assignLayoutPluginToDivision}
@@ -173,13 +194,10 @@ export default function Composer({
         }}
       />
 
-      {/* Resizing is a view option, not a per-layout action, so it lives
-          here as a persistent switch, aligned right at the same level as
-          the Layout/Mapping switch on the left. Also toggled by Tab (see
-          `useLayoutShortcuts`) — Layout mode only: Mapping mode has no
-          row/cell structure to resize in the first place, so the switch
-          (and whatever it was left at) is hidden rather than just
-          disabled. */}
+      {/* Layout-only — Mapping mode hides it (see `Display`'s own
+          `mode` check for the grip itself) since there's no grid
+          structure left to resize there, only plugin content. Also
+          toggled by Tab (see `useLayoutShortcuts`). */}
       {mode === "layout" && (
         <Switch
           label="Resize"
@@ -226,82 +244,68 @@ export default function Composer({
             />
           </Menu.Target>
           <Menu.Dropdown>
-            {contextMenu.kind === "cell" &&
-              mode === "layout" &&
-              grid.selectedCellIndices.length > 0 && (
-                <>
-                  {grid.selectedCellIndices.length === 1 &&
-                    grid.layoutSelection && (
-                      <>
-                        {grid.layoutSelection.isMerged && (
-                          <Menu.Item leftSection={<MdCallSplit />} onClick={grid.unmerge}>
-                            Unmerge
-                          </Menu.Item>
-                        )}
-                        {!grid.layoutSelection.isMerged &&
-                          !grid.layoutSelection.cell.divide && (
-                            <Menu.Item
-                              leftSection={<MdGridOn />}
-                              onClick={() => setDivideModalOpened(true)}
-                            >
-                              Divide
-                            </Menu.Item>
-                          )}
-                        <Menu.Divider />
-                        <Menu.Item
-                          leftSection={<MdContentCopy />}
-                          rightSection={<ShortcutHint>{MOD_KEY_LABEL}C</ShortcutHint>}
-                          onClick={grid.copySelectedCell}
-                        >
-                          Copy
+            {contextMenu.kind === "cell" && grid.selectedCellIndices.length > 0 && (
+              <>
+                {grid.selectedCellIndices.length === 1 &&
+                  grid.layoutSelection && (
+                    <>
+                      {grid.layoutSelection.isMerged && (
+                        <Menu.Item leftSection={<MdCallSplit />} onClick={grid.unmerge}>
+                          Unmerge
                         </Menu.Item>
-                        {/* Applies onto this same cell — see
-                            `canPaste`/`pasteToEmptyRow`: since it's the
-                            exact cell just copied, that's never a
-                            meaningful overwrite, so this lands a new
-                            sibling in its row's own trailing empty space
-                            instead, without first re-selecting that space
-                            explicitly. A *different*, non-empty cell
-                            would instead ask before overwriting it — see
-                            `Confirmation` below. */}
-                        <Menu.Item
-                          leftSection={<MdContentPaste />}
-                          rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
-                          disabled={!grid.canPaste}
-                          onClick={grid.pasteToEmptyRow}
-                        >
-                          Paste
-                        </Menu.Item>
-                        {grid.layoutSelection.canRemove && (
+                      )}
+                      {!grid.layoutSelection.isMerged &&
+                        !grid.layoutSelection.cell.divide && (
                           <Menu.Item
-                            color="red"
-                            leftSection={<MdDelete />}
-                            rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                            onClick={() => grid.removeCell(grid.layoutSelection!.index)}
+                            leftSection={<MdGridOn />}
+                            onClick={() => setDivideModalOpened(true)}
                           >
-                            Delete
+                            Divide
                           </Menu.Item>
                         )}
-                      </>
-                    )}
-                  {grid.selectedCellIndices.length > 1 &&
-                    grid.isCellSelectionContiguous && (
-                      <>
-                        <Menu.Item leftSection={<MdCallMerge />} onClick={grid.mergeSelectedCells}>
-                          Merge
-                        </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        leftSection={<MdContentCopy />}
+                        rightSection={<ShortcutHint>{MOD_KEY_LABEL}C</ShortcutHint>}
+                        onClick={grid.copySelectedCell}
+                      >
+                        Copy
+                      </Menu.Item>
+                      {/* Applies onto this same cell — see
+                          `canPaste`/`pasteToEmptyRow`: since it's the
+                          exact cell just copied, that's never a
+                          meaningful overwrite, so this lands a new
+                          sibling in its row's own trailing empty space
+                          instead, without first re-selecting that space
+                          explicitly. A *different*, non-empty cell
+                          would instead ask before overwriting it — see
+                          `Confirmation` below. */}
+                      <Menu.Item
+                        leftSection={<MdContentPaste />}
+                        rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}
+                        disabled={!grid.canPaste}
+                        onClick={grid.pasteToEmptyRow}
+                      >
+                        Paste
+                      </Menu.Item>
+                      {grid.layoutSelection.canRemove && (
                         <Menu.Item
                           color="red"
                           leftSection={<MdDelete />}
                           rightSection={<ShortcutHint>⌫</ShortcutHint>}
-                          onClick={grid.deleteSelectedCells}
+                          onClick={() => grid.removeCell(grid.layoutSelection!.index)}
                         >
                           Delete
                         </Menu.Item>
-                      </>
-                    )}
-                  {grid.selectedCellIndices.length > 1 &&
-                    !grid.isCellSelectionContiguous && (
+                      )}
+                    </>
+                  )}
+                {grid.selectedCellIndices.length > 1 &&
+                  grid.isCellSelectionContiguous && (
+                    <>
+                      <Menu.Item leftSection={<MdCallMerge />} onClick={grid.mergeSelectedCells}>
+                        Merge
+                      </Menu.Item>
                       <Menu.Item
                         color="red"
                         leftSection={<MdDelete />}
@@ -310,12 +314,23 @@ export default function Composer({
                       >
                         Delete
                       </Menu.Item>
-                    )}
-                </>
-              )}
+                    </>
+                  )}
+                {grid.selectedCellIndices.length > 1 &&
+                  !grid.isCellSelectionContiguous && (
+                    <Menu.Item
+                      color="red"
+                      leftSection={<MdDelete />}
+                      rightSection={<ShortcutHint>⌫</ShortcutHint>}
+                      onClick={grid.deleteSelectedCells}
+                    >
+                      Delete
+                    </Menu.Item>
+                  )}
+              </>
+            )}
 
             {contextMenu.kind === "division" &&
-              mode === "layout" &&
               grid.selectedDivisionIndices.length > 0 && (
                 <>
                   {grid.selectedDivisionIndices.length === 1 &&
@@ -384,7 +399,7 @@ export default function Composer({
                 </>
               )}
 
-            {contextMenu.kind === "row" && mode === "layout" && grid.emptySelection && (
+            {contextMenu.kind === "row" && grid.emptySelection && (
               <Menu.Item
                 leftSection={<MdContentPaste />}
                 rightSection={<ShortcutHint>{MOD_KEY_LABEL}V</ShortcutHint>}

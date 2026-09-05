@@ -2,12 +2,14 @@ import { Box } from "@mantine/core";
 import { useEffect, useState } from "react";
 import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 
+import { addKeyPlugin } from "../api/layers";
 import { FALLBACK_HEIGHT, FALLBACK_WIDTH } from "../api/device";
 import { useCellMove } from "../classes/useCellMove";
 import { useCellResize } from "../classes/useCellResize";
 import { useDevicePolling } from "../classes/useDevicePolling";
 import { useElementSize } from "../classes/useElementSize";
 import { isMappingTarget, isMappingVisible, pluginById } from "../plugins/registry";
+import type { KeyPlugin, LayerData } from "../types/layer";
 import {
   defaultGridCell,
   MIN_UNIT,
@@ -67,6 +69,13 @@ type Props = LayoutSettings & {
   onCellsChange: (
     update: (current: Record<number, GridCell>) => Record<number, GridCell>,
   ) => void;
+  // The current layer, and how to save a freshly-created `KeyPlugin` back
+  // onto it — `null`/omitted-effect while there's no layer yet (nothing to
+  // attach to, same as `isMappingTarget` already gating an untyped cell).
+  // Only Mapping mode's own drop handling (`handleCellDrop`/
+  // `handleDivisionDrop`) actually reads either of these.
+  layer: LayerData | null;
+  onChangePlugins: (plugins: KeyPlugin[]) => void;
   // Drops a freshly-typed cell onto the end of `row`'s empty space —
   // dropping a Layout plugin where there's no cell yet.
   onCreateCell: (row: number, cell: GridCell) => void;
@@ -161,22 +170,28 @@ type Props = LayoutSettings & {
  * Every cell — and a row's trailing empty space — is a drop target for
  * the plugins dragged from `<Inspector>`'s Plugins tab: a Layout plugin
  * (kbrd.layout-key / kbrd.layout-space) sets a cell's kind while in Layout
- * mode (dropping on empty space creates a brand new cell there instead),
- * and, once a cell is a Key, an Invoke/Display plugin can be dropped onto
- * it while in Mapping mode. Adjacent cells can also be merged into one
- * (see the Actions menu in Layout mode) — including a row's still-empty
- * space, which becomes a brand-new, plugin-less cell as part of the merge
- * rather than needing one typed first; every member of a merge shows and
- * edits the same `GridCell`, the group's smallest index (`primaryOf`).
+ * mode (dropping on empty space creates a brand new cell there instead,
+ * minting it a fresh `keyRef` — see `GridCell.keyRef`), and, once a cell
+ * is a Key, a Render/Invoke plugin can be dropped onto it while in
+ * Mapping mode — a real `KeyPlugin`, attached to that cell's own `keyRef`
+ * (see `keyPluginsFor`/`attachMappingPlugin`), whose content then draws
+ * right inside the cell's own shape (see `LayoutCell`'s own `keyPlugins`).
+ * Adjacent cells can also be merged into one (see the Actions menu in
+ * Layout mode) — including a row's still-empty space, which becomes a
+ * brand-new, plugin-less cell as part of the merge rather than needing
+ * one typed first; every member of a merge shows and edits the same
+ * `GridCell`, the group's smallest index (`primaryOf`).
  * Dropping a plugin selects the cell; clicking one does too (and clicking
  * a row's empty space selects *that*, so a copied plugin can be pasted
  * straight onto it), unless a merge is in progress, in which case clicking
  * a valid neighbour — cell or empty space alike — completes it.
- * The whole grid — cells, their merges, which populate each row — is
- * autosaved onto the current layer's own `factory_layout` (see the
- * effect in `App`) and reloaded whenever the user switches layer, as
- * one opaque JSON blob rather than per-key rows: these synthetic cells
- * still have no real `key_ref` of their own to save the usual way.
+ * The grid's own disposition — cells, their merges, which populate each
+ * row — is autosaved onto the current layer's own `factory_layout` (see
+ * the effect in `App`) and reloaded whenever the user switches layer, as
+ * one opaque JSON blob rather than per-key rows: each cell/division's own
+ * `typeId`/`typeConfig`/`unit`/`keyRef` lives there. The real `KeyPlugin`
+ * records a `keyRef` points at are separate — ordinary per-layer rows,
+ * saved (and reloaded) the usual way, same as any other plugin instance.
  */
 export default function Display({
   unitMm,
@@ -187,6 +202,8 @@ export default function Display({
   rows,
   cells,
   onCellsChange,
+  layer,
+  onChangePlugins,
   onCreateCell,
   onAssignLayoutPlugin,
   onAssignLayoutPluginToDivision,
@@ -298,6 +315,39 @@ export default function Display({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // This cell/division's own attached Render/Invoke plugins (see
+  // `GridCell.keyRef`), resolved from the current layer's real
+  // `plugins` — same `enabled`/`position` convention `<Preview>` already
+  // reads them by. `keyRef` is `undefined`/`null` for a cell that's
+  // never had a Layout plugin assigned since this field existed (or has
+  // none at all), which trivially has nothing attached either way.
+  function keyPluginsFor(keyRef: string | null | undefined): KeyPlugin[] {
+    if (!keyRef || !layer) return [];
+    return layer.plugins
+      .filter((instance) => instance.enabled && instance.key_ref === keyRef)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  // Actually creates the real `KeyPlugin` record a Render/Invoke plugin
+  // dropped onto a Key cell/division in Mapping mode attaches to — see
+  // `handleCellDrop`/`handleDivisionDrop`. `keyRef` is whatever the target
+  // cell already has, or a freshly minted one passed down from there for
+  // a cell that predates this field (saved before `GridCell.keyRef`
+  // existed, or one long-lived enough that this is somehow still unset).
+  async function attachMappingPlugin(keyRef: string, pluginId: string) {
+    if (!layer) return;
+    const plugin = pluginById(pluginId);
+    if (!plugin) return;
+    const created = await addKeyPlugin(
+      layer.id,
+      keyRef,
+      plugin.id,
+      plugin.version,
+      plugin.defaultConfig,
+    );
+    onChangePlugins([...layer.plugins, created]);
+  }
+
   function handleCellDragOver(id: number, event: DragEvent<SVGGElement>) {
     if (!event.dataTransfer.types.includes(PLUGIN_DRAG_TYPE)) return;
     event.preventDefault();
@@ -376,11 +426,16 @@ export default function Display({
     ) {
       return;
     }
+    // A cell saved before `GridCell.keyRef` existed has none yet — mint
+    // one now rather than losing the drop, so there's still something
+    // real for the `KeyPlugin` below to attach to.
+    const keyRef = cell.keyRef ?? crypto.randomUUID();
     onCellsChange((current) => ({
       ...current,
-      [primary]: { ...cell, pluginIds: [...cell.pluginIds, plugin.id] },
+      [primary]: { ...cell, keyRef, pluginIds: [...cell.pluginIds, plugin.id] },
     }));
     onSelectCell(primary);
+    void attachMappingPlugin(keyRef, plugin.id);
   }
 
   function handleRowDragOver(row: number, event: DragEvent<SVGGElement>) {
@@ -415,6 +470,7 @@ export default function Display({
       ...defaultGridCell(Math.min(1, remaining)),
       typeId: plugin.id,
       typeConfig: { ...plugin.defaultConfig },
+      keyRef: crypto.randomUUID(),
     });
   }
 
@@ -489,6 +545,7 @@ export default function Display({
     ) {
       return;
     }
+    const keyRef = divCell.keyRef ?? crypto.randomUUID();
     onCellsChange((current) => {
       const parent = current[parentId];
       const existing = parent?.divide?.cells[primary];
@@ -501,13 +558,14 @@ export default function Display({
             ...parent.divide,
             cells: {
               ...parent.divide.cells,
-              [primary]: { ...existing, pluginIds: [...existing.pluginIds, plugin.id] },
+              [primary]: { ...existing, keyRef, pluginIds: [...existing.pluginIds, plugin.id] },
             },
           },
         },
       };
     });
     onSelectDivision({ parentId, subId: primary });
+    void attachMappingPlugin(keyRef, plugin.id);
   }
 
   // Right-click handlers — select the target (mirrors the equivalent
@@ -677,6 +735,7 @@ export default function Display({
                           handleDragLeave({ kind: "division", parentId, subId })
                         }
                         onDivisionDrop={handleDivisionDrop}
+                        keyPluginsFor={keyPluginsFor}
                       />
                     );
                   }
@@ -699,6 +758,7 @@ export default function Display({
                       labelBounds={merged?.labelBounds}
                       typeId={cell?.typeId}
                       pluginIds={cell?.pluginIds}
+                      keyPlugins={keyPluginsFor(cell?.keyRef)}
                       unit={hasContent ? cell?.unit : undefined}
                       isEmpty={!hasContent}
                       isSelected={selectedCellIndices.includes(primary)}

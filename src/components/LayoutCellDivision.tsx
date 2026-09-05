@@ -1,6 +1,7 @@
 import type { DragEvent, MouseEvent as ReactMouseEvent, ReactElement } from "react";
 
 import { isMappingVisible } from "../plugins/registry";
+import type { KeyPlugin } from "../types/layer";
 import type { DivideGrid } from "../types/layout";
 import {
   divisionCellRect,
@@ -43,6 +44,10 @@ type Props = {
     subId: number,
     event: DragEvent<SVGGElement>,
   ) => void;
+  // Resolves a division's own attached Render/Invoke plugins from its
+  // `keyRef` — see `Display`'s own `keyPluginsFor`, the one place that
+  // actually knows about `layer.plugins`.
+  keyPluginsFor: (keyRef: string | null | undefined) => KeyPlugin[];
 };
 
 /**
@@ -71,6 +76,7 @@ export default function LayoutCellDivision({
   onDivisionDragOver,
   onDivisionDragLeave,
   onDivisionDrop,
+  keyPluginsFor,
 }: Props) {
   const count = divide.cols * divide.rows;
   const cols = divide.cols;
@@ -213,6 +219,7 @@ export default function LayoutCellDivision({
           labelBounds={outline?.labelBounds}
           typeId={divCell?.typeId}
           pluginIds={divCell?.pluginIds}
+          keyPlugins={keyPluginsFor(divCell?.keyRef)}
           unit={unit}
           isEmpty={!hasContent}
           isSelected={isSelected}

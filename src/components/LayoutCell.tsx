@@ -1,6 +1,9 @@
+import { useId } from "react";
 import type { DragEvent, MouseEvent, PointerEvent } from "react";
 
 import { pluginById } from "../plugins/registry";
+import { upConfig } from "../plugins/state";
+import type { KeyPlugin } from "../types/layer";
 import type { CellRect } from "../utils/layout";
 
 const LABEL_FONT_SIZE_MM = 2.5;
@@ -74,6 +77,14 @@ type Props = {
   // cell shape stays but the Layout-only "1U · Key" caption underneath it
   // doesn't (see `Display`'s own `mode` prop).
   showText?: boolean;
+  // The real `KeyPlugin` instances attached to this cell's own `keyRef`
+  // (see `GridCell.keyRef`) — already resolved and sorted by `Display`,
+  // which is the one that actually knows about `layer.plugins`. Drawn in
+  // Mapping mode in place of the text label, each one's own `Renderer`
+  // clipped to this cell's shape — the resting ("up") look only, no
+  // press/down-state simulation (unlike `<Preview>`'s own interactive
+  // keyboard, nothing here fakes pressing a key).
+  keyPlugins?: KeyPlugin[];
   onClick?: (event: MouseEvent<SVGGElement>) => void;
   // Right-click — opens this cell's own context menu (see `App`'s
   // `contextMenu`), after selecting it the same way a left click does.
@@ -107,6 +118,7 @@ export default function LayoutCell({
   isDropTarget = false,
   showBorder = true,
   showText = true,
+  keyPlugins = [],
   onClick,
   onContextMenu,
   onDragOver,
@@ -114,6 +126,7 @@ export default function LayoutCell({
   onDrop,
   onPointerDown,
 }: Props) {
+  const clipId = useId();
   const type = typeId ? pluginById(typeId) : null;
   const stroke = isDropTarget
     ? "var(--kbrd-border-alt)"
@@ -160,6 +173,41 @@ export default function LayoutCell({
           height={bounds.height}
           {...shapeProps}
         />
+      )}
+      {!showText && keyPlugins.length > 0 && (
+        <>
+          <defs>
+            <clipPath id={clipId}>
+              {path ? (
+                <path d={path} />
+              ) : (
+                <rect
+                  x={bounds.x}
+                  y={bounds.y}
+                  width={bounds.width}
+                  height={bounds.height}
+                />
+              )}
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#${clipId})`} style={{ pointerEvents: "none" }}>
+            {keyPlugins.map((instance) => {
+              const plugin = pluginById(instance.plugin_id);
+              if (!plugin) return null;
+              const Renderer = plugin.Renderer;
+              return (
+                <Renderer
+                  key={instance.id}
+                  config={upConfig(instance.config)}
+                  x={bounds.x}
+                  y={bounds.y}
+                  width={bounds.width}
+                  height={bounds.height}
+                />
+              );
+            })}
+          </g>
+        </>
       )}
       {showText && sizeLabel && (
         <text

@@ -7,17 +7,16 @@ import {
 } from "../api/layers";
 import { pluginById, plugins } from "../plugins/registry";
 import type { KeyboardLayout } from "../types/layout";
-import type {
-  KeyPlugin,
-  KeyProperty,
-  KeyPropertyConfig,
-  LayerData,
+import {
+  BACKGROUND_REF,
+  type KeyPlugin,
+  type KeyProperty,
+  type KeyPropertyConfig,
+  type LayerData,
 } from "../types/layer";
 import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
 import { usePendingSaves } from "../utils/usePendingSaves";
 import { DEFAULT_KEY_PROPERTIES } from "./inspectorHelpers";
-
-const BACKGROUND_REF = "__background__";
 
 /**
  * Everything behind `<Inspector>`'s Plugins/Properties tabs for

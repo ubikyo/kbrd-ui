@@ -120,10 +120,10 @@ export const UNIT_STEP = 0.25;
 /**
  * One cell in `<Display>`'s grid: a plugin dropped on the display. Synthetic
  * and local for now — see the TODO on `Display` — identified by its own
- * stable id (see `nextCellId`), not by a real geometry `key_ref`. There
- * is no "default" cell: a row starts with none at all, and one only
- * exists once a Layout plugin (kbrd.layout-key / kbrd.layout-space) is
- * actually dropped on the display — see `rows` in `App`.
+ * stable id (see `nextCellId`). There is no "default" cell: a row starts
+ * with none at all, and one only exists once a Layout plugin
+ * (kbrd.layout-key / kbrd.layout-space) is actually dropped on the display
+ * — see `rows` in `App`.
  */
 export type GridCell = {
   // Plugin id of the attached kbrd.layout-key / kbrd.layout-space instance.
@@ -132,6 +132,19 @@ export type GridCell = {
   typeConfig: Record<string, unknown>;
   // Invoke/Display plugins attached in Mapping mode.
   pluginIds: string[];
+  // This cell's own stable reference for the real `KeyPlugin` records a
+  // Render/Invoke plugin dropped onto it in Mapping mode attaches to (see
+  // `KeyPlugin.key_ref`) — unrelated to `id`/`nextCellId`, which is only
+  // this synthetic grid's own bookkeeping and can be reused once a cell is
+  // deleted. Generated fresh (`crypto.randomUUID()`) the moment a Layout
+  // plugin is first assigned to this cell, and again whenever its kind
+  // changes to a different Layout plugin — `null` until then, since there's
+  // nothing yet for a dropped plugin to attach to. Not preserved across
+  // Divide/Merge: each resulting cell/division gets its own fresh one
+  // rather than inheriting the original's, so a stale reference never
+  // silently keeps pointing at plugins that no longer make sense for the
+  // new shape.
+  keyRef: string | null;
   // Keycap width, as a multiple of the display's Unit — any multiple of
   // `UNIT_STEP` from `MIN_UNIT` up.
   unit: number;
@@ -148,6 +161,7 @@ export function defaultGridCell(unit = MIN_UNIT): GridCell {
     typeId: null,
     typeConfig: {},
     pluginIds: [],
+    keyRef: null,
     unit,
   };
 }
@@ -160,10 +174,12 @@ export type DivisionCell = {
   typeId: string | null;
   typeConfig: Record<string, unknown>;
   pluginIds: string[];
+  // Same role as `GridCell.keyRef`, scoped to this division — see there.
+  keyRef: string | null;
 };
 
 export function defaultDivisionCell(): DivisionCell {
-  return { typeId: null, typeConfig: {}, pluginIds: [] };
+  return { typeId: null, typeConfig: {}, pluginIds: [], keyRef: null };
 }
 
 /**
@@ -205,11 +221,16 @@ export function createDivideGrid(
   return { cols, rows, cells, mergeGroups: [] };
 }
 
+// Division `0`'s own `keyRef` is deliberately NOT copied from `original` —
+// see `GridCell.keyRef`'s docblock on why Divide always mints a fresh one
+// instead, even for the one division that otherwise inherits everything
+// else about the cell being divided.
 function cloneDivisionCell(cell: DivisionCell): DivisionCell {
   return {
     typeId: cell.typeId,
     typeConfig: { ...cell.typeConfig },
     pluginIds: [...cell.pluginIds],
+    keyRef: cell.typeId ? crypto.randomUUID() : null,
   };
 }
 

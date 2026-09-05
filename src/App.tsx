@@ -54,8 +54,14 @@ export default function App() {
   const [mode, setMode] = useState<"layout" | "mapping">("layout");
 
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
-  // TODO(preview-rebuild): only the setters are used until <Display> reads
-  // these back to force-render a key/plugin's down state, as <Preview> did.
+  // Forces a specific plugin instance/target key into its "down" look —
+  // set while its own Down-state fields are focused in the Inspector (see
+  // `onPreviewDownPluginChange`/`onPreviewDownTargetChange` there). Only
+  // the setter is ever read: nothing currently renders a "down" look from
+  // the value itself — `<Display>`'s grid only ever draws each plugin's
+  // resting ("up") state (see `LayoutCell`'s own docblock on
+  // `keyPlugins`) — but the Inspector still needs somewhere to record
+  // which plugin/target is focused for a future preview to read.
   const [, setPreviewDownPluginId] = useState<number | null>(null);
   const [, setPreviewDownTarget] = useState<string | null>(null);
   // Mirrors `layer` for the autosave effect below, so that effect only
@@ -86,6 +92,20 @@ export default function App() {
   // well as `<Composer>` (the display's own chrome/shortcuts/undo), so it
   // stays lifted here rather than inside either one.
   const grid = useDisplayGrid({ layoutSettings, gridItemsY });
+
+  // Mapping mode's own "which key" for the Inspector's Plugins/Properties
+  // tabs — whichever cell/division `<Composer>`'s `<Display>` has
+  // selected (the same grid both modes share — see `Display`'s own
+  // docblock), read by its own `keyRef` (see `GridCell.keyRef`): that's
+  // the real reference a Render/Invoke `KeyPlugin` actually attaches to,
+  // not the cell's own synthetic id. `null` while nothing selected has one
+  // yet (an untyped cell, or a fresh save from before this field existed).
+  useEffect(() => {
+    if (mode !== "mapping") return;
+    setSelectedKey(
+      grid.divisionSelection?.cell.keyRef ?? grid.layoutSelection?.cell.keyRef ?? null,
+    );
+  }, [mode, grid.divisionSelection, grid.layoutSelection]);
 
   const keyOps = useKeyOperations({
     layer,
@@ -176,10 +196,11 @@ export default function App() {
     );
   }
 
-  // TODO(preview-rebuild): dropping a plugin onto a key and completing a
-  // duplicate/move operation both used to happen by clicking a key in
-  // <Preview>. Restore that wiring (see git history / Preview.tsx) once
-  // <Display> exposes clickable key/drop targets of its own.
+  // TODO(preview-rebuild): completing a duplicate/move operation
+  // (`keyOps.keyOperation`) used to happen by clicking the destination key
+  // in <Preview> — selecting a Key cell/division in Mapping mode now sets
+  // `selectedKey` the same way (see the effect above), but nothing yet
+  // calls `duplicateKeyPlugins`/`moveKey` when one is armed.
 
   // Autosaves `<Display>`'s disposition onto the current layer's own
   // `factory_layout` — debounced so a drag-resize or a run of clicks
@@ -302,6 +323,7 @@ export default function App() {
               grid={grid}
               entityEditors={entityEditors}
               settingsOpened={settingsOpened}
+              onChangePlugins={changePlugins}
             />
           </Splitter.Pane>
           <Splitter.Pane defaultSize="550px" min="550px">

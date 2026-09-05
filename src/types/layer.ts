@@ -1,5 +1,12 @@
 import type { FactoryLayout } from "./layout";
 
+// The synthetic `key_ref` a Layer-wide (rather than per-key) plugin
+// instance is stored under — shown as "Layer" in the Inspector's own
+// Properties tab (see `useKeyInspector`'s `systemPluginName`), and as the
+// keyboard's own background layer in `Preview` (rendered unclipped,
+// behind every real key).
+export const BACKGROUND_REF = "__background__";
+
 export type KeyPlugin = {
   id: number;
   layer_id: number;
