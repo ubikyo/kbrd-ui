@@ -76,14 +76,23 @@ textarea,
   border: 1px solid var(--kbrd-border-color) !important;
 }
 
+/* The `!important` app-wide default above still wins over an `unstyled`
+   input's own CSS-variable-driven border (transparent) unless overridden
+   with equal specificity — every `ux/` component (Color/Border) relies on
+   `variant="unstyled"` actually having no border/background of its own. */
+.mantine-Input-input[data-variant="unstyled"] {
+  background-color: transparent !important;
+  border: none !important;
+}
+
 .mantine-InputWrapper-label,
 .mantine-Switch-label {
   font-weight: 400 !important;
 }
 
 .property-editor-panel .mantine-Accordion-content {
-  padding-top: var(--mantine-spacing-xl);
-  padding-bottom: var(--mantine-spacing-xl);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .navbar {
