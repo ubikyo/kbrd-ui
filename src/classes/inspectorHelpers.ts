@@ -24,6 +24,7 @@ export const DEFAULT_STATE_CONFIG: KeyStateConfig = {
   backgroundColor: "#00000000",
   borderEnabled: true,
   borderColor: "#808080",
+  borderStyle: "solid",
   borderWidth: 1,
 };
 

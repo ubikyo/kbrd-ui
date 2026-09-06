@@ -60,6 +60,9 @@ export function resolveKeyPropertyConfig(
     backgroundColor: legacy.upBackgroundColor ?? DEFAULT_STATE_CONFIG.backgroundColor,
     borderEnabled: legacy.upBorderEnabled ?? legacy.borderEnabled ?? true,
     borderColor: legacy.upBorderColor ?? DEFAULT_STATE_CONFIG.borderColor,
+    // `borderStyle` never existed in this legacy shape — every key saved
+    // before it did just gets the one look it always had, a solid line.
+    borderStyle: DEFAULT_STATE_CONFIG.borderStyle,
     borderWidth: legacy.upBorderWidth ?? legacy.borderWidth ?? 1,
   };
   const states = [DEFAULT_STATE_NAME];
@@ -72,6 +75,7 @@ export function resolveKeyPropertyConfig(
       backgroundColor: legacy.downBackgroundColor ?? DEFAULT_STATE_CONFIG.backgroundColor,
       borderEnabled: legacy.downBorderEnabled ?? true,
       borderColor: legacy.downBorderColor ?? DEFAULT_STATE_CONFIG.borderColor,
+      borderStyle: DEFAULT_STATE_CONFIG.borderStyle,
       borderWidth: legacy.downBorderWidth ?? 1,
     };
   }

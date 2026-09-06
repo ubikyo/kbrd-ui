@@ -280,19 +280,23 @@ export default function Inspector({
                       <KeyStateFields
                         backgroundColor={activeStateConfig.backgroundColor}
                         borderEnabled={activeStateConfig.borderEnabled}
-                        borderColor={activeStateConfig.borderColor}
-                        borderWidth={activeStateConfig.borderWidth}
+                        border={{
+                          color: activeStateConfig.borderColor,
+                          style: activeStateConfig.borderStyle,
+                          width: activeStateConfig.borderWidth,
+                        }}
                         onBackgroundColorChange={(value) =>
                           patchStateConfig({ backgroundColor: value })
                         }
                         onBorderEnabledChange={(value) =>
                           patchStateConfig({ borderEnabled: value })
                         }
-                        onBorderColorChange={(value) =>
-                          patchStateConfig({ borderColor: value })
-                        }
-                        onBorderWidthChange={(value) =>
-                          patchStateConfig({ borderWidth: value })
+                        onBorderChange={(value) =>
+                          patchStateConfig({
+                            borderColor: value.color,
+                            borderStyle: value.style,
+                            borderWidth: value.width,
+                          })
                         }
                       />
                     </Accordion.Panel>

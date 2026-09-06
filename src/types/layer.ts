@@ -1,3 +1,5 @@
+import type { BorderStyleValue } from "@kbrd/plugins/web";
+
 import type { FactoryLayout } from "./layout";
 
 // The synthetic `key_ref` a Layer-wide (rather than per-key) plugin
@@ -30,6 +32,7 @@ export type KeyStateConfig = {
   backgroundColor: string;
   borderEnabled: boolean;
   borderColor: string;
+  borderStyle: BorderStyleValue;
   borderWidth: number;
 };
 

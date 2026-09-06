@@ -1,89 +1,75 @@
-import { ColorInput, NumberInput, Stack, Switch } from "@mantine/core";
-import { PropertyRow } from "@kbrd/plugins/web";
-
-import { COLOR_SWATCHES, isHexColor } from "../classes/inspectorHelpers";
+import { Switch } from "@mantine/core";
+import { Border, Color, type BorderValue } from "@kbrd/plugins/web";
+import type { CSSProperties } from "react";
 
 type Props = {
   backgroundColor: string;
   borderEnabled: boolean;
-  borderColor: string;
-  borderWidth: number;
+  border: BorderValue;
   onBackgroundColorChange: (value: string) => void;
   onBorderEnabledChange: (value: boolean) => void;
-  onBorderColorChange: (value: string) => void;
-  onBorderWidthChange: (value: number) => void;
+  onBorderChange: (value: BorderValue) => void;
+};
+
+// Bare reset for a plain HTML `<fieldset>`/`<legend>` used as a section
+// grouping here instead of an `Accordion` — no collapse/expand, and (like
+// every `ux/` component it groups) none of the browser's own default
+// border/padding chrome.
+const FIELDSET_STYLE: CSSProperties = {
+  border: "none",
+  margin: 0,
+  padding: 0,
+};
+
+const LEGEND_STYLE: CSSProperties = {
+  padding: 0,
+  marginBottom: "var(--mantine-spacing-xs)",
+  fontSize: "var(--mantine-font-size-xs)",
+  fontWeight: 600,
+  color: "var(--mantine-color-dimmed)",
+  textTransform: "uppercase",
 };
 
 /**
- * Champs "Background color / Border / Border color / Border size" partagés
- * entre les onglets "Up" et "Down" des propriétés système d'une touche.
+ * "Background" / "Border" sections shared between the "Up" and "Down"
+ * tabs of a key's system properties — plain `<fieldset>`s (each section's
+ * own `<legend>` is its only label; nothing inside ever shows one of its
+ * own, matching every other `ux/` component) rather than an `Accordion`,
+ * since there's nothing here worth collapsing.
  */
 export default function KeyStateFields({
   backgroundColor,
   borderEnabled,
-  borderColor,
-  borderWidth,
+  border,
   onBackgroundColorChange,
   onBorderEnabledChange,
-  onBorderColorChange,
-  onBorderWidthChange,
+  onBorderChange,
 }: Props) {
   return (
-    <Stack gap="sm">
-      <PropertyRow label="Background color">
-        <ColorInput
-          w="100%"
+    <>
+      <fieldset style={FIELDSET_STYLE}>
+        <legend style={LEGEND_STYLE}>Background</legend>
+        <Color
           aria-label="Background color"
-          size="xs"
-          format="hexa"
           value={backgroundColor}
-          swatches={COLOR_SWATCHES}
-          error={isHexColor(backgroundColor, true) ? undefined : "Invalid color"}
-          success={isHexColor(backgroundColor, true)}
           onChange={onBackgroundColorChange}
         />
-      </PropertyRow>
-      <PropertyRow label="Border" align="center" compactControl>
+      </fieldset>
+      <fieldset style={{ ...FIELDSET_STYLE, marginTop: "var(--mantine-spacing-sm)" }}>
+        <legend style={LEGEND_STYLE}>Border</legend>
         <Switch
-          aria-label="Border"
+          aria-label="Border enabled"
           size="sm"
+          mb="xs"
           checked={borderEnabled}
-          onChange={(event) =>
-            onBorderEnabledChange(event.currentTarget.checked)
-          }
+          onChange={(event) => onBorderEnabledChange(event.currentTarget.checked)}
         />
-      </PropertyRow>
-      <PropertyRow label="Border color">
-        <ColorInput
-          w="100%"
-          aria-label="Border color"
-          size="xs"
-          format="hex"
-          value={borderColor}
+        <Border
+          value={border}
           disabled={!borderEnabled}
-          swatches={COLOR_SWATCHES}
-          error={isHexColor(borderColor) ? undefined : "Invalid color"}
-          success={isHexColor(borderColor)}
-          onChange={onBorderColorChange}
+          onChange={onBorderChange}
         />
-      </PropertyRow>
-      <PropertyRow label="Border size">
-        <NumberInput
-          w="100%"
-          aria-label="Border size"
-          size="xs"
-          min={1}
-          max={4}
-          allowDecimal={false}
-          clampBehavior="strict"
-          value={borderWidth}
-          disabled={!borderEnabled}
-          success
-          onChange={(value) =>
-            onBorderWidthChange(typeof value === "number" ? value : 1)
-          }
-        />
-      </PropertyRow>
-    </Stack>
+      </fieldset>
+    </>
   );
 }
