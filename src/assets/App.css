@@ -85,14 +85,22 @@ textarea,
   border: none !important;
 }
 
+/* Inside the Properties tab specifically, an unstyled input still reads
+   as a field (rather than plain text) via a bottom border alone — more
+   specific than the border-removal rule above, so it wins for exactly
+   these inputs without reintroducing one everywhere `ux/` components are
+   used. */
+.property-editor-panel .mantine-Input-input[data-variant="unstyled"] {
+  border-bottom: 1px solid var(--kbrd-border-color) !important;
+}
+
 .mantine-InputWrapper-label,
 .mantine-Switch-label {
   font-weight: 400 !important;
 }
 
 .property-editor-panel .mantine-Accordion-content {
-  padding-top: 0;
-  padding-bottom: 0;
+  padding: 20px 0;
 }
 
 .navbar {
