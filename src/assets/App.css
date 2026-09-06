@@ -71,15 +71,6 @@ textarea,
   color: white;
 }
 
-.state-tabs > .mantine-Tabs-list {
-  border-bottom-color: var(--kbrd-border-color);
-}
-
-.state-tabs > .mantine-Tabs-list > .mantine-Tabs-tab[data-active] {
-  color: white;
-  border-bottom-color: white;
-}
-
 .mantine-Input-input {
   background-color: var(--kbrd-color-body) !important;
   border: 1px solid var(--kbrd-border-color) !important;

@@ -23,6 +23,7 @@ import {
   MdHelp,
 } from "react-icons/md";
 import { useEffect, useState } from "react";
+import type { RefObject } from "react";
 
 import { clearKey, duplicateKeyPlugins, moveKey } from "../api/layers";
 import type { DisplayGridApi } from "../classes/useDisplayGrid";
@@ -36,6 +37,8 @@ import type { LayoutData, LayoutSettings } from "../types/layout";
 import { randomId } from "../utils/id";
 import Display from "./Display";
 import type { ContextMenuTarget } from "./Display";
+import Layer from "./menu/Layer";
+import type { LayerMenuHandle } from "./menu/Layer";
 import Confirmation from "./modals/Confirmation";
 import Divide from "./modals/Divide";
 
@@ -45,7 +48,6 @@ import Divide from "./modals/Divide";
 const IS_MAC =
   typeof navigator !== "undefined" && /Mac|iPhone|iPod|iPad/.test(navigator.userAgent);
 const MOD_KEY_LABEL = IS_MAC ? "⌘" : "Ctrl+";
-const ALT_KEY_LABEL = IS_MAC ? "⌥" : "Alt+";
 
 function ShortcutHint({ children }: { children: React.ReactNode }) {
   return (
@@ -57,22 +59,22 @@ function ShortcutHint({ children }: { children: React.ReactNode }) {
 
 // The "?" help button's own reference card — every global keyboard
 // shortcut the *current* mode actually responds to (see
-// `useLayoutShortcuts` and Composer's own Opt/Tab handler below), not the
+// `useLayoutShortcuts` and Composer's own Tab handler below), not the
 // context menu's per-selection ones above: Copy/Paste/Delete only fire in
 // Layout mode (Mapping has no grid structure of its own left to act on —
-// same reasoning as the Resize switch beside it), while Undo and the
+// same reasoning as the Resize shortcut beside it), while Undo and the
 // mode switch itself are global.
 const LAYOUT_SHORTCUTS = [
   { label: "Copy cell", keys: `${MOD_KEY_LABEL}C` },
   { label: "Paste", keys: `${MOD_KEY_LABEL}V` },
   { label: "Delete selection", keys: "⌫" },
-  { label: "Toggle Resize", keys: "Tab" },
+  { label: "Toggle Resize", keys: `${MOD_KEY_LABEL}Tab` },
   { label: "Undo", keys: `${MOD_KEY_LABEL}Z` },
-  { label: "Switch mode", keys: `${ALT_KEY_LABEL}Tab` },
+  { label: "Switch mode", keys: "Tab" },
 ];
 const MAPPING_SHORTCUTS = [
   { label: "Undo", keys: `${MOD_KEY_LABEL}Z` },
-  { label: "Switch mode", keys: `${ALT_KEY_LABEL}Tab` },
+  { label: "Switch mode", keys: "Tab" },
 ];
 
 type Props = {
@@ -94,6 +96,15 @@ type Props = {
   // Delete/Move operations below (the other source of both).
   onChangePlugins: (plugins: KeyPlugin[]) => void;
   onChangeKeyProperties: (keyProperties: KeyProperty[]) => void;
+  // The Layer picker (top-right of the display, Mapping-mode only — see
+  // `<Layer>`'s own `hidden`) lives here instead of `App`'s header now,
+  // right beside the content it actually governs. Passed as its own prop
+  // rather than read off `entityEditors` in here — accessing a ref held
+  // inside another object, mid-render, trips `react-hooks/refs` for
+  // every other property read off that same object in this component.
+  layerMenuRef: RefObject<LayerMenuHandle | null>;
+  onChangeLayer: (layer: LayerData | null) => void;
+  onLayerItemsChange: (items: LayerData[]) => void;
 };
 
 /**
@@ -120,6 +131,9 @@ export default function Composer({
   settingsOpened,
   onChangePlugins,
   onChangeKeyProperties,
+  layerMenuRef,
+  onChangeLayer,
+  onLayerItemsChange,
 }: Props) {
   const [divideModalOpened, setDivideModalOpened] = useState(false);
   // The display's own right-click context menu — replaces the old floating
@@ -325,19 +339,49 @@ export default function Composer({
     pasteToEmptyRow: mode === "layout" ? grid.pasteToEmptyRow : pasteMappingSelection,
   });
 
-  // Opt/Alt+Tab toggles Layout/Mapping — most desktop window managers grab
-  // plain Alt+Tab for their own app switcher before it ever reaches the
-  // browser, so this only fires where that isn't the case.
+  // Plain Tab toggles Layout/Mapping — Cmd/Ctrl+Tab is Resize's own
+  // shortcut instead (see `useLayoutShortcuts`), and both stay out of the
+  // way of a modal's own fields, or typing in a text field, where Tab
+  // must keep doing its normal job.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.altKey && event.key === "Tab") {
-        event.preventDefault();
-        onModeChange(mode === "layout" ? "mapping" : "layout");
+      if (
+        event.key !== "Tab" ||
+        event.altKey ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        settingsOpened ||
+        entityEditors.layoutEditorOpened ||
+        entityEditors.layerEditorOpened ||
+        Boolean(entityEditors.confirmDelete) ||
+        divideModalOpened
+      ) {
+        return;
       }
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      onModeChange(mode === "layout" ? "mapping" : "layout");
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, onModeChange]);
+  }, [
+    mode,
+    onModeChange,
+    settingsOpened,
+    entityEditors.layoutEditorOpened,
+    entityEditors.layerEditorOpened,
+    entityEditors.confirmDelete,
+    divideModalOpened,
+  ]);
 
   // `Display`'s `onContextMenu` — a right-click anywhere on the display.
   // `Display` has already made whatever selection this right-click
@@ -420,6 +464,29 @@ export default function Composer({
         resizeEnabled={resizeEnabled}
         maxColumns={layout?.max_columns ?? null}
       />
+
+      {layout && (
+        <Box
+          style={{
+            position: "absolute",
+            top: 20,
+            right: 20,
+            zIndex: 20,
+          }}
+        >
+          <Layer
+            key={layout.id}
+            ref={layerMenuRef}
+            layoutId={layout.id}
+            onChange={onChangeLayer}
+            onAdd={entityEditors.openAddLayer}
+            onItemsChange={onLayerItemsChange}
+            // Layer only matters in Mapping mode — see `Layer`'s own
+            // docblock on `hidden`.
+            hidden={mode !== "mapping"}
+          />
+        </Box>
+      )}
 
       <SegmentedControl
         value={mode}

@@ -6,17 +6,19 @@ import {
   updateKeyProperties,
 } from "../api/layers";
 import { pluginById, plugins } from "../plugins/registry";
+import { pluginStates } from "../plugins/state";
 import type { KeyboardLayout } from "../types/layout";
 import {
   BACKGROUND_REF,
   type KeyPlugin,
   type KeyProperty,
   type KeyPropertyConfig,
+  type KeyStateConfig,
   type LayerData,
 } from "../types/layer";
-import { resolveBorderEnabled, resolveBorderWidth } from "../utils/keyProperties";
+import { resolveKeyPropertyConfig } from "../utils/keyProperties";
 import { usePendingSaves } from "../utils/usePendingSaves";
-import { DEFAULT_KEY_PROPERTIES } from "./inspectorHelpers";
+import { DEFAULT_STATE_CONFIG, DEFAULT_STATE_NAME } from "./inspectorHelpers";
 
 /**
  * Everything behind `<Inspector>`'s Plugins/Properties tabs for
@@ -26,6 +28,14 @@ import { DEFAULT_KEY_PROPERTIES } from "./inspectorHelpers";
  * each one optimistically updating `layer` through the callbacks passed
  * in (`onChange`/`onKeyPropertiesChange`) before its own debounced save
  * actually reaches KBRD-API (see `usePendingSaves`).
+ *
+ * A key's whole Properties tab — the system row and every attached
+ * plugin alike — pivots on one shared "active state" (see the States
+ * menu placed where the Display group's own label used to sit): whatever
+ * fields each one shows are that state's own values, from
+ * `KeyPropertyConfig.stateConfigs`/each `KeyPlugin.config.states` (see
+ * `plugins/state.ts`) — `addState`/`renameState`/`deleteState` below keep
+ * both in lockstep.
  */
 export function useKeyInspector(params: {
   layer: LayerData | null;
@@ -34,31 +44,24 @@ export function useKeyInspector(params: {
   mode: "layout" | "mapping";
   onChange: (plugins: KeyPlugin[]) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
-  onPreviewDownPluginChange: (pluginId: number | null) => void;
 }) {
-  const {
-    layer,
-    selectedKey,
-    layout,
-    mode,
-    onChange,
-    onKeyPropertiesChange,
-    onPreviewDownPluginChange,
-  } = params;
+  const { layer, selectedKey, layout, mode, onChange, onKeyPropertiesChange } =
+    params;
 
-  const [propertyStates, setPropertyStates] = useState<
-    Record<number, "main" | "up" | "down">
-  >({});
   const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
-  const [targetStates, setTargetStates] = useState<
-    Record<string, "option" | "up" | "down">
-  >({});
   const [dropIndicator, setDropIndicator] = useState<{
     id: number;
     edge: "before" | "after";
   } | null>(null);
   const [draggedPropertyId, setDraggedPropertyId] = useState<number | null>(
     null,
+  );
+  // Which state's fields are currently shown, per key — the States menu's
+  // own selection. Defaults to the key's first state ("Up", unless it's
+  // been renamed) rather than a hardcoded name, and falls back the same
+  // way if the state it remembers was since deleted.
+  const [activeStates, setActiveStates] = useState<Record<string, string>>(
+    {},
   );
   const pendingSaves = usePendingSaves<number, Partial<KeyPlugin>>();
   const pendingPropertySaves = usePendingSaves<string, KeyPropertyConfig>();
@@ -89,31 +92,29 @@ export function useKeyInspector(params: {
   const selectedProperty = keyProperties.find(
     (property) => property.key_ref === selectedKey,
   );
-  const propertyConfig: KeyPropertyConfig = {
-    ...DEFAULT_KEY_PROPERTIES,
-    ...selectedProperty?.config,
-    upBorderWidth: resolveBorderWidth(selectedProperty?.config, false),
-    downBorderWidth: resolveBorderWidth(selectedProperty?.config, true),
-    upBorderEnabled: resolveBorderEnabled(selectedProperty?.config, false),
-    downBorderEnabled: resolveBorderEnabled(selectedProperty?.config, true),
-  };
+  const propertyConfig = resolveKeyPropertyConfig(selectedProperty?.config);
   const targetType: "key" | "space" | "background" =
     selectedKey === BACKGROUND_REF
       ? "background"
       : (layout?.keys.find((key) => key.ref === selectedKey)?.type ?? "key");
-  const storedTargetState = selectedKey
-    ? (targetStates[selectedKey] ?? "option")
-    : "option";
-  const targetState =
-    targetType !== "key" && storedTargetState === "down"
-      ? "up"
-      : storedTargetState;
   const systemPluginName =
     targetType === "background"
       ? "Layer"
       : targetType === "space"
         ? "Space"
         : "Key";
+  const storedActiveState = selectedKey ? activeStates[selectedKey] : undefined;
+  const activeState =
+    storedActiveState && propertyConfig.states.includes(storedActiveState)
+      ? storedActiveState
+      : (propertyConfig.states[0] ?? DEFAULT_STATE_NAME);
+  const activeStateConfig =
+    propertyConfig.stateConfigs[activeState] ?? DEFAULT_STATE_CONFIG;
+
+  function setActiveState(state: string) {
+    if (!selectedKey) return;
+    setActiveStates((current) => ({ ...current, [selectedKey]: state }));
+  }
 
   function patchKeyProperty(data: Partial<KeyPropertyConfig>) {
     if (!layer || !selectedKey) return;
@@ -130,6 +131,17 @@ export function useKeyInspector(params: {
     );
   }
 
+  // Patches only the currently active state's own background/border
+  // fields — the system row's equivalent of a plugin's `withStateConfig`.
+  function patchStateConfig(data: Partial<KeyStateConfig>) {
+    patchKeyProperty({
+      stateConfigs: {
+        ...propertyConfig.stateConfigs,
+        [activeState]: { ...activeStateConfig, ...data },
+      },
+    });
+  }
+
   function patch(item: KeyPlugin, data: Partial<KeyPlugin>) {
     const value = { ...item, ...data };
     onChange(
@@ -141,6 +153,89 @@ export function useKeyInspector(params: {
       (previous) => ({ ...previous, ...data }),
       (merged) => void updateKeyPlugin(item.id, merged),
     );
+  }
+
+  // Adds a new state named `name` to this key — the system row and every
+  // attached plugin instance alike — seeded from `copyFrom`'s own current
+  // values where given, or each one's own defaults otherwise (never left
+  // blank, which would show every field as invalid right away).
+  function addState(name: string, copyFrom: string | null) {
+    if (!layer || !selectedKey) return;
+    const trimmed = name.trim();
+    if (!trimmed || propertyConfig.states.includes(trimmed)) return;
+
+    const seedSystem = copyFrom
+      ? (propertyConfig.stateConfigs[copyFrom] ?? DEFAULT_STATE_CONFIG)
+      : DEFAULT_STATE_CONFIG;
+    patchKeyProperty({
+      states: [...propertyConfig.states, trimmed],
+      stateConfigs: {
+        ...propertyConfig.stateConfigs,
+        [trimmed]: { ...seedSystem },
+      },
+    });
+
+    for (const item of instances) {
+      const plugin = pluginById(item.plugin_id);
+      const states = pluginStates(item.config);
+      const seed = copyFrom
+        ? (states[copyFrom] ?? plugin?.defaultConfig ?? {})
+        : (plugin?.defaultConfig ?? {});
+      patch(item, { config: { states: { ...states, [trimmed]: { ...seed } } } });
+    }
+    setActiveState(trimmed);
+  }
+
+  // Renames `oldName` to `newName` everywhere it appears for this key —
+  // and, when `copyFrom` is given, also resets its values from that other
+  // state's own (a "reset from" alongside the rename).
+  function renameState(
+    oldName: string,
+    newName: string,
+    copyFrom: string | null,
+  ) {
+    if (!layer || !selectedKey) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    if (trimmed !== oldName && propertyConfig.states.includes(trimmed)) return;
+
+    const nextStates = propertyConfig.states.map((state) =>
+      state === oldName ? trimmed : state,
+    );
+    const nextStateConfigs = { ...propertyConfig.stateConfigs };
+    const systemSource = copyFrom
+      ? nextStateConfigs[copyFrom]
+      : nextStateConfigs[oldName];
+    delete nextStateConfigs[oldName];
+    nextStateConfigs[trimmed] = { ...(systemSource ?? DEFAULT_STATE_CONFIG) };
+    patchKeyProperty({ states: nextStates, stateConfigs: nextStateConfigs });
+
+    for (const item of instances) {
+      const states = pluginStates(item.config);
+      const source = copyFrom ? states[copyFrom] : states[oldName];
+      const nextPluginStates = { ...states };
+      delete nextPluginStates[oldName];
+      nextPluginStates[trimmed] = { ...(source ?? {}) };
+      patch(item, { config: { states: nextPluginStates } });
+    }
+    setActiveState(trimmed);
+  }
+
+  // Removes `name` everywhere it appears for this key — refused if it's
+  // the key's last remaining state, per the States menu's own rule.
+  function deleteState(name: string) {
+    if (!layer || !selectedKey || propertyConfig.states.length <= 1) return;
+    const nextStates = propertyConfig.states.filter((state) => state !== name);
+    const nextStateConfigs = { ...propertyConfig.stateConfigs };
+    delete nextStateConfigs[name];
+    patchKeyProperty({ states: nextStates, stateConfigs: nextStateConfigs });
+
+    for (const item of instances) {
+      const states = { ...pluginStates(item.config) };
+      delete states[name];
+      patch(item, { config: { states } });
+    }
+    if (activeState === name) setActiveState(nextStates[0]);
   }
 
   async function reorder(
@@ -197,18 +292,13 @@ export function useKeyInspector(params: {
     onChange(allInstances.filter((plugin) => plugin.id !== item.id));
     if (pending) await updateKeyPlugin(item.id, pending);
     await deleteKeyPlugin(item.id);
-    onPreviewDownPluginChange(null);
     setDeleting(null);
   }
 
   return {
     // UI-only state
-    propertyStates,
-    setPropertyStates,
     deleting,
     setDeleting,
-    targetStates,
-    setTargetStates,
     dropIndicator,
     setDropIndicator,
     draggedPropertyId,
@@ -222,11 +312,17 @@ export function useKeyInspector(params: {
     propertyGroups,
     propertyConfig,
     targetType,
-    targetState,
     systemPluginName,
+    activeState,
+    activeStateConfig,
 
     // mutations
+    setActiveState,
     patchKeyProperty,
+    patchStateConfig,
+    addState,
+    renameState,
+    deleteState,
     patch,
     reorder,
     remove,

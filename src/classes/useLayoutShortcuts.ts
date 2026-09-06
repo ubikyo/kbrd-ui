@@ -68,9 +68,11 @@ export function useLayoutShortcuts(params: {
 
   const [resizeEnabled, setResizeEnabled] = useState(false);
 
-  // Tab toggles Resize — a global shortcut, independent of mode/selection —
-  // except while a modal has its own fields to tab through normally, or
-  // while typing in a text field, where Tab must keep doing its normal job.
+  // Cmd/Ctrl+Tab toggles Resize — a global shortcut, independent of
+  // mode/selection — except while a modal has its own fields to tab
+  // through normally, or while typing in a text field, where Tab must
+  // keep doing its normal job. Plain Tab is Composer's own Layout/Mapping
+  // toggle instead (see there) and must not also flip Resize.
   useEffect(() => {
     if (
       mode !== "layout" ||
@@ -82,9 +84,11 @@ export function useLayoutShortcuts(params: {
       return;
     }
     function handleTab(event: KeyboardEvent) {
-      // Plain Tab only — Opt/Alt+Tab is Composer's own Layout/Mapping
-      // toggle and must not also flip Resize.
-      if (event.key !== "Tab" || event.altKey || event.metaKey || event.ctrlKey) {
+      if (
+        event.key !== "Tab" ||
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey
+      ) {
         return;
       }
       const target = event.target as HTMLElement | null;

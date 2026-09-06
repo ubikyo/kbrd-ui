@@ -4,6 +4,7 @@ import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 
 import { addKeyPlugin } from "../api/layers";
 import { FALLBACK_HEIGHT, FALLBACK_WIDTH } from "../api/device";
+import { DEFAULT_STATE_NAME } from "../classes/inspectorHelpers";
 import { useCellMove } from "../classes/useCellMove";
 import { useCellResize } from "../classes/useCellResize";
 import { useKeyDrag } from "../classes/useKeyDrag";
@@ -481,7 +482,7 @@ export default function Display({
       keyRef,
       plugin.id,
       plugin.version,
-      plugin.defaultConfig,
+      { states: { [DEFAULT_STATE_NAME]: plugin.defaultConfig } },
     );
     onChangePlugins([...layer.plugins, created]);
   }

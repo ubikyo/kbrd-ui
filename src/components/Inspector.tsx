@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Accordion,
   ActionIcon,
@@ -5,22 +6,21 @@ import {
   Button,
   Group,
   Modal,
-  NumberInput,
   Stack,
-  Switch,
   Tabs,
   Text,
 } from "@mantine/core";
 import { MdDelete, MdDragIndicator } from "react-icons/md";
-import { PropertyRow } from "@kbrd/plugins/web";
 
 import { pluginSummary, setDragSymbol, setPluginDragImage } from "../classes/inspectorHelpers";
 import { useKeyInspector } from "../classes/useKeyInspector";
+import State from "./menu/State";
 import { pluginById } from "../plugins/registry";
-import { downState, upConfig } from "../plugins/state";
+import { stateConfig, withStateConfig } from "../plugins/state";
 import type { GridCell, KeyboardLayout } from "../types/layout";
 import KeyStateFields from "./KeyStateFields";
 import LayoutCellProperties from "./LayoutCellProperties";
+import StateEditor from "./modals/StateEditor";
 import type { KeyPlugin, KeyProperty, LayerData } from "../types/layer";
 
 type Props = {
@@ -47,8 +47,6 @@ type Props = {
     patch: Partial<Pick<GridCell, "typeId" | "typeConfig">>,
   ) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
-  onPreviewDownPluginChange: (pluginId: number | null) => void;
-  onPreviewDownTargetChange: (keyRef: string | null) => void;
 };
 
 /**
@@ -68,8 +66,6 @@ export default function Inspector({
   layoutSelection,
   onLayoutCellChange,
   onKeyPropertiesChange,
-  onPreviewDownPluginChange,
-  onPreviewDownTargetChange,
 }: Props) {
   const inspector = useKeyInspector({
     layer,
@@ -78,14 +74,10 @@ export default function Inspector({
     mode,
     onChange,
     onKeyPropertiesChange,
-    onPreviewDownPluginChange,
   });
   const {
-    propertyStates,
-    setPropertyStates,
     deleting,
     setDeleting,
-    setTargetStates,
     dropIndicator,
     setDropIndicator,
     draggedPropertyId,
@@ -96,19 +88,29 @@ export default function Inspector({
     propertyGroups,
     propertyConfig,
     targetType,
-    targetState,
     systemPluginName,
-    patchKeyProperty,
+    activeState,
+    activeStateConfig,
+    setActiveState,
+    patchStateConfig,
+    addState,
+    renameState,
+    deleteState,
     patch,
     reorder,
     remove,
   } = inspector;
+  // "add"/"edit" while the States menu's own modal is open, `null`
+  // otherwise — see `StateEditor`.
+  const [stateEditorMode, setStateEditorMode] = useState<"add" | "edit" | null>(
+    null,
+  );
 
   return (
     <Box
       h="100%"
       bg="var(--kbrd-color-body)"
-      p="lg"
+      p={40}
       style={{ overflow: "auto" }}
     >
       <Tabs
@@ -208,7 +210,7 @@ export default function Inspector({
         <Tabs.Panel value="properties" pt="lg" pb="lg">
           {mode === "layout" ? (
             !layoutSelection ? (
-              <Text c="dimmed">No key selected</Text>
+              <Text c="dimmed">No item selected</Text>
             ) : (
               <LayoutCellProperties
                 cell={layoutSelection.cell}
@@ -218,7 +220,7 @@ export default function Inspector({
               />
             )
           ) : !selectedKey ? (
-            <Text c="dimmed">No key selected</Text>
+            <Text c="dimmed">No item selected</Text>
           ) : (
             <Stack gap={0}>
               <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
@@ -266,97 +268,24 @@ export default function Inspector({
                   </Group>
                   {targetType === "key" && (
                     <Accordion.Panel className="property-editor-panel">
-                      <Tabs
-                        className="state-tabs"
-                        value={targetState}
-                        onChange={(value) => {
-                          const state = (value ?? "option") as
-                            | "option"
-                            | "up"
-                            | "down";
-                          setTargetStates((states) => ({
-                            ...states,
-                            [selectedKey]: state,
-                          }));
-                          onPreviewDownTargetChange(
-                            state === "down" ? selectedKey : null,
-                          );
-                        }}
-                      >
-                        <Tabs.List grow>
-                          <Tabs.Tab value="option">Option</Tabs.Tab>
-                          <Tabs.Tab value="up">Up</Tabs.Tab>
-                          {targetType === "key" && propertyConfig.downEnabled && (
-                            <Tabs.Tab value="down">Down</Tabs.Tab>
-                          )}
-                        </Tabs.List>
-                        <Tabs.Panel value="option" pt="xl">
-                          <Stack gap="md">
-                            <PropertyRow label="Enable down state ?" align="center" compactControl>
-                              <Switch
-                                aria-label="Enable down state ?"
-                                size="sm"
-                                checked={propertyConfig.downEnabled}
-                                onChange={(event) => {
-                                  const enabled = event.currentTarget.checked;
-                                  patchKeyProperty({ downEnabled: enabled });
-                                  if (!enabled) {
-                                    setTargetStates((states) => ({
-                                      ...states,
-                                      [selectedKey]: "option",
-                                    }));
-                                    onPreviewDownTargetChange(null);
-                                  }
-                                }}
-                              />
-                            </PropertyRow>
-                          </Stack>
-                        </Tabs.Panel>
-                        <Tabs.Panel value="up" pt="xl">
-                          <KeyStateFields
-                            backgroundColor={propertyConfig.upBackgroundColor}
-                            borderEnabled={propertyConfig.upBorderEnabled}
-                            borderColor={propertyConfig.upBorderColor}
-                            borderWidth={propertyConfig.upBorderWidth}
-                            onBackgroundColorChange={(value) =>
-                              patchKeyProperty({ upBackgroundColor: value })
-                            }
-                            onBorderEnabledChange={(value) =>
-                              patchKeyProperty({ upBorderEnabled: value })
-                            }
-                            onBorderColorChange={(value) =>
-                              patchKeyProperty({ upBorderColor: value })
-                            }
-                            onBorderWidthChange={(value) =>
-                              patchKeyProperty({ upBorderWidth: value })
-                            }
-                          />
-                        </Tabs.Panel>
-                        {targetType === "key" && propertyConfig.downEnabled && (
-                          <Tabs.Panel value="down" pt="xl">
-                            <KeyStateFields
-                              backgroundColor={
-                                propertyConfig.downBackgroundColor
-                              }
-                              borderEnabled={propertyConfig.downBorderEnabled}
-                              borderColor={propertyConfig.downBorderColor}
-                              borderWidth={propertyConfig.downBorderWidth}
-                              onBackgroundColorChange={(value) =>
-                                patchKeyProperty({ downBackgroundColor: value })
-                              }
-                              onBorderEnabledChange={(value) =>
-                                patchKeyProperty({ downBorderEnabled: value })
-                              }
-                              onBorderColorChange={(value) =>
-                                patchKeyProperty({ downBorderColor: value })
-                              }
-                              onBorderWidthChange={(value) =>
-                                patchKeyProperty({ downBorderWidth: value })
-                              }
-                            />
-                          </Tabs.Panel>
-                        )}
-                      </Tabs>
+                      <KeyStateFields
+                        backgroundColor={activeStateConfig.backgroundColor}
+                        borderEnabled={activeStateConfig.borderEnabled}
+                        borderColor={activeStateConfig.borderColor}
+                        borderWidth={activeStateConfig.borderWidth}
+                        onBackgroundColorChange={(value) =>
+                          patchStateConfig({ backgroundColor: value })
+                        }
+                        onBorderEnabledChange={(value) =>
+                          patchStateConfig({ borderEnabled: value })
+                        }
+                        onBorderColorChange={(value) =>
+                          patchStateConfig({ borderColor: value })
+                        }
+                        onBorderWidthChange={(value) =>
+                          patchStateConfig({ borderWidth: value })
+                        }
+                      />
                     </Accordion.Panel>
                   )}
                 </Accordion.Item>
@@ -375,9 +304,22 @@ export default function Inspector({
                   mt={group.category === "Display" ? 0 : 48}
                   style={{ order: group.category === "Display" ? 1 : 3 }}
                 >
-                  <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                    {group.category}
-                  </Text>
+                  {group.category === "Display" ? (
+                    <Group justify="flex-end" mb="xs">
+                      <State
+                        states={propertyConfig.states}
+                        activeState={activeState}
+                        onSelect={setActiveState}
+                        onAdd={() => setStateEditorMode("add")}
+                        onEdit={() => setStateEditorMode("edit")}
+                        onDelete={() => deleteState(activeState)}
+                      />
+                    </Group>
+                  ) : (
+                    <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
+                      {group.category}
+                    </Text>
+                  )}
                   <Accordion multiple className="property-accordion">
               {group.items.map((item) => {
                 const plugin = pluginById(item.plugin_id);
@@ -386,24 +328,7 @@ export default function Inspector({
                 // mode — see the `mode === "layout"` split above.
                 const Editor = plugin.MappingEditor;
                 const summary = pluginSummary(item);
-                const supportsDown =
-                  targetType === "key" &&
-                  plugin.capabilities.includes("render");
-                const storedPropertyState = propertyStates[item.id] ?? "main";
-                const propertyState =
-                  !supportsDown && storedPropertyState === "down"
-                    ? "up"
-                    : storedPropertyState;
-                const down = downState(item.config);
-                const up = upConfig(item.config);
-                function patchDown(data: Partial<typeof down>) {
-                  patch(item, {
-                    config: {
-                      ...up,
-                      down: { ...down, ...data },
-                    },
-                  });
-                }
+                const currentConfig = stateConfig(item.config, activeState);
                 return (
                   <Accordion.Item
                     key={item.id}
@@ -527,123 +452,15 @@ export default function Inspector({
                       </ActionIcon>
                     </Group>
                     <Accordion.Panel className="property-editor-panel">
-                      <Tabs
-                        className="state-tabs"
-                        value={propertyState}
-                        onChange={(value) => {
-                          setPropertyStates((states) => ({
-                            ...states,
-                            [item.id]: (value ?? "main") as
-                              | "main"
-                              | "up"
-                              | "down",
-                          }));
-                          onPreviewDownPluginChange(
-                            value === "down" ? item.id : null,
-                          );
-                        }}
-                      >
-                        <Tabs.List grow>
-                          <Tabs.Tab value="main">Option</Tabs.Tab>
-                          <Tabs.Tab value="up" disabled={!item.enabled}>
-                            {supportsDown ? "Up" : "Main"}
-                          </Tabs.Tab>
-                          {supportsDown && down.enabled && (
-                            <Tabs.Tab value="down" disabled={!item.enabled}>
-                              Down
-                            </Tabs.Tab>
-                          )}
-                        </Tabs.List>
-
-                        <Tabs.Panel value="main" pt="xl">
-                          <Stack gap="lg">
-                            <PropertyRow label="Disabled" align="center" compactControl>
-                              <Switch
-                                aria-label="Disabled"
-                                size="sm"
-                                checked={!item.enabled}
-                                onChange={(event) => {
-                                  const disabled = event.currentTarget.checked;
-                                  if (disabled) {
-                                    setPropertyStates((states) => ({
-                                      ...states,
-                                      [item.id]: "main",
-                                    }));
-                                    onPreviewDownPluginChange(null);
-                                  }
-                                  void patch(item, { enabled: !disabled });
-                                }}
-                              />
-                            </PropertyRow>
-                            {supportsDown && (
-                              <PropertyRow label="Enable down state ?" align="center" compactControl>
-                                <Switch
-                                  aria-label="Enable down state ?"
-                                  size="sm"
-                                  checked={down.enabled}
-                                  onChange={(event) => {
-                                    const enabled = event.currentTarget.checked;
-                                    if (!enabled) {
-                                      setPropertyStates((states) => ({
-                                        ...states,
-                                        [item.id]: "main",
-                                      }));
-                                      onPreviewDownPluginChange(null);
-                                    }
-                                    patchDown({
-                                      enabled,
-                                      config:
-                                        down.config ?? structuredClone(up),
-                                    });
-                                  }}
-                                />
-                              </PropertyRow>
-                            )}
-                          </Stack>
-                        </Tabs.Panel>
-
-                        <Tabs.Panel value="up" pt="xl">
-                          <Editor
-                            config={up}
-                            targetType={targetType}
-                            onChange={(config) =>
-                              patch(item, {
-                                config: { ...config, down },
-                              })
-                            }
-                          />
-                        </Tabs.Panel>
-
-                        {supportsDown && down.enabled && (
-                          <Tabs.Panel value="down" pt="xl">
-                            <Stack gap="xl">
-                              <Editor
-                                config={down.config ?? up}
-                                targetType={targetType}
-                                onChange={(config) => patchDown({ config })}
-                              />
-                              <PropertyRow label="Delay">
-                                <NumberInput
-                                  w="100%"
-                                  aria-label="Delay"
-                                  suffix=" ms"
-                                  min={0}
-                                  step={100}
-                                  allowNegative={false}
-                                  value={down.delay}
-                                  success
-                                  onChange={(value) =>
-                                    patchDown({
-                                      delay:
-                                        typeof value === "number" ? value : 0,
-                                    })
-                                  }
-                                />
-                              </PropertyRow>
-                            </Stack>
-                          </Tabs.Panel>
-                        )}
-                      </Tabs>
+                      <Editor
+                        config={currentConfig}
+                        targetType={targetType}
+                        onChange={(config) =>
+                          patch(item, {
+                            config: withStateConfig(item.config, activeState, config),
+                          })
+                        }
+                      />
                     </Accordion.Panel>
                   </Accordion.Item>
                 );
@@ -687,6 +504,20 @@ export default function Inspector({
           </Group>
         </Stack>
       </Modal>
+
+      {stateEditorMode && (
+        <StateEditor
+          mode={stateEditorMode}
+          states={propertyConfig.states}
+          editingState={stateEditorMode === "edit" ? activeState : undefined}
+          onClose={() => setStateEditorMode(null)}
+          onSubmit={(name, copyFrom) => {
+            if (stateEditorMode === "add") addState(name, copyFrom);
+            else renameState(activeState, name, copyFrom);
+            setStateEditorMode(null);
+          }}
+        />
+      )}
     </Box>
   );
 }

@@ -23,7 +23,6 @@ import type { FactoryLayout, LayoutData } from "./types/layout";
 import Composer from "./components/Composer";
 import Inspector from "./components/Inspector";
 import Settings from "./components/modals/Settings";
-import Layer from "./components/menu/Layer";
 import LayerEditor from "./components/modals/LayerEditor";
 import ReplaceEntity from "./components/modals/ReplaceEntity";
 import Confirmation from "./components/modals/Confirmation";
@@ -59,16 +58,6 @@ export default function App() {
   const [mode, setMode] = useState<"layout" | "mapping">("layout");
 
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
-  // Forces a specific plugin instance/target key into its "down" look —
-  // set while its own Down-state fields are focused in the Inspector (see
-  // `onPreviewDownPluginChange`/`onPreviewDownTargetChange` there). Only
-  // the setter is ever read: nothing currently renders a "down" look from
-  // the value itself — `<Display>`'s grid only ever draws each plugin's
-  // resting ("up") state (see `LayoutCell`'s own docblock on
-  // `keyPlugins`) — but the Inspector still needs somewhere to record
-  // which plugin/target is focused for a future preview to read.
-  const [, setPreviewDownPluginId] = useState<number | null>(null);
-  const [, setPreviewDownTarget] = useState<string | null>(null);
   // Mirrors `layer` for the autosave effect below, so that effect only
   // has to depend on the grid state that actually triggers a save — not
   // on `layer` itself, which the save's own response also updates.
@@ -142,8 +131,6 @@ export default function App() {
       setLayer(null);
       layerRef.current = null;
       setSelectedKey(null);
-      setPreviewDownPluginId(null);
-      setPreviewDownTarget(null);
       // The layer `<Layer>` activates next (see its effect) seeds
       // these back in via `changeLayer` — this is just the gap between
       // layouts.
@@ -158,8 +145,6 @@ export default function App() {
       setLayer(value);
       layerRef.current = value;
       setSelectedKey(null);
-      setPreviewDownPluginId(null);
-      setPreviewDownTarget(null);
       // Each layer keeps its own `<Display>` disposition — load it back
       // in now that we've switched to it.
       grid.loadFactoryLayout(value?.factory_layout ?? null);
@@ -256,19 +241,6 @@ export default function App() {
             onAdd={entityEditors.openAddLayout}
             onItemsChange={setLayoutItems}
           />
-          {layout && (
-            <Layer
-              key={layout.id}
-              ref={entityEditors.layerMenuRef}
-              layoutId={layout.id}
-              onChange={changeLayer}
-              onAdd={entityEditors.openAddLayer}
-              onItemsChange={setLayerItems}
-              // Layer only matters in Mapping mode — see `Layer`'s own
-              // docblock on `hidden`.
-              hidden={mode !== "mapping"}
-            />
-          )}
 
           <ActionIcon
             variant="subtle"
@@ -325,9 +297,12 @@ export default function App() {
               settingsOpened={settingsOpened}
               onChangePlugins={changePlugins}
               onChangeKeyProperties={changeKeyProperties}
+              layerMenuRef={entityEditors.layerMenuRef}
+              onChangeLayer={changeLayer}
+              onLayerItemsChange={setLayerItems}
             />
           </Splitter.Pane>
-          <Splitter.Pane defaultSize="550px" min="550px">
+          <Splitter.Pane defaultSize="550px" min="350px">
             <Inspector
               layer={layer}
               selectedKey={selectedKey}
@@ -348,8 +323,6 @@ export default function App() {
               onTabChange={setInspectorTab}
               onChange={changePlugins}
               onKeyPropertiesChange={changeKeyProperties}
-              onPreviewDownPluginChange={setPreviewDownPluginId}
-              onPreviewDownTargetChange={setPreviewDownTarget}
             />
           </Splitter.Pane>
         </Splitter>

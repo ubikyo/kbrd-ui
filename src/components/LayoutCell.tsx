@@ -2,7 +2,8 @@ import { useId } from "react";
 import type { DragEvent, MouseEvent, PointerEvent } from "react";
 
 import { pluginById } from "../plugins/registry";
-import { upConfig } from "../plugins/state";
+import { DEFAULT_STATE_NAME } from "../classes/inspectorHelpers";
+import { stateConfig } from "../plugins/state";
 import type { KeyPlugin } from "../types/layer";
 import type { CellRect } from "../utils/layout";
 
@@ -233,7 +234,7 @@ export default function LayoutCell({
               return (
                 <Renderer
                   key={instance.id}
-                  config={upConfig(instance.config)}
+                  config={stateConfig(instance.config, DEFAULT_STATE_NAME)}
                   x={bounds.x}
                   y={bounds.y}
                   width={bounds.width}

@@ -1,5 +1,5 @@
 import type { KeyPlugin } from "../types/layer";
-import type { KeyPropertyConfig } from "../types/layer";
+import type { KeyPropertyConfig, KeyStateConfig } from "../types/layer";
 
 export const COLOR_SWATCHES = [
   "#ffffff",
@@ -15,17 +15,22 @@ export const COLOR_SWATCHES = [
 export const isHexColor = (value: string, alpha = false) =>
   new RegExp(alpha ? "^#[0-9a-f]{8}$" : "^#[0-9a-f]{6}$", "i").test(value);
 
+// Every key starts with exactly one state, named this — the States menu's
+// own default (see `Inspector`'s Properties tab) and the name every
+// plugin's own "Up" look is expected to sit under (`plugins/state.ts`).
+export const DEFAULT_STATE_NAME = "Up";
+
+export const DEFAULT_STATE_CONFIG: KeyStateConfig = {
+  backgroundColor: "#00000000",
+  borderEnabled: true,
+  borderColor: "#808080",
+  borderWidth: 1,
+};
+
 export const DEFAULT_KEY_PROPERTIES: KeyPropertyConfig = {
   keyMode: "momentary",
-  downEnabled: false,
-  upBorderEnabled: true,
-  downBorderEnabled: true,
-  upBorderColor: "#808080",
-  downBorderColor: "#ffffff",
-  upBorderWidth: 1,
-  downBorderWidth: 1,
-  upBackgroundColor: "#00000000",
-  downBackgroundColor: "#00000000",
+  states: [DEFAULT_STATE_NAME],
+  stateConfigs: { [DEFAULT_STATE_NAME]: DEFAULT_STATE_CONFIG },
 };
 
 export function truncate(value: string) {
@@ -86,12 +91,19 @@ export function setDragSymbol(event: React.DragEvent, symbol = "⠿") {
 // doesn't reliably suppress the native preview in every browser (some
 // fall back to snapshotting the whole page instead), but a pre-decoded
 // data-URI image does, with no DOM attachment or load event needed.
-const HIDDEN_DRAG_IMAGE = (() => {
-  const img = new Image();
-  img.src =
-    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
-  return img;
-})();
+// Built lazily (not at module load) so importing this file — e.g. for
+// `DEFAULT_KEY_PROPERTIES`, from plain unit tests with no DOM — never
+// touches `Image` at all unless a drag actually starts.
+let hiddenDragImage: HTMLImageElement | undefined;
+function getHiddenDragImage() {
+  hiddenDragImage ??= (() => {
+    const img = new Image();
+    img.src =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+    return img;
+  })();
+  return hiddenDragImage;
+}
 
 /**
  * A small, cursor-following square that grows into a wider rounded
@@ -171,13 +183,13 @@ export function createFollowGhost(clientX: number, clientY: number, size: number
  * accordion: starts as a small square (the height of the accordion row
  * it was dragged from) showing the grip symbol, then grows into a
  * 100×50px rectangle showing the plugin's name. The native drag image is
- * replaced with `HIDDEN_DRAG_IMAGE` so only this element is ever
+ * replaced with `getHiddenDragImage()` so only this element is ever
  * visible. */
 export function setPluginDragImage(event: React.DragEvent, pluginName: string) {
   const source = event.currentTarget as Element;
   const rowSize = source.getBoundingClientRect().height;
 
-  event.dataTransfer.setDragImage(HIDDEN_DRAG_IMAGE, 0, 0);
+  event.dataTransfer.setDragImage(getHiddenDragImage(), 0, 0);
 
   const ghost = createFollowGhost(event.clientX, event.clientY, rowSize, "⠿");
   ghost.grow(truncate(pluginName), 100, 50, 300);

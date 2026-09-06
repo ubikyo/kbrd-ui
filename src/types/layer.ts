@@ -20,18 +20,24 @@ export type KeyPlugin = {
 
 export type KeyMode = "momentary" | "toggle";
 
+// A key's look for one named state ("Up" always exists — see
+// `DEFAULT_KEY_PROPERTIES` — plus whatever custom states the States menu
+// in the Properties tab has added, e.g. "Down"). Every attached plugin's
+// own `config.states` (see `plugins/state.ts`) carries one of these per
+// state name too, so the whole key's content — system look and every
+// plugin's fields alike — pivots together on whichever state is active.
+export type KeyStateConfig = {
+  backgroundColor: string;
+  borderEnabled: boolean;
+  borderColor: string;
+  borderWidth: number;
+};
+
 export type KeyPropertyConfig = {
   keyMode: KeyMode;
-  borderEnabled?: boolean;
-  downEnabled: boolean;
-  upBorderEnabled: boolean;
-  downBorderEnabled: boolean;
-  upBorderColor: string;
-  downBorderColor: string;
-  upBorderWidth: number;
-  downBorderWidth: number;
-  upBackgroundColor: string;
-  downBackgroundColor: string;
+  // Every state this key has, in menu order — always at least one.
+  states: string[];
+  stateConfigs: Record<string, KeyStateConfig>;
 };
 
 export type KeyProperty = {
