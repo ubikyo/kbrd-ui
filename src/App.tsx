@@ -312,7 +312,7 @@ export default function App() {
               onLayerItemsChange={setLayerItems}
             />
           </Splitter.Pane>
-          <Splitter.Pane defaultSize="550px" min="350px">
+          <Splitter.Pane defaultSize="350px" min="350px">
             <Inspector
               layer={layer}
               selectedKey={selectedKey}
