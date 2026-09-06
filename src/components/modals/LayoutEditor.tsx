@@ -145,10 +145,7 @@ export default function LayoutEditor({
       name: name.trim(),
       description: description.trim(),
       author: author.trim(),
-      // Positioning now lives in Layout mode, not this form — keep
-      // whatever was already stored, or start empty for a brand-new layout.
       unit: editing?.unit ?? "mm",
-      geometry: editing?.geometry ?? [],
       unit_mm: capsMm,
       gap_mm: gapMm,
       max_columns: maxColumnsValue,

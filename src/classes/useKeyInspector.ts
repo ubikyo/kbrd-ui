@@ -5,9 +5,8 @@ import {
   updateKeyPlugin,
   updateKeyProperties,
 } from "../api/layers";
-import { pluginById, plugins } from "../plugins/registry";
+import { isMappingVisible, pluginById, plugins } from "../plugins/registry";
 import { pluginStates } from "../plugins/state";
-import type { KeyboardLayout } from "../types/layout";
 import {
   BACKGROUND_REF,
   type KeyPlugin,
@@ -40,13 +39,22 @@ import { DEFAULT_STATE_CONFIG, DEFAULT_STATE_NAME } from "./inspectorHelpers";
 export function useKeyInspector(params: {
   layer: LayerData | null;
   selectedKey: string | null;
-  layout: KeyboardLayout | null;
+  // `selectedKey`'s own Layout plugin id (`kbrd.layout-key`/
+  // `kbrd.layout-space`) — see `App`'s own `selectedKeyTypeId`, set the
+  // same place `selectedKey` itself is.
+  selectedKeyTypeId: string | null;
   mode: "layout" | "mapping";
   onChange: (plugins: KeyPlugin[]) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
 }) {
-  const { layer, selectedKey, layout, mode, onChange, onKeyPropertiesChange } =
-    params;
+  const {
+    layer,
+    selectedKey,
+    selectedKeyTypeId,
+    mode,
+    onChange,
+    onKeyPropertiesChange,
+  } = params;
 
   const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{
@@ -93,10 +101,18 @@ export function useKeyInspector(params: {
     (property) => property.key_ref === selectedKey,
   );
   const propertyConfig = resolveKeyPropertyConfig(selectedProperty?.config);
+  // `isMappingVisible` is the same "does this Layout plugin still show up
+  // in Mapping mode" capability check `Display`/`LayoutCellDivision` use
+  // to hide a Space's cell there — Key has it, Space doesn't, which is
+  // exactly the Key/Space distinction this needs too. No `typeId` yet (a
+  // cell that predates `GridCell.typeId`, or nothing selected at all)
+  // falls back to "key", same as before this read straight `GridCell`s.
   const targetType: "key" | "space" | "background" =
     selectedKey === BACKGROUND_REF
       ? "background"
-      : (layout?.keys.find((key) => key.ref === selectedKey)?.type ?? "key");
+      : selectedKeyTypeId && !isMappingVisible(selectedKeyTypeId)
+        ? "space"
+        : "key";
   const systemPluginName =
     targetType === "background"
       ? "Layer"

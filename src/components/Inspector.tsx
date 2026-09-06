@@ -17,7 +17,7 @@ import { useKeyInspector } from "../classes/useKeyInspector";
 import State from "./menu/State";
 import { pluginById } from "../plugins/registry";
 import { stateConfig, withStateConfig } from "../plugins/state";
-import type { GridCell, KeyboardLayout } from "../types/layout";
+import type { GridCell } from "../types/layout";
 import KeyStateFields from "./KeyStateFields";
 import LayoutCellProperties from "./LayoutCellProperties";
 import StateEditor from "./modals/StateEditor";
@@ -29,7 +29,15 @@ type Props = {
   tab: string | null;
   onTabChange: (tab: string | null) => void;
   onChange: (plugins: KeyPlugin[]) => void;
-  layout: KeyboardLayout | null;
+  // `selectedKey`'s own Layout plugin id (`kbrd.layout-key`/
+  // `kbrd.layout-space`) — lets `useKeyInspector` tell a Key from a Space
+  // for the system property row's own label, without a `layout`/geometry
+  // lookup (see `App`'s own `selectedKeyTypeId`).
+  selectedKeyTypeId: string | null;
+  // Whether any layout is loaded at all — just for the empty-state
+  // message below ("Create a layer"/"Create a layout"), not a real
+  // `LayoutData` consumer.
+  hasLayout: boolean;
   // Which form each plugin instance below shows: its Layout (placement) or
   // Mapping (everything else) editor — see `kbrd-plugins`' per-plugin
   // `LayoutEditor`/`MappingEditor` exports.
@@ -61,7 +69,8 @@ export default function Inspector({
   tab,
   onTabChange,
   onChange,
-  layout,
+  selectedKeyTypeId,
+  hasLayout,
   mode,
   layoutSelection,
   onLayoutCellChange,
@@ -70,7 +79,7 @@ export default function Inspector({
   const inspector = useKeyInspector({
     layer,
     selectedKey,
-    layout,
+    selectedKeyTypeId,
     mode,
     onChange,
     onKeyPropertiesChange,
@@ -127,7 +136,7 @@ export default function Inspector({
         <Tabs.Panel value="plugins" pt="lg" pb="lg">
           {!layer ? (
             <Text c="dimmed">
-              {layout
+              {hasLayout
                 ? "Create a layer to add plugins."
                 : "Create a layout to add plugins."}
             </Text>

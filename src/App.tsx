@@ -48,6 +48,13 @@ export default function App() {
     useDisplaySettings();
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // `selectedKey`'s own Layout plugin id (`kbrd.layout-key`/
+  // `kbrd.layout-space`) — set in lockstep with it below, so the
+  // Inspector can tell a Key from a Space without needing its own
+  // reverse lookup from `keyRef` back to a `GridCell`/`DivisionCell`.
+  const [selectedKeyTypeId, setSelectedKeyTypeId] = useState<string | null>(
+    null,
+  );
 
   const [layer, setLayer] = useState<LayerData | null>(null);
 
@@ -98,6 +105,9 @@ export default function App() {
     if (mode !== "mapping") return;
     setSelectedKey(
       grid.divisionSelection?.cell.keyRef ?? grid.layoutSelection?.cell.keyRef ?? null,
+    );
+    setSelectedKeyTypeId(
+      grid.divisionSelection?.cell.typeId ?? grid.layoutSelection?.cell.typeId ?? null,
     );
   }, [mode, grid.divisionSelection, grid.layoutSelection]);
 
@@ -306,7 +316,8 @@ export default function App() {
             <Inspector
               layer={layer}
               selectedKey={selectedKey}
-              layout={layout?.layout ?? null}
+              selectedKeyTypeId={selectedKeyTypeId}
+              hasLayout={layout != null}
               mode={mode}
               layoutSelection={
                 grid.divisionSelection
