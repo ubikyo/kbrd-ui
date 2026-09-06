@@ -15,7 +15,7 @@ import {
 import { MdInfoOutline, MdStraighten } from "react-icons/md";
 
 import { getDisplay } from "../../api/display";
-import { createLayout, updateLayout } from "../../api/layouts";
+import { createLayout, duplicateLayout, updateLayout } from "../../api/layouts";
 import { DEFAULT_LAYOUT_SETTINGS } from "../../types/layout";
 import type { DisplayData, LayoutData, LayoutPayload } from "../../types/layout";
 import { maxItems, pitchMm } from "../../utils/layout";
@@ -55,18 +55,31 @@ function DisplayRow({ label, value }: { label: string; value: string }) {
 
 type Props = {
   editing: LayoutData | null;
+  // Set (with `editing` null) to open this as "Duplicate" instead of
+  // "Add" — prefills Name/Description from this source and, on save,
+  // clones its geometry/settings server-side (see `duplicateLayout`)
+  // rather than starting from a blank layout. Geometry isn't editable in
+  // this mode (see the Geometry tab below): `duplicateLayout` always
+  // carries the source's own over unchanged, so exposing fields that
+  // wouldn't actually apply would be misleading.
+  duplicateFrom: LayoutData | null;
   onClose: () => void;
   onSaved: (id: number) => void;
 };
 
 export default function LayoutEditor({
   editing,
+  duplicateFrom,
   onClose,
   onSaved,
 }: Props) {
   const [tab, setTab] = useState<string | null>("general");
-  const [name, setName] = useState(editing?.name ?? "");
-  const [description, setDescription] = useState(editing?.description ?? "");
+  const [name, setName] = useState(
+    editing?.name ?? (duplicateFrom ? `${duplicateFrom.name} copy` : ""),
+  );
+  const [description, setDescription] = useState(
+    editing?.description ?? duplicateFrom?.description ?? "",
+  );
   const [author, setAuthor] = useState(editing?.author ?? "");
   // Caps size / Gap size — per-layout, like the rest of Settings ›
   // Geometry, just edited here instead since they live on this same form.
@@ -146,7 +159,12 @@ export default function LayoutEditor({
     try {
       const saved = editing
         ? await updateLayout(editing.id, payload)
-        : await createLayout(payload);
+        : duplicateFrom
+          ? await duplicateLayout(duplicateFrom.id, {
+              name: payload.name,
+              description: payload.description,
+            })
+          : await createLayout(payload);
       onSaved(saved.id);
     } catch (cause) {
       setError(
@@ -159,7 +177,11 @@ export default function LayoutEditor({
     <Modal
       opened
       onClose={onClose}
-      title={<Text fw={700}>{editing ? "Edit" : "Add"} layout</Text>}
+      title={
+        <Text fw={700}>
+          {editing ? "Edit" : duplicateFrom ? "Duplicate" : "Add"} layout
+        </Text>
+      }
       centered
       size={670}
       overlayProps={{ backgroundOpacity: 0.65, blur: 2 }}
@@ -201,9 +223,11 @@ export default function LayoutEditor({
             <Tabs.Tab value="general" leftSection={<MdInfoOutline size={16} />}>
               General
             </Tabs.Tab>
-            <Tabs.Tab value="geometry" leftSection={<MdStraighten size={16} />}>
-              Geometry
-            </Tabs.Tab>
+            {!duplicateFrom && (
+              <Tabs.Tab value="geometry" leftSection={<MdStraighten size={16} />}>
+                Geometry
+              </Tabs.Tab>
+            )}
           </Tabs.List>
 
           <Tabs.Panel
@@ -221,13 +245,15 @@ export default function LayoutEditor({
                 onChange={(event) => setName(event.currentTarget.value)}
                 required
               />
-              <TextInput
-                variant="filled"
-                label="Author"
-                value={author}
-                success
-                onChange={(event) => setAuthor(event.currentTarget.value)}
-              />
+              {!duplicateFrom && (
+                <TextInput
+                  variant="filled"
+                  label="Author"
+                  value={author}
+                  success
+                  onChange={(event) => setAuthor(event.currentTarget.value)}
+                />
+              )}
               <Textarea
                 variant="filled"
                 label="Description"
@@ -246,6 +272,7 @@ export default function LayoutEditor({
             </Stack>
           </Tabs.Panel>
 
+          {!duplicateFrom && (
           <Tabs.Panel
             value="geometry"
             style={{ overflowY: "auto", padding: 0, paddingLeft: 40 }}
@@ -326,6 +353,7 @@ export default function LayoutEditor({
               </FieldRow>
             </Stack>
           </Tabs.Panel>
+          )}
         </Tabs>
       </Box>
 
@@ -339,7 +367,7 @@ export default function LayoutEditor({
       >
         <Button color="gray" onClick={onClose}>Cancel</Button>
         <Button color="green" onClick={save} disabled={!name.trim()}>
-          {editing ? "Save" : "Add"}
+          {editing ? "Save" : duplicateFrom ? "Duplicate" : "Add"}
         </Button>
       </Group>
     </Modal>

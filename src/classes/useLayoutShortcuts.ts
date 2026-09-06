@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Every global keyboard shortcut Layout mode responds to, independent of
- * whatever's focused: Tab toggles "Resize" (see `resizeEnabled`),
- * Cmd/Ctrl+Z undoes the last edit, Backspace deletes whatever's selected,
- * Cmd/Ctrl+C copies a cell, Cmd/Ctrl+V pastes into empty space. Both
- * effects skip firing while a modal has its own fields to type/tab
- * through, or while the user is typing into a text field somewhere else
- * (a plugin's config, a name field…) rather than working the display.
+ * Every global keyboard shortcut the display responds to, independent of
+ * whatever's focused: Tab toggles "Resize" (Layout-only — see
+ * `resizeEnabled`), Cmd/Ctrl+Z undoes the last edit, Backspace deletes
+ * whatever's selected, Cmd/Ctrl+C copies a cell, Cmd/Ctrl+V pastes into
+ * empty space. Both effects skip firing while a modal has its own fields
+ * to type/tab through, or while the user is typing into a text field
+ * somewhere else (a plugin's config, a name field…) rather than working
+ * the display.
+ *
+ * Backspace/Copy/Paste fire in either mode — this hook has no `mode` of
+ * its own to gate on. `Composer` (the only caller) passes whichever
+ * implementation matches the mode it's currently in: `useDisplayGrid`'s
+ * own geometry operations in Layout, its own Mapping-content operations
+ * (working off `keyRef`/`layer.plugins` instead) in Mapping — this hook
+ * stays ignorant of which is which.
  *
  * The keydown handler itself is read through a ref (`shortcutsRef`)
  * rather than listed as an effect dependency, so the `window` listener is
@@ -15,6 +23,9 @@ import { useEffect, useRef, useState } from "react";
  * many inputs change.
  */
 export function useLayoutShortcuts(params: {
+  // Only gates the Tab/Resize shortcut below — Resize is a Layout-only
+  // concept, so Tab does nothing while in Mapping mode. Every other
+  // shortcut in this hook stays mode-agnostic, per the class doc above.
   mode: "layout" | "mapping";
   settingsOpened: boolean;
   layoutEditorOpened: boolean;
@@ -31,8 +42,8 @@ export function useLayoutShortcuts(params: {
   // same cell's row without re-selecting its trailing space first.
   canPaste: boolean;
   undo: () => void;
-  deleteSelectedCells: () => void;
-  deleteSelectedDivisions: () => void;
+  requestDeleteCells: () => void;
+  requestDeleteDivisions: () => void;
   copySelectedCell: () => void;
   pasteToEmptyRow: () => void;
 }) {
@@ -49,8 +60,8 @@ export function useLayoutShortcuts(params: {
     emptySelection,
     canPaste,
     undo,
-    deleteSelectedCells,
-    deleteSelectedDivisions,
+    requestDeleteCells,
+    requestDeleteDivisions,
     copySelectedCell,
     pasteToEmptyRow,
   } = params;
@@ -61,11 +72,21 @@ export function useLayoutShortcuts(params: {
   // except while a modal has its own fields to tab through normally, or
   // while typing in a text field, where Tab must keep doing its normal job.
   useEffect(() => {
-    if (settingsOpened || layoutEditorOpened || layerEditorOpened || confirmDeleteOpen) {
+    if (
+      mode !== "layout" ||
+      settingsOpened ||
+      layoutEditorOpened ||
+      layerEditorOpened ||
+      confirmDeleteOpen
+    ) {
       return;
     }
     function handleTab(event: KeyboardEvent) {
-      if (event.key !== "Tab") return;
+      // Plain Tab only — Opt/Alt+Tab is Composer's own Layout/Mapping
+      // toggle and must not also flip Resize.
+      if (event.key !== "Tab" || event.altKey || event.metaKey || event.ctrlKey) {
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -80,7 +101,7 @@ export function useLayoutShortcuts(params: {
     }
     window.addEventListener("keydown", handleTab);
     return () => window.removeEventListener("keydown", handleTab);
-  }, [settingsOpened, layoutEditorOpened, layerEditorOpened, confirmDeleteOpen]);
+  }, [mode, settingsOpened, layoutEditorOpened, layerEditorOpened, confirmDeleteOpen]);
 
   const anyModalOpen = Boolean(
     settingsOpened ||
@@ -90,7 +111,6 @@ export function useLayoutShortcuts(params: {
       divideModalOpened,
   );
   const shortcutsRef = useRef({
-    mode,
     anyModalOpen,
     hasCellSelection,
     hasDivisionSelection,
@@ -98,14 +118,13 @@ export function useLayoutShortcuts(params: {
     emptySelection,
     canPaste,
     undo,
-    deleteSelectedCells,
-    deleteSelectedDivisions,
+    requestDeleteCells,
+    requestDeleteDivisions,
     copySelectedCell,
     pasteToEmptyRow,
   });
   useEffect(() => {
     shortcutsRef.current = {
-      mode,
       anyModalOpen,
       hasCellSelection,
       hasDivisionSelection,
@@ -113,8 +132,8 @@ export function useLayoutShortcuts(params: {
       emptySelection,
       canPaste,
       undo,
-      deleteSelectedCells,
-      deleteSelectedDivisions,
+      requestDeleteCells,
+      requestDeleteDivisions,
       copySelectedCell,
       pasteToEmptyRow,
     };
@@ -123,7 +142,6 @@ export function useLayoutShortcuts(params: {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const {
-        mode,
         anyModalOpen,
         hasCellSelection,
         hasDivisionSelection,
@@ -131,8 +149,8 @@ export function useLayoutShortcuts(params: {
         emptySelection,
         canPaste,
         undo,
-        deleteSelectedCells,
-        deleteSelectedDivisions,
+        requestDeleteCells,
+        requestDeleteDivisions,
         copySelectedCell,
         pasteToEmptyRow,
       } = shortcutsRef.current;
@@ -157,7 +175,6 @@ export function useLayoutShortcuts(params: {
         return;
       }
       if (
-        mode !== "layout" ||
         isTyping ||
         (!hasCellSelection && !hasDivisionSelection && !emptySelection)
       ) {
@@ -165,16 +182,16 @@ export function useLayoutShortcuts(params: {
       }
       const withModifier = event.metaKey || event.ctrlKey;
       // A division being the real focus must win here — otherwise
-      // Backspace would fall through to `deleteSelectedCells` and delete
+      // Backspace would fall through to `requestDeleteCells` and delete
       // the whole divided cell, every other division along with it,
       // rather than just clearing the selected one(s)' own plugin (a
       // division can never be removed on its own, only cleared).
       if (event.key === "Backspace" && hasDivisionSelection) {
         event.preventDefault();
-        deleteSelectedDivisions();
+        requestDeleteDivisions();
       } else if (event.key === "Backspace" && hasCellSelection) {
         event.preventDefault();
-        deleteSelectedCells();
+        requestDeleteCells();
       } else if (
         canCopySelection &&
         withModifier &&

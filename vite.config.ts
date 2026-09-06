@@ -16,6 +16,12 @@ export default defineConfig({
   // kbrd-os/board/kbrd/rootfs-overlay/etc/nginx/conf.d/kbrd-web.conf) —
   // `vite build` ignores this block entirely, so it's harmless there.
   server: {
+    // Vite's own default only binds the dev server to localhost — fine
+    // when the browser runs on the same machine, but this is usually
+    // developed inside a VM/container with the browser outside it. `true`
+    // binds every interface (0.0.0.0) instead, so a forwarded/bridged port
+    // can actually reach it from there.
+    host: true,
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8081",

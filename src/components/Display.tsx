@@ -6,6 +6,8 @@ import { addKeyPlugin } from "../api/layers";
 import { FALLBACK_HEIGHT, FALLBACK_WIDTH } from "../api/device";
 import { useCellMove } from "../classes/useCellMove";
 import { useCellResize } from "../classes/useCellResize";
+import { useKeyDrag } from "../classes/useKeyDrag";
+import type { KeyDragTarget } from "../classes/useKeyDrag";
 import { useDevicePolling } from "../classes/useDevicePolling";
 import { useElementSize } from "../classes/useElementSize";
 import { isMappingTarget, isMappingVisible, pluginById } from "../plugins/registry";
@@ -29,6 +31,7 @@ import {
   remainingUnitsInRow,
   type CellRect,
 } from "../utils/layout";
+import { randomId } from "../utils/id";
 import LayoutCellDivision from "./LayoutCellDivision";
 import LayoutCell, { ResizeGrip } from "./LayoutCell";
 
@@ -100,6 +103,10 @@ type Props = LayoutSettings & {
   // there — see `handleCellDragOver`'s own insertion-point math and
   // `onMoveCell`'s Unit-budget check.
   onMoveCell: (id: number, targetRow: number, beforeId: number | null) => void;
+  // Dragging a Key cell with Mapping content onto another Key cell moves
+  // all of it there (in place of the old "Move to" menu item) — see
+  // `useKeyDrag`. Only wired up (and only ever called) in Mapping mode.
+  onMoveKey: (sourceKeyRef: string, destKeyRef: string) => void;
   mergeGroups: MergeGroups;
   // Every currently-selected top-level cell's own primary id — plain
   // click replaces this with a singleton (or empty, toggling the sole
@@ -208,6 +215,7 @@ export default function Display({
   onAssignLayoutPlugin,
   onAssignLayoutPluginToDivision,
   onMoveCell,
+  onMoveKey,
   mergeGroups,
   selectedCellIndices,
   onSelectCell,
@@ -298,6 +306,85 @@ export default function Display({
     handleCellPointerDown,
   } = cellMove;
 
+  // A drag target's own current `keyRef` — `undefined`/`null` for a Key
+  // cell/division that's never had one minted yet (see `GridCell.keyRef`'s
+  // own docblock) — and, for `onMoveKey` below, minting (and persisting)
+  // a fresh one on demand for whichever end doesn't have one, the same
+  // way `handleCellDrop`/`handleDivisionDrop` already do for a plugin
+  // dropped from the Inspector.
+  function keyRefFor(target: KeyDragTarget): string | null | undefined {
+    return target.kind === "cell"
+      ? cells[target.id]?.keyRef
+      : cells[target.parentId]?.divide?.cells[target.subId]?.keyRef;
+  }
+
+  function ensureKeyRef(target: KeyDragTarget): string {
+    const existing = keyRefFor(target);
+    if (existing) return existing;
+    const keyRef = randomId();
+    if (target.kind === "cell") {
+      onCellsChange((current) => {
+        const cell = current[target.id];
+        if (!cell) return current;
+        return { ...current, [target.id]: { ...cell, keyRef } };
+      });
+    } else {
+      onCellsChange((current) => {
+        const parent = current[target.parentId];
+        const existingDivision = parent?.divide?.cells[target.subId];
+        if (!parent?.divide || !existingDivision) return current;
+        return {
+          ...current,
+          [target.parentId]: {
+            ...parent,
+            divide: {
+              ...parent.divide,
+              cells: {
+                ...parent.divide.cells,
+                [target.subId]: { ...existingDivision, keyRef },
+              },
+            },
+          },
+        };
+      });
+    }
+    return keyRef;
+  }
+
+  const keyDrag = useKeyDrag({
+    rows,
+    cells,
+    mergeGroups,
+    unitMm,
+    gapMm,
+    display,
+    pxPerMm,
+    gridOffsetX,
+    gridOffsetY,
+    itemsY,
+    rowPitch,
+    svgRef,
+    hasContent: (target) => hasMappingContent(keyRefFor(target)),
+    pluginCount: (target) => pluginCountFor(keyRefFor(target)),
+    onSelectStart: (target) => {
+      if (isSelectedTarget(target)) return;
+      if (target.kind === "cell") onSelectCell(target.id);
+      else onSelectDivision({ parentId: target.parentId, subId: target.subId });
+    },
+    onMoveKey: (source, dest) => {
+      const sourceKeyRef = ensureKeyRef(source);
+      const destKeyRef = ensureKeyRef(dest);
+      onMoveKey(sourceKeyRef, destKeyRef);
+      // The destination becomes the selection, same as dropping a plugin
+      // from the Inspector onto a cell/division already does (see
+      // `handleCellDrop`/`handleDivisionDrop`'s own `onSelectCell`/
+      // `onSelectDivision` calls) — not the source, which just lost its
+      // content.
+      if (dest.kind === "cell") onSelectCell(dest.id);
+      else onSelectDivision({ parentId: dest.parentId, subId: dest.subId });
+    },
+  });
+
   // A native HTML5 drag ending any way at all (dropped, or cancelled with
   // Escape) must never leave a stale drop-target highlight behind — the
   // element it was over doesn't always get its own `dragleave` first.
@@ -328,6 +415,57 @@ export default function Display({
       .sort((a, b) => a.position - b.position);
   }
 
+  // Whether `keyRef` has *any* Mapping content at all — including a
+  // disabled plugin, unlike `keyPluginsFor` above (which only resolves
+  // the ones actually drawn). Used to decide whether a key is worth
+  // dragging (`useKeyDrag`'s own `hasContent`), the same "any plugin
+  // counts" rule Composer's own Copy/Paste/Delete already use
+  // (`hasMappingContent`) — a key whose only plugin happens to be
+  // disabled was otherwise silently undraggable.
+  function hasMappingContent(keyRef: string | null | undefined): boolean {
+    return Boolean(keyRef && layer?.plugins.some((instance) => instance.key_ref === keyRef));
+  }
+
+  // How many plugins `keyRef` carries — same "any plugin counts" rule as
+  // `hasMappingContent` above, shown on the key-move drag ghost once it
+  // grows (see `useKeyDrag`'s own `pluginCount`).
+  function pluginCountFor(keyRef: string | null | undefined): number {
+    if (!keyRef || !layer) return 0;
+    return layer.plugins.filter((instance) => instance.key_ref === keyRef).length;
+  }
+
+  // Whether `target` is already the sole selection — guards `onSelectStart`
+  // above so re-confirming a drag on whatever's already selected doesn't
+  // also run through `onSelectCell`/`onSelectDivision`'s own toggle-off-if-
+  // already-sole-selection logic and deselect it instead.
+  function isSelectedTarget(target: KeyDragTarget): boolean {
+    return target.kind === "cell"
+      ? selectedCellIndices.length === 1 &&
+          selectedCellIndices[0] === target.id &&
+          selectedDivisionIndices.length === 0
+      : selectedCellIndices.length === 1 &&
+          selectedCellIndices[0] === target.parentId &&
+          selectedDivisionIndices.length === 1 &&
+          selectedDivisionIndices[0] === target.subId;
+  }
+
+  // Whether `keyRef` already has a real `pluginId` instance attached —
+  // `handleCellDrop`/`handleDivisionDrop` below use this (not the cell's
+  // own `pluginIds`, a client-only list of every id *ever* dropped there)
+  // to decide whether dropping the same plugin again is a no-op. `pluginIds`
+  // is never cleared by Delete/Move/Paste-overwrite (see `Composer`'s own
+  // Mapping operations), so a division that once had, say, "Label" and had
+  // it removed since would otherwise still read as "already has Label" —
+  // silently rejecting every further drop of it, real content or not.
+  function hasPlugin(keyRef: string | null | undefined, pluginId: string): boolean {
+    return Boolean(
+      keyRef &&
+        layer?.plugins.some(
+          (instance) => instance.key_ref === keyRef && instance.plugin_id === pluginId,
+        ),
+    );
+  }
+
   // Actually creates the real `KeyPlugin` record a Render/Invoke plugin
   // dropped onto a Key cell/division in Mapping mode attaches to — see
   // `handleCellDrop`/`handleDivisionDrop`. `keyRef` is whatever the target
@@ -351,7 +489,7 @@ export default function Display({
   function handleCellDragOver(id: number, event: DragEvent<SVGGElement>) {
     if (!event.dataTransfer.types.includes(PLUGIN_DRAG_TYPE)) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+    event.dataTransfer.dropEffect = "move";
     setDropTarget({ kind: "cell", id });
   }
 
@@ -377,9 +515,11 @@ export default function Display({
     event.stopPropagation();
     // The browser still fires a `click` right after the `pointerup` that
     // ends an actual move-drag (see the pointer effect above) — without
-    // this, dropping a cell elsewhere would also re-select/toggle it.
-    if (suppressClickRef.current) {
+    // this, dropping a cell elsewhere would also re-select/toggle it. Same
+    // deal for `keyDrag`'s own Mapping-mode drag, a separate hook/ref.
+    if (suppressClickRef.current || keyDrag.suppressClickRef.current) {
       suppressClickRef.current = false;
+      keyDrag.suppressClickRef.current = false;
       return;
     }
     const primary = primaryOf(index, mergeGroups);
@@ -422,14 +562,14 @@ export default function Display({
     if (
       plugin.category === "Layout" ||
       !isMappingTarget(cell?.typeId) ||
-      cell.pluginIds.includes(plugin.id)
+      hasPlugin(cell.keyRef, plugin.id)
     ) {
       return;
     }
     // A cell saved before `GridCell.keyRef` existed has none yet — mint
     // one now rather than losing the drop, so there's still something
     // real for the `KeyPlugin` below to attach to.
-    const keyRef = cell.keyRef ?? crypto.randomUUID();
+    const keyRef = cell.keyRef ?? randomId();
     onCellsChange((current) => ({
       ...current,
       [primary]: { ...cell, keyRef, pluginIds: [...cell.pluginIds, plugin.id] },
@@ -446,7 +586,7 @@ export default function Display({
       return;
     }
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+    event.dataTransfer.dropEffect = "move";
     setDropTarget({ kind: "row", row });
   }
 
@@ -470,7 +610,7 @@ export default function Display({
       ...defaultGridCell(Math.min(1, remaining)),
       typeId: plugin.id,
       typeConfig: { ...plugin.defaultConfig },
-      keyRef: crypto.randomUUID(),
+      keyRef: randomId(),
     });
   }
 
@@ -486,6 +626,14 @@ export default function Display({
     event: ReactMouseEvent<SVGGElement>,
   ) {
     event.stopPropagation();
+    // Same deal as `handleClick`'s own check — the `click` right after a
+    // `keyDrag` move's `pointerup` (see `useKeyDrag`) must not also
+    // select/toggle the division it just landed on.
+    if (suppressClickRef.current || keyDrag.suppressClickRef.current) {
+      suppressClickRef.current = false;
+      keyDrag.suppressClickRef.current = false;
+      return;
+    }
     const primary = primaryOf(subId, divide.mergeGroups);
     if (event.metaKey || event.ctrlKey) {
       onToggleDivision({ parentId, subId: primary });
@@ -510,7 +658,7 @@ export default function Display({
   ) {
     if (!event.dataTransfer.types.includes(PLUGIN_DRAG_TYPE)) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+    event.dataTransfer.dropEffect = "move";
     setDropTarget({ kind: "division", parentId, subId });
   }
 
@@ -541,11 +689,11 @@ export default function Display({
     if (
       plugin.category === "Layout" ||
       !isMappingTarget(divCell?.typeId) ||
-      divCell.pluginIds.includes(plugin.id)
+      hasPlugin(divCell.keyRef, plugin.id)
     ) {
       return;
     }
-    const keyRef = divCell.keyRef ?? crypto.randomUUID();
+    const keyRef = divCell.keyRef ?? randomId();
     onCellsChange((current) => {
       const parent = current[parentId];
       const existing = parent?.divide?.cells[primary];
@@ -572,10 +720,11 @@ export default function Display({
   // left-click handler above, minus its merge-in-progress branch: a
   // context menu request is never itself the neighbour that completes a
   // merge) and report it to `App`, which opens its own context menu
-  // there. Layout-mode only for anything but the display — nothing to act
-  // on in Mapping mode, so the browser's own context menu is left alone.
+  // there. A cell/division's own menu fires in either mode now — its
+  // content differs (geometry actions in Layout, Mapping-content actions
+  // in Mapping — see `Composer`); only the empty row's menu below stays
+  // Layout-only, since Mapping has no equivalent to act on there.
   function handleCellContextMenu(index: number, event: ReactMouseEvent<SVGGElement>) {
-    if (mode !== "layout") return;
     event.preventDefault();
     event.stopPropagation();
     const primary = primaryOf(index, mergeGroups);
@@ -593,7 +742,6 @@ export default function Display({
     subId: number,
     event: ReactMouseEvent<SVGGElement>,
   ) {
-    if (mode !== "layout") return;
     event.preventDefault();
     event.stopPropagation();
     const primary = primaryOf(subId, divide.mergeGroups);
@@ -647,8 +795,21 @@ export default function Display({
           viewBox={`0 0 ${physicalWidthMm} ${physicalHeightMm}`}
           // Any click that isn't on a cell — including the frame itself —
           // bubbles up here and selects the display instead; cells stop
-          // their own click from reaching this (see `handleClick`).
-          onClick={onSelectDisplay}
+          // their own click from reaching this (see `handleClick`). Also
+          // the final backstop for `suppressClickRef`/`keyDrag`'s own —
+          // the state update a drag's `pointerup` triggers (a fresh
+          // selection, a moved plugin…) can get the dragged cell/division
+          // reconciled to a new DOM node before the browser's trailing
+          // `click` fires, letting it bubble straight past every `<g>`'s
+          // own `stopPropagation()` up to here instead.
+          onClick={() => {
+            if (suppressClickRef.current || keyDrag.suppressClickRef.current) {
+              suppressClickRef.current = false;
+              keyDrag.suppressClickRef.current = false;
+              return;
+            }
+            onSelectDisplay();
+          }}
           onContextMenu={handleDisplayContextMenu}
           style={{ flexShrink: 0, cursor: "pointer" }}
         >
@@ -728,6 +889,11 @@ export default function Display({
                           dropTarget.parentId === primary &&
                           dropTarget.subId === subId
                         }
+                        isMoveTarget={(subId) =>
+                          keyDrag.dragTarget?.kind === "division" &&
+                          keyDrag.dragTarget.parentId === primary &&
+                          keyDrag.dragTarget.subId === subId
+                        }
                         onDivisionClick={handleDivisionClick}
                         onDivisionContextMenu={handleDivisionContextMenu}
                         onDivisionDragOver={handleDivisionDragOver}
@@ -735,6 +901,12 @@ export default function Display({
                           handleDragLeave({ kind: "division", parentId, subId })
                         }
                         onDivisionDrop={handleDivisionDrop}
+                        onDivisionPointerDown={(parentId, subId, event) =>
+                          keyDrag.handleKeyPointerDown(
+                            { kind: "division", parentId, subId },
+                            event,
+                          )
+                        }
                         keyPluginsFor={keyPluginsFor}
                       />
                     );
@@ -757,14 +929,16 @@ export default function Display({
                       path={merged?.path}
                       labelBounds={merged?.labelBounds}
                       typeId={cell?.typeId}
-                      pluginIds={cell?.pluginIds}
                       keyPlugins={keyPluginsFor(cell?.keyRef)}
                       unit={hasContent ? cell?.unit : undefined}
                       isEmpty={!hasContent}
                       isSelected={selectedCellIndices.includes(primary)}
                       isDropTarget={
-                        dropTarget?.kind === "cell" &&
-                        dropTarget.id === primary
+                        dropTarget?.kind === "cell" && dropTarget.id === primary
+                      }
+                      isMoveTarget={
+                        keyDrag.dragTarget?.kind === "cell" &&
+                        keyDrag.dragTarget.id === primary
                       }
                       // Layout-only: Mapping mode shows the shape (once
                       // `mapping-visible`) with no size/type caption under
@@ -777,16 +951,21 @@ export default function Display({
                         handleDragLeave({ kind: "cell", id: primary })
                       }
                       onDrop={(event) => handleCellDrop(primary, event)}
-                      // Only a single, unmerged cell has one well-defined
-                      // place to drag *from* — same restriction the
-                      // resize grip already has (see `pendingGrips`
-                      // above) — and only in Layout mode, where the
-                      // row/cell structure this actually changes is
-                      // being edited in the first place.
+                      // Layout: only a single, unmerged cell has one
+                      // well-defined place to drag *from* — same
+                      // restriction the resize grip already has (see
+                      // `pendingGrips` above). Mapping: any Key cell that
+                      // actually has content — dragging it moves that
+                      // content onto whatever key it's dropped on (see
+                      // `useKeyDrag`), in place of the old "Move to" menu
+                      // item; an empty key has nothing to drag.
                       onPointerDown={
-                        mode === "layout" && group.length === 1
-                          ? (event) => handleCellPointerDown(primary, event)
-                          : undefined
+                        mode === "layout"
+                          ? group.length === 1
+                            ? (event) => handleCellPointerDown(primary, event)
+                            : undefined
+                          : (event) =>
+                              keyDrag.handleKeyPointerDown({ kind: "cell", id: primary }, event)
                       }
                     />
                   );

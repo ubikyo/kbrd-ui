@@ -1,6 +1,8 @@
 import {
   createTheme,
   type CSSVariablesResolver,
+  HoverCard,
+  Kbd,
   Menu,
   Modal,
   NumberInput,
@@ -50,6 +52,31 @@ export const theme = createTheme({
       styles: {
         thumb: {
           backgroundColor: "#FFFFFF",
+        },
+      },
+    }),
+    // Same window look as `Modal`/`Menu` above — a HoverCard is just
+    // another floating window in this app, not a lighter-weight thing of
+    // its own.
+    HoverCard: HoverCard.extend({
+      styles: {
+        dropdown: {
+          border: "1px solid var(--kbrd-border-color)",
+          backgroundColor: "var(--kbrd-color-body)",
+        },
+      },
+    }),
+    // Mantine's own keycap look (light background, inset box-shadow, bold
+    // monospace) doesn't fit this app's dark chrome — flattened to a plain
+    // outlined tag matching the rest of the UI's borders.
+    Kbd: Kbd.extend({
+      styles: {
+        root: {
+          border: "none",
+          backgroundColor: "var(--kbrd-color-surface)",
+          boxShadow: "none",
+          color: "#FFFFFF",
+          fontWeight: 400,
         },
       },
     }),

@@ -28,6 +28,16 @@ type Props = {
   // physical screen), but Add stays reachable straight from this picker
   // too — the "+" below the list, the quickest path to a new one.
   onAdd: () => void;
+  // The full list, whenever it (re)loads — lets `App` build the "Replace
+  // with current" picker (every *other* layer) without this component
+  // needing to know anything about that feature itself.
+  onItemsChange?: (items: LayerData[]) => void;
+  // Layer only matters in Mapping mode (Render/Invoke plugins attach to
+  // it; Layout plugins attach to the Layout itself) — `App` hides this
+  // picker in Layout mode by setting this, rather than unmounting the
+  // component outright, so switching modes back and forth doesn't
+  // re-trigger its own load/(re)activate effect above every time.
+  hidden?: boolean;
 };
 
 // Add/Edit/Delete now live in Display's own display Actions menu (select the
@@ -39,7 +49,7 @@ export type LayerMenuHandle = {
 };
 
 const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
-  { layoutId, onChange, onAdd },
+  { layoutId, onChange, onAdd, onItemsChange, hidden = false },
   ref,
 ) {
   const [items, setItems] = useState<LayerData[]>([]);
@@ -61,6 +71,7 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
     void listLayers(layoutId).then(async (data) => {
       if (cancelled) return;
       setItems(data);
+      onItemsChange?.(data);
       const current = data.find((item) => item.active) ?? data[0];
       if (current) await select(current);
       else {
@@ -73,11 +84,13 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutId, onChange, select]);
 
   async function refresh(preferredId?: number) {
     const data = await listLayers(layoutId);
     setItems(data);
+    onItemsChange?.(data);
     const current = data.find((item) => item.id === preferredId) ?? data[0];
     if (current) await select(current);
     else {
@@ -88,6 +101,8 @@ const Layer = forwardRef<LayerMenuHandle, Props>(function Layer(
   }
 
   useImperativeHandle(ref, () => ({ refresh }));
+
+  if (hidden) return null;
 
   return (
     <Menu

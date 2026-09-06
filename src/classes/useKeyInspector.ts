@@ -35,9 +35,6 @@ export function useKeyInspector(params: {
   onChange: (plugins: KeyPlugin[]) => void;
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
-  onPreviewDownTargetChange: (keyRef: string | null) => void;
-  onMoveTo: () => void;
-  onClearAll: () => Promise<void>;
 }) {
   const {
     layer,
@@ -47,16 +44,12 @@ export function useKeyInspector(params: {
     onChange,
     onKeyPropertiesChange,
     onPreviewDownPluginChange,
-    onPreviewDownTargetChange,
-    onMoveTo,
-    onClearAll,
   } = params;
 
   const [propertyStates, setPropertyStates] = useState<
     Record<number, "main" | "up" | "down">
   >({});
   const [deleting, setDeleting] = useState<KeyPlugin | null>(null);
-  const [clearing, setClearing] = useState(false);
   const [targetStates, setTargetStates] = useState<
     Record<string, "option" | "up" | "down">
   >({});
@@ -208,40 +201,12 @@ export function useKeyInspector(params: {
     setDeleting(null);
   }
 
-  async function clearAll() {
-    if (!selectedKey) return;
-    pendingPropertySaves.take(selectedKey);
-    for (const instance of instances) {
-      pendingSaves.take(instance.id);
-    }
-    await onClearAll();
-    onPreviewDownPluginChange(null);
-    onPreviewDownTargetChange(null);
-    setClearing(false);
-  }
-
-  async function startMoveTo() {
-    if (!layer || !selectedKey) return;
-    const saves: Promise<unknown>[] = [];
-    if (pendingPropertySaves.take(selectedKey)) {
-      saves.push(updateKeyProperties(layer.id, selectedKey, propertyConfig));
-    }
-    for (const instance of instances) {
-      const pending = pendingSaves.take(instance.id);
-      if (pending) saves.push(updateKeyPlugin(instance.id, pending));
-    }
-    await Promise.all(saves);
-    onMoveTo();
-  }
-
   return {
     // UI-only state
     propertyStates,
     setPropertyStates,
     deleting,
     setDeleting,
-    clearing,
-    setClearing,
     targetStates,
     setTargetStates,
     dropIndicator,
@@ -265,7 +230,5 @@ export function useKeyInspector(params: {
     patch,
     reorder,
     remove,
-    clearAll,
-    startMoveTo,
   };
 }

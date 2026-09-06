@@ -1,3 +1,5 @@
+import { randomId } from "../utils/id";
+
 export type LayoutPart = {
   width: number;
   height: number;
@@ -136,7 +138,7 @@ export type GridCell = {
   // Render/Invoke plugin dropped onto it in Mapping mode attaches to (see
   // `KeyPlugin.key_ref`) — unrelated to `id`/`nextCellId`, which is only
   // this synthetic grid's own bookkeeping and can be reused once a cell is
-  // deleted. Generated fresh (`crypto.randomUUID()`) the moment a Layout
+  // deleted. Generated fresh (`randomId()`) the moment a Layout
   // plugin is first assigned to this cell, and again whenever its kind
   // changes to a different Layout plugin — `null` until then, since there's
   // nothing yet for a dropped plugin to attach to. Not preserved across
@@ -230,7 +232,7 @@ function cloneDivisionCell(cell: DivisionCell): DivisionCell {
     typeId: cell.typeId,
     typeConfig: { ...cell.typeConfig },
     pluginIds: [...cell.pluginIds],
-    keyRef: cell.typeId ? crypto.randomUUID() : null,
+    keyRef: cell.typeId ? randomId() : null,
   };
 }
 

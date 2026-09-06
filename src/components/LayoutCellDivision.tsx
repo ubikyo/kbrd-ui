@@ -1,4 +1,9 @@
-import type { DragEvent, MouseEvent as ReactMouseEvent, ReactElement } from "react";
+import type {
+  DragEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactElement,
+} from "react";
 
 import { isMappingVisible } from "../plugins/registry";
 import type { KeyPlugin } from "../types/layer";
@@ -20,6 +25,16 @@ type Props = {
   selectedCellIndices: number[];
   selectedDivisionIndices: number[];
   isDropTarget: (subId: number) => boolean;
+  // Mapping mode's own key-drag drop target (see `useKeyDrag`) — separate
+  // from `isDropTarget` above (a plugin dragged from the Inspector), see
+  // `LayoutCell`'s own `isMoveTarget`. Both default to never-true so
+  // Layout-mode callers (which don't have this concept) can omit them.
+  isMoveTarget?: (subId: number) => boolean;
+  onDivisionPointerDown?: (
+    parentId: number,
+    subId: number,
+    event: ReactPointerEvent<SVGGElement>,
+  ) => void;
   onDivisionClick: (
     parentId: number,
     divide: DivideGrid,
@@ -71,11 +86,13 @@ export default function LayoutCellDivision({
   selectedCellIndices,
   selectedDivisionIndices,
   isDropTarget,
+  isMoveTarget,
   onDivisionClick,
   onDivisionContextMenu,
   onDivisionDragOver,
   onDivisionDragLeave,
   onDivisionDrop,
+  onDivisionPointerDown,
   keyPluginsFor,
 }: Props) {
   const count = divide.cols * divide.rows;
@@ -97,6 +114,7 @@ export default function LayoutCellDivision({
       isMerged: group.length > 1,
       isSelected,
       isDropTarget: isDropTarget(primary),
+      isMoveTarget: isMoveTarget?.(primary) ?? false,
       // Mapping mode only ever shows a division whose own Layout plugin
       // opts into it (`mapping-visible`) — same rule as `Display`'s own
       // top-level cells, just per-division.
@@ -104,7 +122,7 @@ export default function LayoutCellDivision({
     };
   });
   const isHighlighted = (subId: number) =>
-    status[subId].isSelected || status[subId].isDropTarget;
+    status[subId].isSelected || status[subId].isDropTarget || status[subId].isMoveTarget;
 
   // Two adjacent, both-dashed divisions each stroking their own full
   // border would draw their shared edge twice — and since each one's
@@ -166,20 +184,33 @@ export default function LayoutCellDivision({
   }
 
   const rendered = new Set<number>();
-  // Whichever sibling comes later in this array visually wins on any
-  // shared edge it still has (SVG paints in document order) — with
-  // border-dedup above, that's now only ever a highlighted item next
-  // to a baseline one it no longer draws anything towards anyway, but
-  // this stays as a defensive ordering all the same, the same reason
-  // `Display` already renders the resize grip in its own pass after
-  // every cell.
-  const items: { key: string; priority: boolean; element: ReactElement }[] = [];
+  // The interactive element for a division — real event handlers, real
+  // content — always renders in this same, stable `subId` order and
+  // *never* moves in the DOM afterward, regardless of selection/drop/move
+  // state: reordering it (an earlier "priority" pass used to push a
+  // highlighted one later, to paint over a neighbour's shared edge) can
+  // detach and reattach its own DOM node mid-gesture, which is enough to
+  // make a browser's native drag-and-drop silently lose track of it —
+  // `dragover` still fires (nothing about the drag's own tracking touches
+  // the DOM), but the `drop` right after it never does. Any Z-ordering a
+  // highlight still needs against a neighbour is handled by
+  // `highlightItems` below instead: a second, purely visual, non-
+  // interactive pass drawn after every one of these, so it always paints
+  // on top without this element ever having to.
+  const baseItems: ReactElement[] = [];
+  // Visual-only re-draw of whichever division(s) are currently selected,
+  // a plugin's own drop target, or a key-drag's move target — same shape/
+  // position as the matching `baseItems` entry, `pointerEvents: "none"`
+  // so it never intercepts anything, just painted after every baseline
+  // item so its own highlighted border/fill always wins on a shared edge.
+  const highlightItems: ReactElement[] = [];
   for (let subId = 0; subId < count; subId++) {
     const {
       group,
       primary,
       isSelected,
       isDropTarget: primaryIsDropTarget,
+      isMoveTarget: primaryIsMoveTarget,
       isMerged,
       isVisible,
     } = status[subId];
@@ -207,37 +238,60 @@ export default function LayoutCellDivision({
     const unit = hasContent
       ? Math.round((bounds.width / parentRect.width) * parentUnit * 100) / 100
       : undefined;
+    const isHighlightedNow = isSelected || primaryIsDropTarget || primaryIsMoveTarget;
 
-    items.push({
-      key: `division-${parentId}-${primary}`,
-      priority: isSelected || primaryIsDropTarget,
-      element: (
-        <LayoutCell
-          key={`division-${parentId}-${primary}`}
-          bounds={bounds}
-          path={outline?.path}
-          labelBounds={outline?.labelBounds}
-          typeId={divCell?.typeId}
-          pluginIds={divCell?.pluginIds}
-          keyPlugins={keyPluginsFor(divCell?.keyRef)}
-          unit={unit}
-          isEmpty={!hasContent}
-          isSelected={isSelected}
-          isDropTarget={primaryIsDropTarget}
-          // A baseline (unmerged, unhighlighted) division's border is
-          // drawn once, deduplicated, in `borderSegments` above instead.
-          showBorder={isMerged || isSelected || primaryIsDropTarget}
-          showText={mode === "layout"}
-          onClick={(event) => onDivisionClick(parentId, divide, primary, event)}
-          onContextMenu={(event) =>
-            onDivisionContextMenu(parentId, divide, primary, event)
-          }
-          onDragOver={(event) => onDivisionDragOver(parentId, primary, event)}
-          onDragLeave={() => onDivisionDragLeave(parentId, primary)}
-          onDrop={(event) => onDivisionDrop(parentId, divide, primary, event)}
-        />
-      ),
-    });
+    baseItems.push(
+      <LayoutCell
+        key={`division-${parentId}-${primary}`}
+        bounds={bounds}
+        path={outline?.path}
+        labelBounds={outline?.labelBounds}
+        typeId={divCell?.typeId}
+        keyPlugins={keyPluginsFor(divCell?.keyRef)}
+        unit={unit}
+        isEmpty={!hasContent}
+        // Never this element's own highlighted styling — see
+        // `highlightItems` above for that.
+        isSelected={false}
+        isDropTarget={false}
+        isMoveTarget={false}
+        // A baseline (unmerged) division's border is drawn once,
+        // deduplicated, in `borderSegments` above instead; a merged one
+        // still needs its own outline regardless of highlight state.
+        showBorder={isMerged}
+        showText={mode === "layout"}
+        onClick={(event) => onDivisionClick(parentId, divide, primary, event)}
+        onContextMenu={(event) =>
+          onDivisionContextMenu(parentId, divide, primary, event)
+        }
+        onDragOver={(event) => onDivisionDragOver(parentId, primary, event)}
+        onDragLeave={() => onDivisionDragLeave(parentId, primary)}
+        onDrop={(event) => onDivisionDrop(parentId, divide, primary, event)}
+        onPointerDown={
+          mode === "mapping" && onDivisionPointerDown
+            ? (event) => onDivisionPointerDown(parentId, primary, event)
+            : undefined
+        }
+      />,
+    );
+
+    if (isHighlightedNow) {
+      highlightItems.push(
+        <g key={`division-highlight-${parentId}-${primary}`} style={{ pointerEvents: "none" }}>
+          <LayoutCell
+            bounds={bounds}
+            path={outline?.path}
+            labelBounds={outline?.labelBounds}
+            isEmpty={!hasContent}
+            isSelected={isSelected}
+            isDropTarget={primaryIsDropTarget}
+            isMoveTarget={primaryIsMoveTarget}
+            showBorder
+            showText={false}
+          />
+        </g>,
+      );
+    }
   }
 
   const borderLines = borderSegments.map((segment, index) => (
@@ -257,7 +311,7 @@ export default function LayoutCellDivision({
 
   return [
     ...borderLines,
-    ...items.filter((item) => !item.priority).map((item) => item.element),
-    ...items.filter((item) => item.priority).map((item) => item.element),
+    ...baseItems,
+    ...highlightItems,
   ];
 }

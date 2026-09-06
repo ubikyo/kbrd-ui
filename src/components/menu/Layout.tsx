@@ -12,6 +12,10 @@ type Props = {
   // the physical screen), but Add stays reachable straight from this
   // picker too — the "+" below the list, the quickest path to a new one.
   onAdd: () => void;
+  // The full list, whenever it (re)loads — lets `App` build the "Replace
+  // with current" picker (every *other* layout) without this component
+  // needing to know anything about that feature itself.
+  onItemsChange?: (items: LayoutData[]) => void;
 };
 
 // Add/Edit/Delete now live in Display's own display Actions menu (select the
@@ -23,7 +27,7 @@ export type LayoutMenuHandle = {
 };
 
 const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
-  { onChange, onAdd },
+  { onChange, onAdd, onItemsChange },
   ref,
 ) {
   const [items, setItems] = useState<LayoutData[]>([]);
@@ -38,6 +42,7 @@ const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
   async function refresh(preferredId?: number) {
     const data = await listLayouts();
     setItems(data);
+    onItemsChange?.(data);
     select(
       data.find((item) => item.id === preferredId) ??
         data.find((item) => item.id === selected?.id) ??
@@ -54,12 +59,14 @@ const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
       if (cancelled) return;
       const current = defaultLayout(data) ?? null;
       setItems(data);
+      onItemsChange?.(data);
       setSelected(current);
       onChange(current);
     });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onChange]);
 
   return (

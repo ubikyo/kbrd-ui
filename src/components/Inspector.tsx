@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Group,
-  Menu,
   Modal,
   NumberInput,
   Stack,
@@ -12,16 +11,10 @@ import {
   Tabs,
   Text,
 } from "@mantine/core";
-import {
-  MdContentCopy,
-  MdDelete,
-  MdDragIndicator,
-  MdDriveFileMove,
-  MdMoreVert,
-} from "react-icons/md";
+import { MdDelete, MdDragIndicator } from "react-icons/md";
 import { PropertyRow } from "@kbrd/plugins/web";
 
-import { pluginSummary, setDragSymbol } from "../classes/inspectorHelpers";
+import { pluginSummary, setDragSymbol, setPluginDragImage } from "../classes/inspectorHelpers";
 import { useKeyInspector } from "../classes/useKeyInspector";
 import { pluginById } from "../plugins/registry";
 import { downState, upConfig } from "../plugins/state";
@@ -56,10 +49,6 @@ type Props = {
   onKeyPropertiesChange: (properties: KeyProperty[]) => void;
   onPreviewDownPluginChange: (pluginId: number | null) => void;
   onPreviewDownTargetChange: (keyRef: string | null) => void;
-  onDuplicateFrom: () => void;
-  onDuplicateTo: () => void;
-  onMoveTo: () => void;
-  onClearAll: () => Promise<void>;
 };
 
 /**
@@ -81,10 +70,6 @@ export default function Inspector({
   onKeyPropertiesChange,
   onPreviewDownPluginChange,
   onPreviewDownTargetChange,
-  onDuplicateFrom,
-  onDuplicateTo,
-  onMoveTo,
-  onClearAll,
 }: Props) {
   const inspector = useKeyInspector({
     layer,
@@ -94,17 +79,12 @@ export default function Inspector({
     onChange,
     onKeyPropertiesChange,
     onPreviewDownPluginChange,
-    onPreviewDownTargetChange,
-    onMoveTo,
-    onClearAll,
   });
   const {
     propertyStates,
     setPropertyStates,
     deleting,
     setDeleting,
-    clearing,
-    setClearing,
     setTargetStates,
     dropIndicator,
     setDropIndicator,
@@ -122,8 +102,6 @@ export default function Inspector({
     patch,
     reorder,
     remove,
-    clearAll,
-    startMoveTo,
   } = inspector;
 
   return (
@@ -152,7 +130,14 @@ export default function Inspector({
                 : "Create a layout to add plugins."}
             </Text>
           ) : (
-            <Accordion multiple defaultValue={pluginCategories}>
+            // `key={mode}` forces a fresh instance on every mode switch —
+            // `defaultValue` is only ever read once, at mount, so without
+            // this the categories left open/closed from Layout mode would
+            // just carry straight over instead of reopening every one of
+            // Mapping's own (`pluginCategories` itself already reacts to
+            // `mode`, an uncontrolled Accordion's own expanded state
+            // wouldn't otherwise).
+            <Accordion key={mode} multiple defaultValue={pluginCategories}>
               {pluginCategories.map(
                 (category) => {
                   const categoryPlugins = draggablePlugins.filter(
@@ -175,14 +160,26 @@ export default function Inspector({
                                 index < categoryPlugins.length - 1
                                   ? "1px solid var(--kbrd-border-color)"
                                   : undefined,
+                              // Without this, starting the drag with a
+                              // left click paints a native text/element
+                              // selection highlight over the row instead
+                              // of (or alongside) the custom drag ghost.
+                              userSelect: "none",
+                              WebkitUserSelect: "none",
+                              WebkitUserDrag: "element",
                             }}
                             onDragStart={(event) => {
-                              event.dataTransfer.effectAllowed = "copy";
+                              // "move" (not "copy") so the browser's own
+                              // cursor badge doesn't show a "+" — dropping
+                              // a plugin here doesn't remove it from this
+                              // list either way, "move" is just the cursor
+                              // this app wants.
+                              event.dataTransfer.effectAllowed = "move";
                               event.dataTransfer.setData(
                                 "application/kbrd-plugin",
                                 plugin.id,
                               );
-                              setDragSymbol(event);
+                              setPluginDragImage(event, plugin.name);
                             }}
                           >
                             <Group justify="space-between" wrap="nowrap">
@@ -224,50 +221,6 @@ export default function Inspector({
             <Text c="dimmed">No key selected</Text>
           ) : (
             <Stack gap={0}>
-              {targetType === "key" && (
-                <Group justify="flex-end" mb="md">
-                  <Menu position="bottom-end" width={180}>
-                    <Menu.Target>
-                      <Button
-                        variant="subtle"
-                        color="gray"
-                        size="xs"
-                        leftSection={<MdMoreVert />}
-                      >
-                        Actions
-                      </Button>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item
-                        leftSection={<MdContentCopy />}
-                        onClick={onDuplicateFrom}
-                      >
-                        Duplicate from
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<MdContentCopy />}
-                        onClick={onDuplicateTo}
-                      >
-                        Duplicate to
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<MdDriveFileMove />}
-                        onClick={() => void startMoveTo()}
-                      >
-                        Move to
-                      </Menu.Item>
-                      <Menu.Divider />
-                      <Menu.Item
-                        color="red"
-                        leftSection={<MdDelete />}
-                        onClick={() => setClearing(true)}
-                      >
-                        Clear all
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                </Group>
-              )}
               <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
                 {!propertyGroups.some(
                   (group) => group.category === "Display",
@@ -704,32 +657,6 @@ export default function Inspector({
           )}
         </Tabs.Panel>
       </Tabs>
-
-      <Modal
-        opened={clearing}
-        onClose={() => setClearing(false)}
-        title={<Text fw={700}>Clear key</Text>}
-        centered
-        size="sm"
-      >
-        <Stack>
-          <Text>
-            Permanently clear all plugins and properties from this key?
-          </Text>
-          <Group justify="flex-end">
-            <Button color="gray" onClick={() => setClearing(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              leftSection={<MdDelete size={16} />}
-              onClick={() => void clearAll()}
-            >
-              Clear all
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
 
       <Modal
         opened={deleting !== null}

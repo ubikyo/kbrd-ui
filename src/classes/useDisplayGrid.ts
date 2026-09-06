@@ -27,6 +27,7 @@ import {
   removeMerge,
   rowOf,
 } from "../utils/layout";
+import { randomId } from "../utils/id";
 
 /**
  * `<Display>`'s own grid state — `cells`/`rowOverrides`/`mergeGroups` and
@@ -92,7 +93,13 @@ export function useDisplayGrid(params: {
   const [pendingOverwrite, setPendingOverwrite] = useState<
     | {
         source: "paste";
-        target: { kind: "cell"; id: number } | { kind: "division"; parentId: number; subId: number };
+        // Every target this paste would overwrite — more than one once a
+        // multi-selection is the paste target (see `pasteToEmptyRow`); a
+        // single Confirmation still covers the whole batch.
+        targets: (
+          | { kind: "cell"; id: number }
+          | { kind: "division"; parentId: number; subId: number }
+        )[];
       }
     | {
         source: "layout-plugin";
@@ -101,6 +108,12 @@ export function useDisplayGrid(params: {
         defaultConfig: Record<string, unknown>;
       }
     | null
+  >(null);
+  // Backspace, or the context menu's "Delete", on the current cell/division
+  // selection waits here for confirmation (`Composer`'s own `Confirmation`)
+  // instead of deleting right away — mirrors `pendingOverwrite` above.
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: "cells" | "divisions" } | null
   >(null);
   // Sidesteps `useUndoHistory`'s own push effect, and the autosave-to-
   // server effect in `App`, for the run right after `loadFactoryLayout`
@@ -210,6 +223,17 @@ export function useDisplayGrid(params: {
     setSelectedCellIndices([]);
     setSelectedDivisionIndices([]);
     setSelectedEmptyRow(null);
+  }
+
+  // Every selection at once, `displaySelected` included — unlike
+  // `clearCellSelection` above. Used when switching between Layout and
+  // Mapping mode, since a selection made in one mode has no meaning in
+  // the other (their content is isolated, only geometry is shared).
+  function clearSelection() {
+    setSelectedCellIndices([]);
+    setSelectedDivisionIndices([]);
+    setSelectedEmptyRow(null);
+    setDisplaySelected(false);
   }
 
   // Seeds `cells`/`rowOverrides`/`mergeGroups` from a layer's own saved
@@ -462,7 +486,9 @@ export function useDisplayGrid(params: {
   // copied, both need actual room in that row to fall back to instead.
   const canPaste =
     copiedCell !== null &&
-    (selectedDivisionId !== null ||
+    (selectedCellIndices.length > 1 ||
+      (selectedCellIndices.length === 1 && selectedDivisionIndices.length > 1) ||
+      selectedDivisionId !== null ||
       (selectedCellIndex !== null &&
         selectedDivisionIndices.length === 0 &&
         selectedCellIndex !== copiedCell.sourceId) ||
@@ -503,6 +529,36 @@ export function useDisplayGrid(params: {
     setMergeGroups((current) => removeMerge(current, selectedCellIndices[0]));
   }
 
+  // Backspace, or the context menu's "Delete" — arms `pendingDelete` for
+  // `Composer`'s Confirmation rather than deleting right away (see
+  // `confirmDelete`/`cancelDelete`). No-ops on an empty selection, same as
+  // the immediate deletion this replaced always did.
+  function requestDeleteCells() {
+    if (selectedCellIndices.length === 0) return;
+    setPendingDelete({ kind: "cells" });
+  }
+
+  function requestDeleteDivisions() {
+    if (selectedCellIndices.length !== 1 || selectedDivisionIndices.length === 0) {
+      return;
+    }
+    setPendingDelete({ kind: "divisions" });
+  }
+
+  // "Yes" on the delete confirmation — runs whichever of the two below
+  // `pendingDelete.kind` armed.
+  function confirmDelete() {
+    const pending = pendingDelete;
+    setPendingDelete(null);
+    if (!pending) return;
+    if (pending.kind === "cells") performDeleteSelectedCells();
+    else performDeleteSelectedDivisions();
+  }
+
+  function cancelDelete() {
+    setPendingDelete(null);
+  }
+
   // "Delete" on however many top-level cells are currently selected
   // (contiguous or not) — removes every one that's actually removable
   // (`canRemoveCell`) in a single pass. Deliberately not a loop of
@@ -510,7 +566,7 @@ export function useDisplayGrid(params: {
   // closure rather than a functional update, so calling it more than once
   // in the same stroke would have each call overwrite the last's result
   // instead of compounding.
-  function deleteSelectedCells() {
+  function performDeleteSelectedCells() {
     const removable = new Set(
       selectedCellIndices.filter((id) => canRemoveCell(id, rows, mergeGroups)),
     );
@@ -593,7 +649,7 @@ export function useDisplayGrid(params: {
             // assignment — see `GridCell.keyRef` — rather than the
             // division's own, now that it's collapsing back into a
             // plain top-level cell.
-            keyRef: crypto.randomUUID(),
+            keyRef: randomId(),
             divide: undefined,
           },
         };
@@ -652,7 +708,7 @@ export function useDisplayGrid(params: {
   // This just clears each selected one's plugin back to blank, the same
   // state every division but the first starts in — the divisions
   // themselves, and the rest of the grid, stay exactly as they were.
-  function deleteSelectedDivisions() {
+  function performDeleteSelectedDivisions() {
     if (
       selectedCellIndices.length !== 1 ||
       selectedDivisionIndices.length === 0
@@ -740,7 +796,7 @@ export function useDisplayGrid(params: {
       typeId: copiedCell.typeId,
       typeConfig: { ...copiedCell.typeConfig },
       pluginIds: [...copiedCell.pluginIds],
-      keyRef: crypto.randomUUID(),
+      keyRef: randomId(),
     });
   }
 
@@ -750,25 +806,57 @@ export function useDisplayGrid(params: {
       typeId: copiedCell.typeId,
       typeConfig: { ...copiedCell.typeConfig },
       pluginIds: [...copiedCell.pluginIds],
-      keyRef: crypto.randomUUID(),
+      keyRef: randomId(),
     });
   }
 
   // Applies the copied cell to whatever's actually selected right now —
   // see `canPaste` for when this can do anything at all:
   //
-  // - A division is the real focus: applies directly onto it (divisions
-  //   have no separate "row" of their own to fall back to instead — see
-  //   `createDivideGrid`), confirming first (`pendingOverwrite`) if
-  //   it isn't already blank.
+  // - More than one cell, or more than one division of the same parent, is
+  //   selected: applies directly onto every one of them (never the "new
+  //   cell in this row" convenience below — that only ever makes sense for
+  //   a single target), one Confirmation covering the whole batch if any
+  //   target isn't already blank.
+  // - A single division is the real focus: applies directly onto it
+  //   (divisions have no separate "row" of their own to fall back to
+  //   instead — see `createDivideGrid`), confirming first
+  //   (`pendingOverwrite`) if it isn't already blank.
   // - The row's own empty space is selected, or the selected cell is the
   //   exact one just copied (see `copiedCell.sourceId`) and its row still
   //   has room: lands a brand-new cell at that row's own trailing end —
   //   never overwrites anything, so never needs to confirm.
-  // - Any other cell: applies directly onto it, confirming first if it
-  //   isn't already blank — same as a division above.
+  // - Any other single cell: applies directly onto it, confirming first if
+  //   it isn't already blank — same as a division above.
   function pasteToEmptyRow() {
     if (!copiedCell) return;
+
+    if (selectedCellIndices.length === 1 && selectedDivisionIndices.length > 1) {
+      const parentId = selectedCellIndices[0];
+      const parent = cells[parentId];
+      if (!parent?.divide) return;
+      const targets = selectedDivisionIndices.map((subId) => ({
+        kind: "division" as const,
+        parentId,
+        subId,
+      }));
+      if (selectedDivisionIndices.some((subId) => parent.divide!.cells[subId]?.typeId)) {
+        setPendingOverwrite({ source: "paste", targets });
+      } else {
+        targets.forEach((target) => applyPasteOntoDivision(target.parentId, target.subId));
+      }
+      return;
+    }
+
+    if (selectedCellIndices.length > 1) {
+      const targets = selectedCellIndices.map((id) => ({ kind: "cell" as const, id }));
+      if (selectedCellIndices.some((id) => cells[id]?.typeId)) {
+        setPendingOverwrite({ source: "paste", targets });
+      } else {
+        targets.forEach((target) => applyPasteOntoCell(target.id));
+      }
+      return;
+    }
 
     if (selectedCellIndex !== null && selectedDivisionId !== null) {
       const parentId = selectedCellIndex;
@@ -776,7 +864,7 @@ export function useDisplayGrid(params: {
       if (cells[parentId]?.divide?.cells[subId]?.typeId) {
         setPendingOverwrite({
           source: "paste",
-          target: { kind: "division", parentId, subId },
+          targets: [{ kind: "division", parentId, subId }],
         });
         return;
       }
@@ -797,7 +885,7 @@ export function useDisplayGrid(params: {
           typeId: copiedCell.typeId,
           typeConfig: { ...copiedCell.typeConfig },
           pluginIds: [...copiedCell.pluginIds],
-          keyRef: crypto.randomUUID(),
+          keyRef: randomId(),
           unit: copiedCell.unit,
         },
       }));
@@ -814,7 +902,7 @@ export function useDisplayGrid(params: {
       if (cells[selectedCellIndex]?.typeId) {
         setPendingOverwrite({
           source: "paste",
-          target: { kind: "cell", id: selectedCellIndex },
+          targets: [{ kind: "cell", id: selectedCellIndex }],
         });
         return;
       }
@@ -837,7 +925,7 @@ export function useDisplayGrid(params: {
         ...defaultGridCell(current[id]?.unit),
         typeId: pluginId,
         typeConfig: { ...defaultConfig },
-        keyRef: crypto.randomUUID(),
+        keyRef: randomId(),
       },
     }));
   }
@@ -852,7 +940,7 @@ export function useDisplayGrid(params: {
       typeId: pluginId,
       typeConfig: { ...defaultConfig },
       pluginIds: [],
-      keyRef: crypto.randomUUID(),
+      keyRef: randomId(),
     });
   }
 
@@ -914,8 +1002,10 @@ export function useDisplayGrid(params: {
     setPendingOverwrite(null);
     if (!pending) return;
     if (pending.source === "paste") {
-      if (pending.target.kind === "cell") applyPasteOntoCell(pending.target.id);
-      else applyPasteOntoDivision(pending.target.parentId, pending.target.subId);
+      for (const target of pending.targets) {
+        if (target.kind === "cell") applyPasteOntoCell(target.id);
+        else applyPasteOntoDivision(target.parentId, target.subId);
+      }
     } else {
       if (pending.target.kind === "cell") {
         applyLayoutPluginToCell(pending.target.id, pending.pluginId, pending.defaultConfig);
@@ -953,6 +1043,7 @@ export function useDisplayGrid(params: {
     displaySelected,
     copiedCell,
     pendingOverwrite,
+    pendingDelete,
 
     // selection actions
     selectDisplay,
@@ -962,6 +1053,7 @@ export function useDisplayGrid(params: {
     toggleDivisionSelection,
     selectEmptyRow,
     clearCellSelection,
+    clearSelection,
 
     // derived selection
     selectedCellIndex,
@@ -984,10 +1076,10 @@ export function useDisplayGrid(params: {
     removeCell,
     mergeSelectedCells,
     unmerge,
-    deleteSelectedCells,
+    requestDeleteCells,
     mergeSelectedDivisions,
     unmergeDivision,
-    deleteSelectedDivisions,
+    requestDeleteDivisions,
     divideSelectedCell,
     copySelectedCell,
     pasteToEmptyRow,
@@ -995,6 +1087,8 @@ export function useDisplayGrid(params: {
     assignLayoutPluginToDivision,
     confirmOverwrite,
     cancelOverwrite,
+    confirmDelete,
+    cancelDelete,
   };
 }
 

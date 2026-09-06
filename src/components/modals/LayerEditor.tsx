@@ -10,12 +10,17 @@ import {
   TextInput,
 } from "@mantine/core";
 
-import { createLayer, updateLayer } from "../../api/layers";
+import { createLayer, duplicateLayer, updateLayer } from "../../api/layers";
 import type { LayerData } from "../../types/layer";
 
 type Props = {
   layoutId: number;
   editing: LayerData | null;
+  // Set (with `editing` null) to open this as "Duplicate" instead of
+  // "Add" — prefills Name/Description from this source and, on save,
+  // clones its factory layout/plugins/properties server-side (see
+  // `duplicateLayer`) rather than starting from a blank layer.
+  duplicateFrom: LayerData | null;
   onClose: () => void;
   onSaved: (id: number) => void;
 };
@@ -23,18 +28,25 @@ type Props = {
 export default function LayerEditor({
   layoutId,
   editing,
+  duplicateFrom,
   onClose,
   onSaved,
 }: Props) {
-  const [name, setName] = useState(editing?.name ?? "");
-  const [description, setDescription] = useState(editing?.description ?? "");
+  const [name, setName] = useState(
+    editing?.name ?? (duplicateFrom ? `${duplicateFrom.name} copy` : ""),
+  );
+  const [description, setDescription] = useState(
+    editing?.description ?? duplicateFrom?.description ?? "",
+  );
   const [error, setError] = useState("");
 
   async function save() {
     try {
       const item = editing
         ? await updateLayer(editing.id, name, description)
-        : await createLayer(layoutId, name, description);
+        : duplicateFrom
+          ? await duplicateLayer(duplicateFrom.id, { name, description })
+          : await createLayer(layoutId, name, description);
       onSaved(item.id);
     } catch (cause) {
       setError(
@@ -49,7 +61,7 @@ export default function LayerEditor({
       onClose={onClose}
       title={
         <Text fw={700}>
-          {editing ? "Edit" : "Add"} layer
+          {editing ? "Edit" : duplicateFrom ? "Duplicate" : "Add"} layer
         </Text>
       }
       centered
@@ -92,7 +104,7 @@ export default function LayerEditor({
           disabled={!name.trim()}
           onClick={() => void save()}
         >
-          {editing ? "Save" : "Add"}
+          {editing ? "Save" : duplicateFrom ? "Duplicate" : "Add"}
         </Button>
       </Group>
     </Modal>

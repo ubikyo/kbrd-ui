@@ -5,13 +5,12 @@ import {
   Button,
   Group,
   Modal,
-  Notification,
   Splitter,
   Stack,
   Text,
 } from "@mantine/core";
 
-import { MdContentCopy, MdDelete, MdDriveFileMove, MdSettings } from "react-icons/md";
+import { MdDelete, MdSettings } from "react-icons/md";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -26,13 +25,14 @@ import Inspector from "./components/Inspector";
 import Settings from "./components/modals/Settings";
 import Layer from "./components/menu/Layer";
 import LayerEditor from "./components/modals/LayerEditor";
+import ReplaceEntity from "./components/modals/ReplaceEntity";
+import Confirmation from "./components/modals/Confirmation";
 import { updateFactoryLayout } from "./api/layers";
 import { maxItems } from "./utils/layout";
 import type { LayerData } from "./types/layer";
 import { useDisplayGrid } from "./classes/useDisplayGrid";
 import { useDisplaySettings } from "./classes/useDisplaySettings";
 import { useEntityEditors } from "./classes/useEntityEditors";
-import { useKeyOperations } from "./classes/useKeyOperations";
 
 // How long `<Display>`'s grid sits idle before its disposition is
 // autosaved onto the current layout — see the effect below.
@@ -40,6 +40,11 @@ const FACTORY_LAYOUT_AUTOSAVE_MS = 600;
 
 export default function App() {
   const [layout, setLayout] = useState<LayoutData | null>(null);
+  // Every Layout/Layer that currently exists — fed by `<Layout>`/`<Layer>`'s
+  // own `onItemsChange`, read only by `useEntityEditors`' "Replace with
+  // current" picker.
+  const [layoutItems, setLayoutItems] = useState<LayoutData[]>([]);
+  const [layerItems, setLayerItems] = useState<LayerData[]>([]);
   const { layoutSettings, setLayoutSettings, saveDisplaySettings } =
     useDisplaySettings();
 
@@ -107,15 +112,7 @@ export default function App() {
     );
   }, [mode, grid.divisionSelection, grid.layoutSelection]);
 
-  const keyOps = useKeyOperations({
-    layer,
-    selectedKey,
-    setLayer,
-    onPreviewDownPluginChange: setPreviewDownPluginId,
-    onPreviewDownTargetChange: setPreviewDownTarget,
-  });
-
-  const entityEditors = useEntityEditors({ layout, layer });
+  const entityEditors = useEntityEditors({ layout, layer, layoutItems, layerItems });
 
   const changeLayout = useCallback(
     (value: LayoutData | null) => {
@@ -145,7 +142,6 @@ export default function App() {
       setLayer(null);
       layerRef.current = null;
       setSelectedKey(null);
-      keyOps.stopKeyOperation();
       setPreviewDownPluginId(null);
       setPreviewDownTarget(null);
       // The layer `<Layer>` activates next (see its effect) seeds
@@ -162,7 +158,6 @@ export default function App() {
       setLayer(value);
       layerRef.current = value;
       setSelectedKey(null);
-      keyOps.stopKeyOperation();
       setPreviewDownPluginId(null);
       setPreviewDownTarget(null);
       // Each layer keeps its own `<Display>` disposition — load it back
@@ -195,12 +190,6 @@ export default function App() {
       value ? { ...value, key_properties: keyProperties } : null,
     );
   }
-
-  // TODO(preview-rebuild): completing a duplicate/move operation
-  // (`keyOps.keyOperation`) used to happen by clicking the destination key
-  // in <Preview> — selecting a Key cell/division in Mapping mode now sets
-  // `selectedKey` the same way (see the effect above), but nothing yet
-  // calls `duplicateKeyPlugins`/`moveKey` when one is armed.
 
   // Autosaves `<Display>`'s disposition onto the current layer's own
   // `factory_layout` — debounced so a drag-resize or a run of clicks
@@ -265,6 +254,7 @@ export default function App() {
             ref={entityEditors.layoutMenuRef}
             onChange={changeLayout}
             onAdd={entityEditors.openAddLayout}
+            onItemsChange={setLayoutItems}
           />
           {layout && (
             <Layer
@@ -273,6 +263,10 @@ export default function App() {
               layoutId={layout.id}
               onChange={changeLayer}
               onAdd={entityEditors.openAddLayer}
+              onItemsChange={setLayerItems}
+              // Layer only matters in Mapping mode — see `Layer`'s own
+              // docblock on `hidden`.
+              hidden={mode !== "mapping"}
             />
           )}
 
@@ -317,13 +311,20 @@ export default function App() {
             <Composer
               layoutSettings={layoutSettings}
               mode={mode}
-              onModeChange={setMode}
+              onModeChange={(next) => {
+                // A selection made in one mode has no meaning in the
+                // other — Layout and Mapping share only cell/division
+                // display, position and type, not their own content.
+                grid.clearSelection();
+                setMode(next);
+              }}
               layout={layout}
               layer={layer}
               grid={grid}
               entityEditors={entityEditors}
               settingsOpened={settingsOpened}
               onChangePlugins={changePlugins}
+              onChangeKeyProperties={changeKeyProperties}
             />
           </Splitter.Pane>
           <Splitter.Pane defaultSize="550px" min="550px">
@@ -349,56 +350,14 @@ export default function App() {
               onKeyPropertiesChange={changeKeyProperties}
               onPreviewDownPluginChange={setPreviewDownPluginId}
               onPreviewDownTargetChange={setPreviewDownTarget}
-              onDuplicateFrom={keyOps.startDuplicateFrom}
-              onDuplicateTo={keyOps.startDuplicateTo}
-              onMoveTo={keyOps.startMoveTo}
-              onClearAll={keyOps.clearSelectedKey}
             />
           </Splitter.Pane>
         </Splitter>
       </AppShell.Main>
-      {keyOps.keyOperation && (
-        <Notification
-          icon={
-            keyOps.keyOperation.direction === "move" ? (
-              <MdDriveFileMove size={18} />
-            ) : (
-              <MdContentCopy size={18} />
-            )
-          }
-          title={
-            keyOps.keyOperation.direction === "from"
-              ? "Duplicate from"
-              : keyOps.keyOperation.direction === "to"
-                ? "Duplicate to"
-                : "Move to"
-          }
-          onClose={keyOps.stopKeyOperation}
-          withBorder
-          style={{
-            position: "fixed",
-            left: 20,
-            bottom: 20,
-            zIndex: 1000,
-          }}
-        >
-          <Group gap="md" wrap="nowrap">
-            <Text size="sm">
-              {keyOps.keyOperation.direction === "from"
-                ? "Click the source key to duplicate."
-                : keyOps.keyOperation.direction === "to"
-                  ? "Click each destination key to duplicate."
-                  : "Click the destination key to move."}
-            </Text>
-            <Button size="compact-xs" color="red" onClick={keyOps.stopKeyOperation}>
-              STOP
-            </Button>
-          </Group>
-        </Notification>
-      )}
       {entityEditors.layoutEditorOpened && (
         <LayoutEditor
           editing={entityEditors.editingLayout}
+          duplicateFrom={entityEditors.duplicatingLayout}
           onClose={() => entityEditors.setLayoutEditorOpened(false)}
           onSaved={(id) => {
             entityEditors.setLayoutEditorOpened(false);
@@ -410,11 +369,45 @@ export default function App() {
         <LayerEditor
           layoutId={layout.id}
           editing={entityEditors.editingLayer}
+          duplicateFrom={entityEditors.duplicatingLayer}
           onClose={() => entityEditors.setLayerEditorOpened(false)}
           onSaved={(id) => {
             entityEditors.setLayerEditorOpened(false);
             void entityEditors.layerMenuRef.current?.refresh(id);
           }}
+        />
+      )}
+      {entityEditors.replacePickerKind && (
+        <ReplaceEntity
+          kind={entityEditors.replacePickerKind}
+          items={
+            entityEditors.replacePickerKind === "layout"
+              ? entityEditors.layoutItems
+              : entityEditors.layerItems
+          }
+          currentId={
+            entityEditors.replacePickerKind === "layout"
+              ? (layout?.id ?? null)
+              : (layer?.id ?? null)
+          }
+          onClose={entityEditors.cancelReplacePicker}
+          onPick={entityEditors.pickReplaceTarget}
+        />
+      )}
+      {entityEditors.pendingReplace && (
+        <Confirmation
+          title="Replace"
+          message={
+            <>
+              Replace{" "}
+              <Text component="span" fw={600}>
+                {entityEditors.pendingReplace.targetName}
+              </Text>{" "}
+              with the current {entityEditors.pendingReplace.kind}? This cannot be undone.
+            </>
+          }
+          onConfirm={() => void entityEditors.confirmReplaceNow()}
+          onCancel={entityEditors.cancelReplace}
         />
       )}
       {entityEditors.confirmDelete && (

@@ -7,7 +7,22 @@ import type { KeyPlugin } from "../types/layer";
 import type { CellRect } from "../utils/layout";
 
 const LABEL_FONT_SIZE_MM = 2.5;
+// Vertical spacing between the label's own lines (size, Layout plugin
+// type, each attached Mapping plugin type) — see `labelLines` below.
+const LABEL_LINE_HEIGHT_MM = LABEL_FONT_SIZE_MM * 1.2;
 const SELECTED_STROKE = "#00ff00";
+// Both kinds of drag destination — a plugin dragged from the Inspector
+// (`isDropTarget`) and a key's Mapping content dragged from another key
+// (`isMoveTarget`, see `useKeyDrag`) — read the same way: the cell/
+// division's existing border just turns solid white (`shapeProps`'s own
+// dashed/transparent look otherwise stays), with a symbol centred over it
+// telling the two apart (a plugin lands fresh, a move replaces).
+const TARGET_SYMBOL_SIZE_MM = 5;
+const DROP_TARGET_SYMBOL = "+";
+const MOVE_TARGET_SYMBOL = "⤵";
+// The body colour at 80% opacity — a drop/move target's own fill,
+// instead of the plain transparent fill every other cell has.
+const TARGET_FILL = "color-mix(in srgb, var(--kbrd-color-body) 80%, transparent)";
 // A fixed screen size regardless of the grid's own scale (Caps size, zoom,
 // how many rows fit…) — unlike the rest of a cell, which is drawn directly
 // in the SVG's mm-space and so naturally scales with it, the grip is
@@ -50,9 +65,6 @@ type Props = {
   // Plugin id of the attached kbrd.layout-key / kbrd.layout-space instance,
   // or null when this cell hasn't been assigned a kind yet.
   typeId?: string | null;
-  // Invoke/Display plugins attached in Mapping mode (only meaningful once
-  // `typeId` is kbrd.layout-key).
-  pluginIds?: string[];
   // Keycap width as a multiple of the display's Unit, shown above the type
   // label — undefined when the cell itself is unknown (shouldn't normally
   // happen, since every `GridCell` has a `unit`).
@@ -64,6 +76,11 @@ type Props = {
   // solid, since there's nothing there yet.
   isEmpty?: boolean;
   isDropTarget?: boolean;
+  // Mapping mode's own drag destination (see `useKeyDrag`) — drawn as a
+  // thick outline surrounding the whole shape, on top of whatever else it
+  // already looks like (selected, empty…), so the drop target is
+  // unambiguous regardless of the cell/division's own current state.
+  isMoveTarget?: boolean;
   // False for a division whose border `Display` is instead drawing as
   // part of its own deduplicated pass over the whole division grid (see
   // `renderDivisions`) — two adjacent, both-dashed divisions each
@@ -111,11 +128,11 @@ export default function LayoutCell({
   path,
   labelBounds = bounds,
   typeId = null,
-  pluginIds = [],
   unit,
   isSelected = false,
   isEmpty = false,
   isDropTarget = false,
+  isMoveTarget = false,
   showBorder = true,
   showText = true,
   keyPlugins = [],
@@ -128,18 +145,23 @@ export default function LayoutCell({
 }: Props) {
   const clipId = useId();
   const type = typeId ? pluginById(typeId) : null;
-  const stroke = isDropTarget
-    ? "var(--kbrd-border-alt)"
-    : isSelected
-      ? SELECTED_STROKE
-      : "var(--kbrd-border-color)";
-  const sizeLabel = typeof unit === "number" ? `${unit}U` : null;
-  const typeLabel = type
-    ? [type.name, ...pluginIds.map((id) => pluginById(id)?.name).filter(Boolean)]
-        .join(" · ")
-    : null;
+  const stroke =
+    isDropTarget || isMoveTarget
+      ? "var(--kbrd-border-alt)"
+      : isSelected
+        ? SELECTED_STROKE
+        : "var(--kbrd-border-color)";
+  // Size, then the Layout plugin's own type — one per line. The Mapping
+  // plugin(s) attached via `pluginIds` used to get their own line(s) too,
+  // but that grew this label too tall for a typical cell, so it's
+  // deliberately left out here (still shown in Mapping mode itself, via
+  // each plugin's own `Renderer`).
+  const labelLines = [
+    typeof unit === "number" ? `${unit}U` : null,
+    type?.name ?? null,
+  ].filter((line): line is string => Boolean(line));
   const shapeProps = {
-    fill: "transparent",
+    fill: isDropTarget || isMoveTarget ? TARGET_FILL : "transparent",
     // `mergedOutline` can trace a shape wrapped all the way around a cell
     // that wasn't merged in, coming out as an outer subpath plus an inner
     // one for the hole — `evenodd` is what tells a filled version of that
@@ -173,6 +195,19 @@ export default function LayoutCell({
           height={bounds.height}
           {...shapeProps}
         />
+      )}
+      {(isDropTarget || isMoveTarget) && (
+        <text
+          x={labelBounds.x + labelBounds.width / 2}
+          y={labelBounds.y + labelBounds.height / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={TARGET_SYMBOL_SIZE_MM}
+          fill="var(--kbrd-border-alt)"
+          style={{ pointerEvents: "none" }}
+        >
+          {isMoveTarget ? MOVE_TARGET_SYMBOL : DROP_TARGET_SYMBOL}
+        </text>
       )}
       {!showText && keyPlugins.length > 0 && (
         <>
@@ -209,13 +244,13 @@ export default function LayoutCell({
           </g>
         </>
       )}
-      {showText && sizeLabel && (
+      {showText && labelLines.length > 0 && (
         <text
           x={labelBounds.x + labelBounds.width / 2}
           y={
             labelBounds.y +
             labelBounds.height / 2 -
-            (typeLabel ? LABEL_FONT_SIZE_MM * 0.6 : 0)
+            ((labelLines.length - 1) * LABEL_LINE_HEIGHT_MM) / 2
           }
           textAnchor="middle"
           dominantBaseline="middle"
@@ -223,24 +258,18 @@ export default function LayoutCell({
           fill="var(--kbrd-border-alt)"
           style={{ pointerEvents: "none" }}
         >
-          {sizeLabel}
-        </text>
-      )}
-      {showText && typeLabel && (
-        <text
-          x={labelBounds.x + labelBounds.width / 2}
-          y={
-            labelBounds.y +
-            labelBounds.height / 2 +
-            (sizeLabel ? LABEL_FONT_SIZE_MM * 0.6 : 0)
-          }
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize={LABEL_FONT_SIZE_MM}
-          fill="var(--kbrd-border-alt)"
-          style={{ pointerEvents: "none" }}
-        >
-          {typeLabel}
+          {labelLines.map((line, index) => (
+            <tspan
+              key={index}
+              x={labelBounds.x + labelBounds.width / 2}
+              dy={index === 0 ? 0 : LABEL_LINE_HEIGHT_MM}
+              // The size (always the first line) reads bold — the Layout
+              // plugin's own type name underneath it stays regular weight.
+              fontWeight={index === 0 ? "bold" : "normal"}
+            >
+              {line}
+            </tspan>
+          ))}
         </text>
       )}
     </g>

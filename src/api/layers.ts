@@ -39,6 +39,25 @@ export const updateLayer = (
 export const deleteLayer = (id: number) =>
   api<{ ok: boolean }>(`/api/layer/${id}`, { method: "DELETE" });
 
+// Clones this layer's factory layout, plugins and key properties under a
+// new name (same layout).
+export const duplicateLayer = (
+  id: number,
+  payload: { name: string; description?: string },
+) =>
+  api<LayerData>(`/api/layer/${id}/duplicate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+// Overwrites `targetId`'s own factory layout, plugins and key properties
+// with `sourceId`'s — the target keeps its own id/name/layout.
+export const replaceLayer = (targetId: number, sourceId: number) =>
+  api<LayerData>(`/api/layer/${targetId}/replace`, {
+    method: "POST",
+    body: JSON.stringify({ source_id: sourceId }),
+  });
+
 // Autosaves `<Display>`'s disposition onto this layer — see the effect
 // in `App` — so it's reloaded whenever the user switches back to it.
 export const updateFactoryLayout = (
