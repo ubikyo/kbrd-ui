@@ -68,11 +68,14 @@ export function useLayoutShortcuts(params: {
 
   const [resizeEnabled, setResizeEnabled] = useState(false);
 
-  // Cmd/Ctrl+Tab toggles Resize — a global shortcut, independent of
+  // Option/Alt+Tab toggles Resize — a global shortcut, independent of
   // mode/selection — except while a modal has its own fields to tab
   // through normally, or while typing in a text field, where Tab must
   // keep doing its normal job. Plain Tab is Composer's own Layout/Mapping
-  // toggle instead (see there) and must not also flip Resize.
+  // toggle instead (see there) and must not also flip Resize. Not
+  // Cmd/Ctrl+Tab: the OS (macOS's own app switcher, at least) intercepts
+  // that before it ever reaches the browser, so the shortcut was
+  // effectively dead on the platform it matters most on.
   useEffect(() => {
     if (
       mode !== "layout" ||
@@ -84,11 +87,7 @@ export function useLayoutShortcuts(params: {
       return;
     }
     function handleTab(event: KeyboardEvent) {
-      if (
-        event.key !== "Tab" ||
-        !(event.metaKey || event.ctrlKey) ||
-        event.altKey
-      ) {
+      if (event.key !== "Tab" || !event.altKey) {
         return;
       }
       const target = event.target as HTMLElement | null;
