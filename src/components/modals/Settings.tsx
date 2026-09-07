@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
-import { Box, Button, Group, Modal, NumberInput, Stack, Tabs, Text, Title } from "@mantine/core";
-import { MdStraighten } from "react-icons/md";
+import {
+  Box,
+  Button,
+  Group,
+  Modal,
+  NumberInput,
+  Stack,
+  Switch,
+  Tabs,
+  Text,
+  Title,
+} from "@mantine/core";
+import { MdCode, MdStraighten } from "react-icons/md";
 
 import {
   FALLBACK_HEIGHT,
@@ -50,6 +61,12 @@ type Props = {
   onClose: () => void;
   settings: LayoutSettings;
   onSave: (settings: LayoutSettings) => void;
+  // The Developer tab's "Enable debug" — app-level rather than part of
+  // `LayoutSettings` (nothing about it is persisted with a layout), so
+  // `App` holds it and applies it (see its own `contextmenu` handler and
+  // the `debug` body class).
+  debug: boolean;
+  onDebugChange: (debug: boolean) => void;
 };
 
 export default function Settings({
@@ -57,16 +74,22 @@ export default function Settings({
   onClose,
   settings,
   onSave,
+  debug,
+  onDebugChange,
 }: Props) {
   const [tab, setTab] = useState<string | null>("display");
   const [draft, setDraft] = useState<LayoutSettings>(settings);
+  const [debugDraft, setDebugDraft] = useState(debug);
   const [device, setDevice] = useState<DeviceStatus>({ connected: false });
 
   // Reset the draft to the last saved values whenever the modal opens back up.
   const [wasOpened, setWasOpened] = useState(opened);
   if (opened !== wasOpened) {
     setWasOpened(opened);
-    if (opened) setDraft(settings);
+    if (opened) {
+      setDraft(settings);
+      setDebugDraft(debug);
+    }
   }
 
   useEffect(() => {
@@ -94,11 +117,13 @@ export default function Settings({
 
   function cancel() {
     setDraft(settings);
+    setDebugDraft(debug);
     onClose();
   }
 
   function save() {
     onSave(draft);
+    onDebugChange(debugDraft);
     onClose();
   }
 
@@ -165,6 +190,9 @@ export default function Settings({
             <Tabs.Tab value="display" leftSection={<MdStraighten size={16} />}>
               Display
             </Tabs.Tab>
+            <Tabs.Tab value="developer" leftSection={<MdCode size={16} />}>
+              Developer
+            </Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel
@@ -218,6 +246,24 @@ export default function Settings({
               </FieldRow>
               <DisplayRow label="Resolution (px)" value={resolutionValue} />
               <DisplayRow label="DPI (x / y)" value={dpiValue} />
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel
+            value="developer"
+            style={{ overflowY: "auto", padding: 0, paddingLeft: 40 }}
+          >
+            <Stack gap="md">
+              <Title order={4}>Developer</Title>
+              <FieldRow label="Enable debug">
+                <Switch
+                  aria-label="Enable debug"
+                  checked={debugDraft}
+                  onChange={(event) =>
+                    setDebugDraft(event.currentTarget.checked)
+                  }
+                />
+              </FieldRow>
             </Stack>
           </Tabs.Panel>
         </Tabs>

@@ -482,7 +482,11 @@ export default function Display({
       keyRef,
       plugin.id,
       plugin.version,
-      { states: { [DEFAULT_STATE_NAME]: plugin.defaultConfig } },
+      // Nothing stored yet: every field falls back to the plugin's own
+      // `defaultConfig` for rendering (see `LayoutCell`), which is what
+      // leaves each optional property group closed until the Inspector's
+      // own `+` actually sets it (see `PropertyGroup`).
+      { states: { [DEFAULT_STATE_NAME]: {} } },
     );
     onChangePlugins([...layer.plugins, created]);
   }

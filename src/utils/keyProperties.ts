@@ -57,7 +57,11 @@ export function resolveKeyPropertyConfig(
 
   const legacy = config as LegacyKeyPropertyConfig;
   const upState: KeyStateConfig = {
-    backgroundColor: legacy.upBackgroundColor ?? DEFAULT_STATE_CONFIG.backgroundColor,
+    // Every legacy key already had a real background color saved (it was
+    // a required field before), so this stays whatever it already was —
+    // never invented, never defaulted to "set" for a key that predates
+    // `backgroundColor` being optional at all.
+    backgroundColor: legacy.upBackgroundColor,
     borderEnabled: legacy.upBorderEnabled ?? legacy.borderEnabled ?? true,
     borderColor: legacy.upBorderColor ?? DEFAULT_STATE_CONFIG.borderColor,
     // `borderStyle` never existed in this legacy shape — every key saved
@@ -72,7 +76,7 @@ export function resolveKeyPropertyConfig(
   if (legacy.downEnabled) {
     states.push("Down");
     stateConfigs.Down = {
-      backgroundColor: legacy.downBackgroundColor ?? DEFAULT_STATE_CONFIG.backgroundColor,
+      backgroundColor: legacy.downBackgroundColor,
       borderEnabled: legacy.downBorderEnabled ?? true,
       borderColor: legacy.downBorderColor ?? DEFAULT_STATE_CONFIG.borderColor,
       borderStyle: DEFAULT_STATE_CONFIG.borderStyle,

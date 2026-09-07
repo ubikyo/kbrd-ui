@@ -65,6 +65,10 @@ export default function App() {
   const [mode, setMode] = useState<"layout" | "mapping">("layout");
 
   const [inspectorTab, setInspectorTab] = useState<string | null>("plugins");
+  // Settings' Developer tab — on for now, while the app is still being
+  // built: it restores plain HTML page behaviour (native context menu,
+  // selectable text) that the app otherwise suppresses.
+  const [debug, setDebug] = useState(true);
   // Mirrors `layer` for the autosave effect below, so that effect only
   // has to depend on the grid state that actually triggers a save — not
   // on `layer` itself, which the save's own response also updates.
@@ -167,14 +171,25 @@ export default function App() {
   // in the app — `<Composer>` already shows its own for a cell/division/
   // row/display in Layout mode, but this covers every other case too
   // (Mapping mode, the header, the Inspector panel, Settings…), where
-  // nothing else calls `preventDefault()` on it.
+  // nothing else calls `preventDefault()` on it. Debug mode (Settings'
+  // Developer tab) is the one exception: the page then behaves like any
+  // other HTML page, native context menu and all, so the browser's own
+  // element inspector is reachable.
   useEffect(() => {
+    if (debug) return;
     function handleContextMenu(event: MouseEvent) {
       event.preventDefault();
     }
     window.addEventListener("contextmenu", handleContextMenu);
     return () => window.removeEventListener("contextmenu", handleContextMenu);
-  }, []);
+  }, [debug]);
+
+  // The other half of debug mode: `body`'s app-wide `user-select: none`
+  // (see App.css) is lifted so text can be selected like anywhere else.
+  useEffect(() => {
+    document.body.classList.toggle("debug", debug);
+    return () => document.body.classList.remove("debug");
+  }, [debug]);
 
   function changePlugins(plugins: LayerData["plugins"]) {
     setLayer((value) => (value ? { ...value, plugins } : null));
@@ -271,6 +286,8 @@ export default function App() {
         onClose={() => setSettingsOpened(false)}
         settings={layoutSettings}
         onSave={saveDisplaySettings}
+        debug={debug}
+        onDebugChange={setDebug}
       />
 
       <AppShell.Main
@@ -279,10 +296,15 @@ export default function App() {
           height: "100vh",
         }}
       >
+        {/* Resizing is switched off for now: `withHandle` drops the grip
+            thumb, and the Inspector pane's `max` pinned to its `min` below
+            leaves the handle nothing to move. Drop both to bring dragging
+            back. */}
         <Splitter
           orientation="horizontal"
           lineSize={1}
           handleColor="var(--kbrd-border-color)"
+          withHandle={false}
           style={{
             position: "relative",
             height: "calc(100vh - 64px)",
@@ -312,7 +334,12 @@ export default function App() {
               onLayerItemsChange={setLayerItems}
             />
           </Splitter.Pane>
-          <Splitter.Pane defaultSize="350px" min="350px">
+          <Splitter.Pane
+            defaultSize="350px"
+            min="350px"
+            max="350px"
+            style={{ padding: "40px 0 0 0" }}
+          >
             <Inspector
               layer={layer}
               selectedKey={selectedKey}

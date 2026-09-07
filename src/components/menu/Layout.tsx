@@ -103,7 +103,7 @@ const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
                 <Text size="xs" c="dimmed">
                   Layout
                 </Text>
-                <Text size="sm" fw={500}>
+                <Text size="sm">
                   {selected?.name ?? "None"}
                 </Text>
               </Box>
@@ -133,7 +133,7 @@ const Layout = forwardRef<LayoutMenuHandle, Props>(function Layout(
               borderRadius: theme.radius.xs,
             })}
           >
-            <Text size="sm" fw={500}>
+            <Text size="sm">
               {item.name}
             </Text>
             {item.description && (

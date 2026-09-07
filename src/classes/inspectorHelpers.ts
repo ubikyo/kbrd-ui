@@ -21,7 +21,9 @@ export const isHexColor = (value: string, alpha = false) =>
 export const DEFAULT_STATE_NAME = "Up";
 
 export const DEFAULT_STATE_CONFIG: KeyStateConfig = {
-  backgroundColor: "#00000000",
+  // No `backgroundColor` — a brand-new state has none set, same as
+  // Border's own `borderEnabled: true` default doesn't apply here (see
+  // `KeyStateConfig`'s own docblock).
   borderEnabled: true,
   borderColor: "#808080",
   borderStyle: "solid",

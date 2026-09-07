@@ -33,6 +33,15 @@ textarea,
   user-select: text;
 }
 
+/* Debug mode (Settings' Developer tab, see `App`) gives the page back its
+   plain HTML behaviour — selectable text everywhere, alongside the native
+   context menu `App` stops suppressing. */
+body.debug,
+body.debug * {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
 .inspector-accordion-heading {
   background: var(--kbrd-color-body);
   transition: background-color 120ms ease;
@@ -45,6 +54,21 @@ textarea,
 
 .property-accordion > .mantine-Accordion-item[data-active] {
   border-bottom-color: transparent;
+}
+
+/* Mantine only draws the separator *below* each item, so the first one
+   opens with no line above it — this closes the list at the top with the
+   same border (`--item-border-color` is the accordion's own). */
+.property-accordion > .mantine-Accordion-item:first-of-type {
+  border-top: 1px solid var(--item-border-color);
+}
+
+/* An opened item gets room below itself, to set it apart from the item
+   that follows — the last one has nothing after it to separate from, so
+   it stays flush against the bottom of the list. */
+.property-accordion > .mantine-Accordion-item[data-active]:not(:last-of-type),
+.plugin-accordion > .mantine-Accordion-item[data-active]:not(:last-of-type) {
+  padding-bottom: 40px;
 }
 
 .inspector-accordion-heading:hover {
@@ -60,7 +84,7 @@ textarea,
 }
 
 .plugin-category-panel .mantine-Accordion-content {
-  padding-inline: var(--mantine-spacing-xs);
+  padding-inline: 0;
   padding-bottom: 0;
 }
 
@@ -83,6 +107,7 @@ textarea,
 .mantine-Input-input[data-variant="unstyled"] {
   background-color: transparent !important;
   border: none !important;
+  border-radius: 0 !important;
 }
 
 /* Inside the Properties tab specifically, an unstyled input still reads
@@ -100,7 +125,7 @@ textarea,
 }
 
 .property-editor-panel .mantine-Accordion-content {
-  padding: 20px 0;
+  padding: 0;
 }
 
 .navbar {

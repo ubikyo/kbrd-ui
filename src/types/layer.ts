@@ -29,7 +29,10 @@ export type KeyMode = "momentary" | "toggle";
 // state name too, so the whole key's content — system look and every
 // plugin's fields alike — pivots together on whichever state is active.
 export type KeyStateConfig = {
-  backgroundColor: string;
+  // Optional, like `borderEnabled` governs `border*` below — `undefined`
+  // means the property genuinely isn't set (see `PropertyGroup`), not
+  // "unset, so treat it as transparent/default".
+  backgroundColor?: string;
   borderEnabled: boolean;
   borderColor: string;
   borderStyle: BorderStyleValue;

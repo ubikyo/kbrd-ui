@@ -5,7 +5,12 @@ import {
   updateKeyPlugin,
   updateKeyProperties,
 } from "../api/layers";
-import { isMappingVisible, pluginById, plugins } from "../plugins/registry";
+import {
+  isDeletable,
+  isMappingVisible,
+  pluginById,
+  plugins,
+} from "../plugins/registry";
 import { pluginStates } from "../plugins/state";
 import {
   BACKGROUND_REF,
@@ -29,8 +34,8 @@ import { DEFAULT_STATE_CONFIG, DEFAULT_STATE_NAME } from "./inspectorHelpers";
  * actually reaches KBRD-API (see `usePendingSaves`).
  *
  * A key's whole Properties tab — the system row and every attached
- * plugin alike — pivots on one shared "active state" (see the States
- * menu placed where the Display group's own label used to sit): whatever
+ * plugin alike, listed in one flat accordion — pivots on one shared
+ * "active state" (see the States menu above that accordion): whatever
  * fields each one shows are that state's own values, from
  * `KeyPropertyConfig.stateConfigs`/each `KeyPlugin.config.states` (see
  * `plugins/state.ts`) — `addState`/`renameState`/`deleteState` below keep
@@ -76,10 +81,15 @@ export function useKeyInspector(params: {
 
   // Layout plugins (positioning/kind) are only draggable in Layout mode;
   // Invoke/Display plugins (behaviour/content) only in Mapping mode.
-  const draggablePlugins = plugins.filter((plugin) =>
-    mode === "layout"
-      ? plugin.category === "Layout"
-      : plugin.category !== "Layout",
+  // A non-deletable plugin is the element's own form rather than
+  // something attached to it (see `isDeletable`), so it never belongs in
+  // the list you drag from either.
+  const draggablePlugins = plugins.filter(
+    (plugin) =>
+      isDeletable(plugin) &&
+      (mode === "layout"
+        ? plugin.category === "Layout"
+        : plugin.category !== "Layout"),
   );
   const pluginCategories = [
     ...new Set(draggablePlugins.map((plugin) => plugin.category)),
@@ -88,14 +98,6 @@ export function useKeyInspector(params: {
   const instances = allInstances
     .filter((plugin) => plugin.key_ref === selectedKey)
     .sort((left, right) => left.position - right.position);
-  const propertyGroups = [...new Set(plugins.map((plugin) => plugin.category))]
-    .map((category) => ({
-      category,
-      items: instances.filter(
-        (item) => pluginById(item.plugin_id)?.category === category,
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
   const keyProperties = layer?.key_properties ?? [];
   const selectedProperty = keyProperties.find(
     (property) => property.key_ref === selectedKey,
@@ -192,11 +194,10 @@ export function useKeyInspector(params: {
     });
 
     for (const item of instances) {
-      const plugin = pluginById(item.plugin_id);
       const states = pluginStates(item.config);
-      const seed = copyFrom
-        ? (states[copyFrom] ?? plugin?.defaultConfig ?? {})
-        : (plugin?.defaultConfig ?? {});
+      // Same rule as a freshly attached instance: nothing stored unless
+      // it's being copied from a state that had something.
+      const seed = copyFrom ? (states[copyFrom] ?? {}) : {};
       patch(item, { config: { states: { ...states, [trimmed]: { ...seed } } } });
     }
     setActiveState(trimmed);
@@ -325,7 +326,6 @@ export function useKeyInspector(params: {
     pluginCategories,
     allInstances,
     instances,
-    propertyGroups,
     propertyConfig,
     targetType,
     systemPluginName,

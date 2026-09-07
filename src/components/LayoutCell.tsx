@@ -234,7 +234,10 @@ export default function LayoutCell({
               return (
                 <Renderer
                   key={instance.id}
-                  config={stateConfig(instance.config, DEFAULT_STATE_NAME)}
+                  config={{
+                    ...plugin.defaultConfig,
+                    ...stateConfig(instance.config, DEFAULT_STATE_NAME),
+                  }}
                   x={bounds.x}
                   y={bounds.y}
                   width={bounds.width}

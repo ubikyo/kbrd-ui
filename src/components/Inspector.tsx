@@ -15,10 +15,13 @@ import { MdDelete, MdDragIndicator } from "react-icons/md";
 import { pluginSummary, setDragSymbol, setPluginDragImage } from "../classes/inspectorHelpers";
 import { useKeyInspector } from "../classes/useKeyInspector";
 import State from "./menu/State";
-import { pluginById } from "../plugins/registry";
+import {
+  SYSTEM_PLUGIN_ID,
+  isDeletable,
+  pluginById,
+} from "../plugins/registry";
 import { stateConfig, withStateConfig } from "../plugins/state";
 import type { GridCell } from "../types/layout";
-import KeyStateFields from "./KeyStateFields";
 import LayoutCellProperties from "./LayoutCellProperties";
 import StateEditor from "./modals/StateEditor";
 import type { KeyPlugin, KeyProperty, LayerData } from "../types/layer";
@@ -94,7 +97,6 @@ export default function Inspector({
     draggablePlugins,
     pluginCategories,
     instances,
-    propertyGroups,
     propertyConfig,
     targetType,
     systemPluginName,
@@ -109,6 +111,12 @@ export default function Inspector({
     reorder,
     remove,
   } = inspector;
+  // The element's own form lives in a plugin like any other now
+  // (`kbrd.render-key`), it's just not one that can be attached or
+  // detached — see its manifest's `deletable` and `isDeletable`.
+  const systemPlugin = pluginById(SYSTEM_PLUGIN_ID);
+  const SystemEditor = systemPlugin?.MappingEditor;
+  const systemPluginDeletable = systemPlugin ? isDeletable(systemPlugin) : true;
   // "add"/"edit" while the States menu's own modal is open, `null`
   // otherwise — see `StateEditor`.
   const [stateEditorMode, setStateEditorMode] = useState<"add" | "edit" | null>(
@@ -119,7 +127,7 @@ export default function Inspector({
     <Box
       h="100%"
       bg="var(--kbrd-color-body)"
-      p={40}
+      p={0}
       style={{ overflow: "auto" }}
     >
       <Tabs
@@ -148,7 +156,12 @@ export default function Inspector({
             // Mapping's own (`pluginCategories` itself already reacts to
             // `mode`, an uncontrolled Accordion's own expanded state
             // wouldn't otherwise).
-            <Accordion key={mode} multiple defaultValue={pluginCategories}>
+            <Accordion
+              key={mode}
+              multiple
+              className="plugin-accordion"
+              defaultValue={pluginCategories}
+            >
               {pluginCategories.map(
                 (category) => {
                   const categoryPlugins = draggablePlugins.filter(
@@ -164,6 +177,8 @@ export default function Inspector({
                           <Box
                             key={plugin.id}
                             py="sm"
+                            pl={10}
+                            pr={10}
                             draggable
                             style={{
                               borderBottom:
@@ -231,16 +246,168 @@ export default function Inspector({
           ) : !selectedKey ? (
             <Text c="dimmed">No item selected</Text>
           ) : (
-            <Stack gap={0}>
-              <Box key={`${selectedKey}-system`} style={{ order: 2 }}>
-                {!propertyGroups.some(
-                  (group) => group.category === "Display",
-                ) && (
-                  <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                    Render
-                  </Text>
-                )}
-                <Accordion multiple className="property-accordion">
+            <Stack key={selectedKey} gap={0}>
+              <Group justify="flex-end" mb="xs" pr={15}>
+                <State
+                  states={propertyConfig.states}
+                  activeState={activeState}
+                  onSelect={setActiveState}
+                  onAdd={() => setStateEditorMode("add")}
+                  onEdit={() => setStateEditorMode("edit")}
+                  onDelete={() => deleteState(activeState)}
+                />
+              </Group>
+              <Accordion multiple className="property-accordion">
+                {instances.map((item) => {
+                  const plugin = pluginById(item.plugin_id);
+                  if (!plugin) return null;
+                  // This branch of the Properties tab only renders in Mapping
+                  // mode — see the `mode === "layout"` split above.
+                  const Editor = plugin.MappingEditor;
+                  const summary = pluginSummary(item);
+                  const definedConfig = stateConfig(item.config, activeState);
+                  const currentConfig = {
+                    ...plugin.defaultConfig,
+                    ...definedConfig,
+                  };
+                  return (
+                    <Accordion.Item
+                      key={item.id}
+                      value={String(item.id)}
+                      style={{
+                        position: "relative",
+                      }}
+                      onDragOver={(event) => {
+                        if (
+                          draggedPropertyId !== null &&
+                          pluginById(
+                            instances.find(
+                              (instance) => instance.id === draggedPropertyId,
+                            )?.plugin_id ?? "",
+                          )?.category === plugin.category &&
+                          event.dataTransfer.types.includes(
+                            "application/kbrd-property",
+                          )
+                        ) {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          setDropIndicator({
+                            id: item.id,
+                            edge:
+                              event.clientY < bounds.top + bounds.height / 2
+                                ? "before"
+                                : "after",
+                          });
+                        } else {
+                          setDropIndicator(null);
+                        }
+                      }}
+                      onDragLeave={(event) => {
+                        if (
+                          !event.currentTarget.contains(
+                            event.relatedTarget as Node | null,
+                          )
+                        ) {
+                          setDropIndicator((value) =>
+                            value?.id === item.id ? null : value,
+                          );
+                        }
+                      }}
+                      onDrop={(event) => {
+                        const draggedId = Number(
+                          event.dataTransfer.getData("application/kbrd-property"),
+                        );
+                        if (!Number.isNaN(draggedId)) {
+                          event.preventDefault();
+                          const edge =
+                            dropIndicator?.id === item.id
+                              ? dropIndicator.edge
+                              : "before";
+                          setDropIndicator(null);
+                          void reorder(draggedId, item.id, edge);
+                        }
+                      }}
+                    >
+                      {dropIndicator?.id === item.id && (
+                        <Box
+                          aria-hidden
+                          style={{
+                            position: "absolute",
+                            zIndex: 10,
+                            left: 0,
+                            right: 0,
+                            [dropIndicator.edge === "before" ? "top" : "bottom"]:
+                              -1,
+                            height: 2,
+                            pointerEvents: "none",
+                            backgroundColor: "var(--kbrd-border-color)",
+                          }}
+                        />
+                      )}
+                      <Group
+                        className="inspector-accordion-heading"
+                        gap={0}
+                        wrap="nowrap"
+                      >
+                        <Box
+                          draggable
+                          pl={10}
+                          pr={4}
+                          py="sm"
+                          onDragStart={(event) => {
+                            event.stopPropagation();
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData(
+                              "application/kbrd-property",
+                              String(item.id),
+                            );
+                            setDraggedPropertyId(item.id);
+                            setDragSymbol(event);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedPropertyId(null);
+                            setDropIndicator(null);
+                          }}
+                        >
+                          <MdDragIndicator
+                            aria-label={`Move ${plugin.name}`}
+                            style={{ cursor: "grab", display: "block" }}
+                          />
+                        </Box>
+                        <Accordion.Control
+                          style={{ flex: 1, paddingLeft: 0 }}
+                        >
+                          <Text truncate>
+                            {plugin.name}
+                            {summary && ` (${summary})`}
+                          </Text>
+                        </Accordion.Control>
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          aria-label={`Delete ${plugin.name}`}
+                          mr="xs"
+                          onClick={() => setDeleting(item)}
+                        >
+                          <MdDelete />
+                        </ActionIcon>
+                      </Group>
+                      <Accordion.Panel className="property-editor-panel">
+                        <Editor
+                          config={currentConfig}
+                          definedConfig={definedConfig}
+                          targetType={targetType}
+                          onChange={(config) =>
+                            patch(item, {
+                              config: withStateConfig(item.config, activeState, config),
+                            })
+                          }
+                        />
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  );
+                })}
                 <Accordion.Item value="system">
                   <Group
                     className="inspector-accordion-heading"
@@ -248,7 +415,8 @@ export default function Inspector({
                     wrap="nowrap"
                   >
                     <Box
-                      px={4}
+                      pl={10}
+                      pr={4}
                       py="sm"
                       aria-label={`Move ${systemPluginName} disabled`}
                       aria-disabled="true"
@@ -269,220 +437,23 @@ export default function Inspector({
                       variant="transparent"
                       mr="xs"
                       aria-label={`Delete ${systemPluginName} disabled`}
-                      disabled
+                      disabled={!systemPluginDeletable}
                       style={{ backgroundColor: "transparent" }}
                     >
                       <MdDelete />
                     </ActionIcon>
                   </Group>
-                  {targetType === "key" && (
+                  {targetType === "key" && SystemEditor && (
                     <Accordion.Panel className="property-editor-panel">
-                      <KeyStateFields
-                        backgroundColor={activeStateConfig.backgroundColor}
-                        borderEnabled={activeStateConfig.borderEnabled}
-                        border={{
-                          color: activeStateConfig.borderColor,
-                          style: activeStateConfig.borderStyle,
-                          width: activeStateConfig.borderWidth,
-                        }}
-                        onBackgroundColorChange={(value) =>
-                          patchStateConfig({ backgroundColor: value })
-                        }
-                        onBorderEnabledChange={(value) =>
-                          patchStateConfig({ borderEnabled: value })
-                        }
-                        onBorderChange={(value) =>
-                          patchStateConfig({
-                            borderColor: value.color,
-                            borderStyle: value.style,
-                            borderWidth: value.width,
-                          })
-                        }
+                      <SystemEditor
+                        config={activeStateConfig}
+                        targetType={targetType}
+                        onChange={(config) => patchStateConfig(config)}
                       />
                     </Accordion.Panel>
                   )}
                 </Accordion.Item>
-                </Accordion>
-              </Box>
-
-              {instances.length > 0 && (
-                <Stack
-                  key={`${selectedKey}-plugins`}
-                  gap={0}
-                  style={{ display: "contents" }}
-                >
-              {propertyGroups.map((group) => (
-                <Box
-                  key={group.category}
-                  mt={group.category === "Display" ? 0 : 48}
-                  style={{ order: group.category === "Display" ? 1 : 3 }}
-                >
-                  {group.category === "Display" ? (
-                    <Group justify="flex-end" mb="xs">
-                      <State
-                        states={propertyConfig.states}
-                        activeState={activeState}
-                        onSelect={setActiveState}
-                        onAdd={() => setStateEditorMode("add")}
-                        onEdit={() => setStateEditorMode("edit")}
-                        onDelete={() => deleteState(activeState)}
-                      />
-                    </Group>
-                  ) : (
-                    <Text size="xs" fw={600} c="dimmed" mb="xs" tt="uppercase">
-                      {group.category}
-                    </Text>
-                  )}
-                  <Accordion multiple className="property-accordion">
-              {group.items.map((item) => {
-                const plugin = pluginById(item.plugin_id);
-                if (!plugin) return null;
-                // This branch of the Properties tab only renders in Mapping
-                // mode — see the `mode === "layout"` split above.
-                const Editor = plugin.MappingEditor;
-                const summary = pluginSummary(item);
-                const currentConfig = stateConfig(item.config, activeState);
-                return (
-                  <Accordion.Item
-                    key={item.id}
-                    value={String(item.id)}
-                    style={{
-                      position: "relative",
-                    }}
-                    onDragOver={(event) => {
-                      if (
-                        draggedPropertyId !== null &&
-                        pluginById(
-                          instances.find(
-                            (instance) => instance.id === draggedPropertyId,
-                          )?.plugin_id ?? "",
-                        )?.category === plugin.category &&
-                        event.dataTransfer.types.includes(
-                          "application/kbrd-property",
-                        )
-                      ) {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = "move";
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        setDropIndicator({
-                          id: item.id,
-                          edge:
-                            event.clientY < bounds.top + bounds.height / 2
-                              ? "before"
-                              : "after",
-                        });
-                      } else {
-                        setDropIndicator(null);
-                      }
-                    }}
-                    onDragLeave={(event) => {
-                      if (
-                        !event.currentTarget.contains(
-                          event.relatedTarget as Node | null,
-                        )
-                      ) {
-                        setDropIndicator((value) =>
-                          value?.id === item.id ? null : value,
-                        );
-                      }
-                    }}
-                    onDrop={(event) => {
-                      const draggedId = Number(
-                        event.dataTransfer.getData("application/kbrd-property"),
-                      );
-                      if (!Number.isNaN(draggedId)) {
-                        event.preventDefault();
-                        const edge =
-                          dropIndicator?.id === item.id
-                            ? dropIndicator.edge
-                            : "before";
-                        setDropIndicator(null);
-                        void reorder(draggedId, item.id, edge);
-                      }
-                    }}
-                  >
-                    {dropIndicator?.id === item.id && (
-                      <Box
-                        aria-hidden
-                        style={{
-                          position: "absolute",
-                          zIndex: 10,
-                          left: 0,
-                          right: 0,
-                          [dropIndicator.edge === "before" ? "top" : "bottom"]:
-                            -1,
-                          height: 2,
-                          pointerEvents: "none",
-                          backgroundColor: "var(--kbrd-border-color)",
-                        }}
-                      />
-                    )}
-                    <Group
-                      className="inspector-accordion-heading"
-                      gap={0}
-                      wrap="nowrap"
-                    >
-                      <Box
-                        draggable
-                        px={4}
-                        py="sm"
-                        onDragStart={(event) => {
-                          event.stopPropagation();
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData(
-                            "application/kbrd-property",
-                            String(item.id),
-                          );
-                          setDraggedPropertyId(item.id);
-                          setDragSymbol(event);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedPropertyId(null);
-                          setDropIndicator(null);
-                        }}
-                      >
-                        <MdDragIndicator
-                          aria-label={`Move ${plugin.name}`}
-                          style={{ cursor: "grab", display: "block" }}
-                        />
-                      </Box>
-                      <Accordion.Control
-                        style={{ flex: 1, paddingLeft: 0 }}
-                      >
-                        <Text truncate>
-                          {plugin.name}
-                          {summary && ` (${summary})`}
-                        </Text>
-                      </Accordion.Control>
-                      <ActionIcon
-                        color="red"
-                        variant="subtle"
-                        aria-label={`Delete ${plugin.name}`}
-                        mr="xs"
-                        onClick={() => setDeleting(item)}
-                      >
-                        <MdDelete />
-                      </ActionIcon>
-                    </Group>
-                    <Accordion.Panel className="property-editor-panel">
-                      <Editor
-                        config={currentConfig}
-                        targetType={targetType}
-                        onChange={(config) =>
-                          patch(item, {
-                            config: withStateConfig(item.config, activeState, config),
-                          })
-                        }
-                      />
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                );
-              })}
-                  </Accordion>
-                </Box>
-              ))}
-                </Stack>
-              )}
+              </Accordion>
             </Stack>
           )}
         </Tabs.Panel>
